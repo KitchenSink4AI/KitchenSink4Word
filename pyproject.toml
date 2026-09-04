@@ -1,0 +1,49 @@
+[project]
+name = "kitchensink4word"
+version = "2.0.0"
+description = "Everything plus the kitchen sink for Microsoft Word - the most complete .docx MCP server: live editing of open documents (one Ctrl+Z per call, cursor-safe), mail merge, batch operations, redaction, accessibility and template-compliance audits, cross-reference validation, native citations/bibliography, index, merge-aware tables, footnotes/endnotes, TOC, tracked-change writing, document compare/merge, protection, PDF import/export, engineered not to corrupt"
+readme = "README.md"
+license = "AGPL-3.0-only"
+license-files = ["LICENSE", "NOTICE.md"]
+authors = [{ name = "KitchenSink4AI", email = "support@kitchensink4.ai" }]
+keywords = [
+    "mcp", "word", "docx", "ooxml", "claude", "model-context-protocol",
+    "live-editing", "citations", "bibliography", "footnotes",
+    "table-of-contents", "tracked-changes", "document-compare", "tables",
+    "mail-merge", "redaction", "accessibility", "compliance", "forms",
+    "batch-processing", "pdf-import",
+]
+requires-python = ">=3.12"
+dependencies = [
+    "fastmcp>=3.4,<4",
+    "latex2mathml>=3.81",
+    "mathml2omml>=0.0.2",
+    "python-docx",
+    "lxml",
+    "regex",
+    "pywin32; sys_platform == 'win32'",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "pytest-timeout",
+]
+
+[project.scripts]
+word-mcp = "word_mcp.server:main"
+kitchensink4word = "word_mcp.server:main"
+
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+timeout = 120
+markers = [
+    "live: needs an interactive Word instance (auto-skipped where Word is unavailable)",
+]

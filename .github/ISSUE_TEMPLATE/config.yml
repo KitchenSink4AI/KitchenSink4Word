@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: 📖 Documentation
+    url: https://github.com/KitchenSink4AI/KitchenSink4Word#readme
+    about: The README covers installation, the tool inventory, and the safety model.

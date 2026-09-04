@@ -1,0 +1,24 @@
+name: "💼 Commercial license inquiry"
+description: "You want to include KitchenSink4Word in a product or service without the AGPL obligations"
+title: "[commercial] "
+labels: ["commercial-license"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        KitchenSink4Word is free for any use that complies with the AGPL-3.0, including
+        commercial use. Use this form if your organization wants to include
+        KitchenSink4Word in a product or service without the AGPL's source-sharing
+        obligations, and we will reply with commercial license terms.
+  - type: textarea
+    id: use
+    attributes:
+      label: Intended commercial use
+      description: Rough description is fine (product, internal tooling, service...).
+    validations:
+      required: true
+  - type: input
+    id: contact
+    attributes:
+      label: How to reach you
+      placeholder: "email, or 'reply here'"
