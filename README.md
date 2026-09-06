@@ -325,7 +325,9 @@ automatic slot backups before every mutation and atomic validated saves, so a
 bad outcome is a restore, not a loss. If something misbehaves on your
 documents, [an issue](https://github.com/nometalalchemist/KitchenSink4Word/issues)
 with the symptom (never the document itself, unless it contains nothing
-private) is the most valuable thing you can send.
+private) is the most valuable thing you can send. Before filing: ask your AI
+to run `get_server_info` and paste the output here; it is designed to be safe
+to share.
 
 **Beta-labeled tools**, heuristic by nature: review their flagged-items list
 rather than trusting silently: `convert_citation_style`,
