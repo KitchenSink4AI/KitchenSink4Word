@@ -136,7 +136,7 @@ def test_f1_inactive_document_reports_ungrouped(live_doc, tmp_path):
         app2 = win32com.client.GetActiveObject("Word.Application")
         for d in app2.Documents:
             if not d.Path:          # the unsaved decoy
-                d.Close(SaveChanges=0)
+                d.Close(0)
                 break
         app2 = None
 

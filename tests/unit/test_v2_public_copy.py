@@ -96,6 +96,17 @@ _STALE = [
     (r"~?7\.6k\b", "retired lite token bill 7.6k"),
     (r"\b26[,.   ]?600\b", "retired full token bill 26,600"),
     (r"~?26\.6k\b", "retired full token bill 26.6k"),
+    # The 2026-09-06 feature cycle moved the surface three times, for
+    # get_server_info, floating images, and list numbering. Every headline
+    # figure it retired is listed here, so a stale one cannot come back.
+    (r"\b219\b", "retired operations count 219"),
+    (r"\b220\b", "retired operations count 220"),
+    (r"7[.,]\s?7k", "retired lite token bill 7.7k"),
+    (r"7[,.\s]700", "retired lite token bill 7,700"),
+    (r"7[.,]\s?9k", "retired lite token bill 7.9k"),
+    (r"7[,.\s]900", "retired lite token bill 7,900"),
+    (r"26[.,]\s?[79]k", "retired full token bill 26.7k / 26.9k"),
+    (r"27[.,]\s?4k", "retired full token bill 27.4k"),
 ]
 
 

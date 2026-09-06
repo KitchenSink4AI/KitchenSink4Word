@@ -32,10 +32,16 @@ from ..core.errors import (
     WordMcpError,
 )
 from ..core.sandbox import check_path
+from . import callargs as _args
 from . import serial as _serial
 
 _WD_ALERTS_NONE = 0
 _WD_FORMAT_PDF = 17
+_WD_FORMAT_DOCX_DEFAULT = 16
+#: An encrypted Office document is an OLE compound file; a plain
+#: one is a zip starting PK. Four bytes settle it, with no
+#: password prompt and no second Word instance.
+_OLE_MAGIC = bytes.fromhex("d0cf11e0")
 _WD_DO_NOT_SAVE = 0
 _WD_SAVE = -1
 
@@ -106,7 +112,7 @@ def _word():
     finally:
         if app is not None:
             with contextlib.suppress(Exception):
-                app.Quit(SaveChanges=_WD_DO_NOT_SAVE)
+                app.Quit(_WD_DO_NOT_SAVE)
         _INVISIBLE_PIDS.pop(tid, None)
         pythoncom.CoUninitialize()
 
@@ -222,8 +228,17 @@ def _open_in_running_word(path) -> bool:
 
 
 def _open(app, path: Path, *, read_only: bool):
-    return app.Documents.Open(
-        str(path.resolve()),
+    """Open a document in this invisible Word.
+
+    Routed through callargs because a keyword argument here does not
+    survive the trip: pywin32 drops it when it is bound late, and this
+    call is exactly where that mattered, since read_only silently became
+    false on every machine with no makepy cache.
+    """
+    return _args.call(
+        app.Documents.Open, "Documents.Open",
+        FileName=str(path.resolve()),
+        ConfirmConversions=False,
         ReadOnly=read_only,
         AddToRecentFiles=False,
         OpenAndRepair=False,
@@ -299,7 +314,7 @@ def refresh_fields(path: str) -> dict:
             toc_count = doc.TablesOfContents.Count
             doc.Save()
         finally:
-            doc.Close(SaveChanges=_WD_DO_NOT_SAVE)
+            doc.Close(_WD_DO_NOT_SAVE)
     return {"fields_refreshed": True, "tocs_updated": toc_count}
 
 
@@ -316,9 +331,12 @@ def export_pdf(path: str, pdf_path: str | None = None) -> dict:
     with _word() as app:
         doc = _open(app, p, read_only=True)
         try:
-            doc.SaveAs2(str(out.resolve()), FileFormat=_WD_FORMAT_PDF)
+            _args.call(
+                doc.SaveAs2, "Document.SaveAs2",
+                FileName=str(out.resolve()), FileFormat=_WD_FORMAT_PDF,
+            )
         finally:
-            doc.Close(SaveChanges=_WD_DO_NOT_SAVE)
+            doc.Close(_WD_DO_NOT_SAVE)
     if not out.exists():
         raise WordMcpError("Word reported success but no PDF was produced")
     return {"pdf": str(out), "bytes": out.stat().st_size}
@@ -353,7 +371,8 @@ def compare_documents(
         doc_a = _open(app, orig, read_only=True)
         doc_b = _open(app, rev, read_only=True)
         try:
-            result = app.CompareDocuments(
+            result = _args.call(
+                app.CompareDocuments, "Application.CompareDocuments",
                 OriginalDocument=doc_a,
                 RevisedDocument=doc_b,
                 Destination=2,  # wdCompareDestinationNew
@@ -366,10 +385,10 @@ def compare_documents(
                 RevisedAuthor=author,
             )
             result.SaveAs2(str(out.resolve()))
-            result.Close(SaveChanges=_WD_DO_NOT_SAVE)
+            result.Close(_WD_DO_NOT_SAVE)
         finally:
-            doc_a.Close(SaveChanges=_WD_DO_NOT_SAVE)
-            doc_b.Close(SaveChanges=_WD_DO_NOT_SAVE)
+            doc_a.Close(_WD_DO_NOT_SAVE)
+            doc_b.Close(_WD_DO_NOT_SAVE)
     if not out.exists():
         raise WordMcpError("Word reported success but produced no output")
     # Summarize what changed, using our own revision reader.
@@ -422,7 +441,7 @@ def validate_opens_clean(path: str) -> dict:
             # status bar shows.
             words = int(doc.ComputeStatistics(0))  # wdStatisticWords
         finally:
-            doc.Close(SaveChanges=_WD_DO_NOT_SAVE)
+            doc.Close(_WD_DO_NOT_SAVE)
     return {"opens_clean": True, "paragraphs": paragraphs, "words": words}
 
 
@@ -461,7 +480,7 @@ def merge_documents(
             doc.SaveAs2(str(out.resolve()))
             paragraphs = doc.Paragraphs.Count
         finally:
-            doc.Close(SaveChanges=_WD_DO_NOT_SAVE)
+            doc.Close(_WD_DO_NOT_SAVE)
     if not out.exists():
         raise WordMcpError("Word reported success but produced no output")
     # Word's InsertFile does not carry the customXml bibliography store;
@@ -545,16 +564,17 @@ def combine_documents(
         doc_a = _open(app, orig, read_only=True)
         doc_b = _open(app, rev, read_only=True)
         try:
-            result = app.MergeDocuments(
+            result = _args.call(
+                app.MergeDocuments, "Application.MergeDocuments",
                 OriginalDocument=doc_a,
                 RevisedDocument=doc_b,
                 Destination=2,  # wdCompareDestinationNew
             )
             result.SaveAs2(str(out.resolve()))
-            result.Close(SaveChanges=_WD_DO_NOT_SAVE)
+            result.Close(_WD_DO_NOT_SAVE)
         finally:
-            doc_a.Close(SaveChanges=_WD_DO_NOT_SAVE)
-            doc_b.Close(SaveChanges=_WD_DO_NOT_SAVE)
+            doc_a.Close(_WD_DO_NOT_SAVE)
+            doc_b.Close(_WD_DO_NOT_SAVE)
     from ..core.package import DocxPackage
     from ..ops.read import revision_summary
 
@@ -681,7 +701,7 @@ def close_open_document(path: str, *, save: bool = True) -> dict:
         with _alerts_suppressed(app):
             _, retries = _retry_word_call(
                 lambda: doc.Close(
-                    SaveChanges=_WD_SAVE if save else _WD_DO_NOT_SAVE
+                    _WD_SAVE if save else _WD_DO_NOT_SAVE
                 ),
                 attempts=3,
             )
@@ -732,7 +752,7 @@ def proofing_errors(path: str, *, limit: int = 100) -> dict:
                 text = err.Text
                 grammar.append(text[:120])
         finally:
-            doc.Close(SaveChanges=_WD_DO_NOT_SAVE)
+            doc.Close(_WD_DO_NOT_SAVE)
     return {
         "spelling_errors": spelling,
         "spelling_truncated": len(spelling) >= limit,
@@ -770,7 +790,7 @@ def readability_statistics(path: str) -> dict:
             for st in doc.Content.ReadabilityStatistics:
                 stats[st.Name] = st.Value
         finally:
-            doc.Close(SaveChanges=_WD_DO_NOT_SAVE)
+            doc.Close(_WD_DO_NOT_SAVE)
     return {"readability": stats}
 
 
@@ -794,17 +814,52 @@ def save_with_password(
         else p.with_name(f"{p.stem}_PROTECTED{p.suffix}")
     )
     with _word() as app:
-        doc = _open(app, p, read_only=True)
+        # Read-write on purpose: the Password PROPERTY is what actually
+        # encrypts, and Word refuses to set it on a read-only document.
+        # The source is never saved, only SaveAs2'd to the output path.
+        doc = _open(app, p, read_only=False)
         try:
-            doc.SaveAs2(str(out.resolve()), Password=password)
+            doc.Password = password
+            _args.call(
+                doc.SaveAs2, "Document.SaveAs2",
+                FileName=str(out.resolve()),
+                FileFormat=_WD_FORMAT_DOCX_DEFAULT,
+            )
         finally:
-            doc.Close(SaveChanges=_WD_DO_NOT_SAVE)
+            doc.Close(_WD_DO_NOT_SAVE)
     if not out.exists():
         raise WordMcpError("Word produced no output")
+    if not _is_encrypted(out):
+        # Never report an encryption that did not happen. An encrypted
+        # OOXML file is an OLE compound file; a plain one is a ZIP, so the
+        # first four bytes settle it without a password prompt.
+        out.unlink(missing_ok=True)
+        raise WordMcpError(
+            f"Word saved {out.name} without applying the password, so the "
+            f"copy was NOT encrypted and has been removed rather than left "
+            f"looking protected. Encrypt it in Word (File, Info, Protect "
+            f"Document, Encrypt with Password); set_document_protection is "
+            f"a different thing and does not encrypt."
+        )
     return {
         "encrypted_copy": str(out),
+        "verified": "the copy is an encrypted OLE container, not a plain zip",
         "note": "keep the password safe; there is no recovery",
     }
+
+
+def _is_encrypted(path: Path) -> bool:
+    """Is this file an encrypted Office document?
+
+    Encryption rewraps the .docx zip inside an OLE compound file, so the
+    magic bytes answer it: D0CF11E0 for encrypted, PK for a plain package.
+    Cheap, offline, and no password prompt.
+    """
+    try:
+        with open(path, "rb") as fh:
+            return fh.read(4) == _OLE_MAGIC
+    except OSError:
+        return False
 
 
 def zombie_check() -> dict:
