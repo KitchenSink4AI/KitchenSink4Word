@@ -22,6 +22,7 @@ file cannot see a single one of them.
 from __future__ import annotations
 
 import re
+import sys
 from pathlib import Path
 
 import pytest
@@ -127,14 +128,23 @@ def test_every_signature_has_unique_parameter_names():
         assert len(set(params)) == len(params), f"{name} repeats a parameter"
 
 
-def test_positional_fills_the_gaps_and_stops_at_the_last_named_argument():
+@pytest.mark.skipif(
+    sys.platform != "win32", reason="pywin32 is Windows-only"
+)
+def test_the_placeholder_is_the_one_word_understands():
+    """The contract that needs a real Word machine: the gap filler must be
+    pythoncom.Missing itself, not the off-Windows stand-in."""
     import pythoncom
 
+    assert callargs.MISSING is pythoncom.Missing
+
+
+def test_positional_fills_the_gaps_and_stops_at_the_last_named_argument():
     args = callargs.positional(
         "Documents.Open", FileName="x.docx", ReadOnly=True,
     )
     assert args[0] == "x.docx"
-    assert args[1] is pythoncom.Missing, (
+    assert args[1] is callargs.MISSING, (
         "ConfirmConversions was not asked for, so it must be omitted "
         "rather than guessed at"
     )

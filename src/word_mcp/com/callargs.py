@@ -32,6 +32,25 @@ from __future__ import annotations
 
 from ..core.errors import WordMcpError
 
+
+class _Omitted:
+    """Stand-in for pythoncom.Missing where pywin32 is not installed."""
+
+    __slots__ = ()
+
+    def __repr__(self) -> str:  # pragma: no cover - diagnostic only
+        return "<omitted>"
+
+
+try:
+    import pythoncom as _pythoncom
+
+    MISSING = _pythoncom.Missing
+except ImportError:  # pragma: no cover - the non-Windows path
+    # No call from this machine can reach Word, but the parameter-order
+    # tables and the guards over them still have to be testable everywhere.
+    MISSING = _Omitted()
+
 #: Word's parameter ORDER for the methods this server calls, from the Word
 #: object-model reference. Order is the whole contract: everything below
 #: is passed positionally, so a wrong entry here is a wrong argument in
@@ -79,8 +98,6 @@ def positional(signature: str, **kwargs) -> list:
     is how an omitted optional argument is spelled on the wire, and
     nothing past the last named argument is passed at all.
     """
-    import pythoncom
-
     try:
         names = SIGNATURES[signature]
     except KeyError:
@@ -100,7 +117,7 @@ def positional(signature: str, **kwargs) -> list:
         return []
     last = max(names.index(key) for key in kwargs)
     return [
-        kwargs[names[i]] if names[i] in kwargs else pythoncom.Missing
+        kwargs[names[i]] if names[i] in kwargs else MISSING
         for i in range(last + 1)
     ]
 
