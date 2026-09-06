@@ -47,7 +47,9 @@ def _measured():
 def test_published_numbers_match_scripts():
     """Every headline number in the public copy is the script's number."""
     lite, full, n_ops = _measured()
-    assert (lite, full, n_ops) == (28, 110, 219), (
+    lite_k = re.search(r"lite startup surface: \d+ tools, ~([\d.]+)k",
+                       _run("measure_surface.py")).group(1)
+    assert (lite, full, n_ops) == (29, 111, 220), (
         f"scripts now report lite={lite} full={full} ops={n_ops}; update the "
         "public copy AND this test together (that is the whole point)."
     )
@@ -59,8 +61,9 @@ def test_published_numbers_match_scripts():
                        ("index.html", index)):
         assert str(n_ops) in text, f"{name} is missing the operations count"
         assert str(docs) in text, f"{name} is missing the tool count"
-        assert ("7.7k" in text or "7,700" in text), (
-            f"{name} is missing the lite token figure"
+        assert (f"{lite_k}k" in text or f"{int(float(lite_k) * 1000):,}"
+                in text), (
+            f"{name} is missing the measured lite token figure {lite_k}k"
         )
 
 
@@ -180,13 +183,13 @@ def test_i18n_dictionaries_carry_current_figures():
         return [base] + [base.replace(",", s)
                          for s in (".", " ", " ", " ")]
 
-    sep = forms_of("7,700")
-    full = forms_of("26,700")
+    sep = forms_of("7,900")
+    full = forms_of("26,900")
     old = forms_of("34,400")
     for i, lang in enumerate(langs):
         block = text[spans[i]:spans[i + 1]]
-        assert "219" in block, f"i18n {lang}: operations count 219 missing"
-        for name, forms in (("lite 7.7k", sep), ("full 26.7k", full),
+        assert "220" in block, f"i18n {lang}: operations count 220 missing"
+        for name, forms in (("lite 7.9k", sep), ("full 26.9k", full),
                             ("v1.6 34.4k", old)):
             assert any(f in block for f in forms), (
                 f"i18n {lang}: {name} figure missing in all accepted formats"

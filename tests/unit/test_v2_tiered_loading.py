@@ -1,6 +1,6 @@
 """v2 Phase 4: tiered loading wired for real.
 
-Pack membership finalized against the 108-tool surface (+2 toggles),
+Pack membership finalized against the 109-tool surface (+2 toggles),
 enable_tools/disable_tools registered, KS4W_MODE/KS4W_PACK_POLICY
 startup handling, the fastmcp 3.x visibility route (global transform at
 startup, session-scoped toggles mid-session), and the discoverability
@@ -41,10 +41,11 @@ def _shipped_tools():
     }
 
 
-# The Phase 4 lite core, finalized (26 content tools + the 2 toggles).
+# The Phase 4 lite core, finalized (27 content tools + the 2 toggles).
 LITE = {
     "create_document", "copy_document", "manage_backups",
     "get_document_info", "diagnose_document", "get_workflows",
+    "get_server_info",
     "get_text", "find_text", "get_outline", "get_document_view",
     "apply_edits", "search_and_replace", "insert_paragraphs",
     "delete_paragraphs", "set_paragraph_text", "insert_break",
@@ -90,9 +91,9 @@ def test_lite_membership_finalized():
 
 
 def test_surface_counts():
-    """108 consolidated tools + enable_tools/disable_tools."""
-    assert len(_shipped_tools()) == 110
-    assert len(packs.pack_tools("lite")) == 28
+    """109 consolidated tools + enable_tools/disable_tools."""
+    assert len(_shipped_tools()) == 111
+    assert len(packs.pack_tools("lite")) == 29
 
 
 def test_toggles_always_on():
