@@ -51,6 +51,7 @@ from .core.errors import (
     UnsupportedStructure,
     WordMcpError,
 )
+from .core import readonly as _readonly
 from .core import update_check as _upd
 from .core.locate import is_range_spec, resolve_location, resolve_range
 from .core.package import DocxPackage, qn
@@ -170,7 +171,10 @@ def _tool(pack: str):
     isError=true, the Phase 1 refusal architecture); the module attribute
     stays the raw function so in-process returns stay v1-shaped. Every
     tool lands in the packs registry under its Section 14.8 pack tag
-    ('lite' = the always-on core)."""
+    ('lite' = the always-on core), and carries the readOnlyHint its
+    core/readonly.py classification gives it. An unclassified tool raises
+    HERE, at import, rather than reaching tools/list without anyone having
+    decided whether it can change a document."""
 
     def deco(fn):
         if _inspect.iscoroutinefunction(fn):
@@ -188,7 +192,12 @@ def _tool(pack: str):
                 except _envelope.CATCHABLE as exc:
                     return _envelope.refuse(exc)
 
-        tool = _FunctionTool.from_function(boundary)
+        tool = _FunctionTool.from_function(
+            boundary,
+            annotations={
+                "readOnlyHint": _readonly.read_only_hint(fn.__name__)
+            },
+        )
         mcp.add_tool(tool)
         _packs.register(fn.__name__, None if pack == "lite" else pack, tool)
         return fn
