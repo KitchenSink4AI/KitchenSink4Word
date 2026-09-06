@@ -49,7 +49,7 @@ def test_published_numbers_match_scripts():
     lite, full, n_ops = _measured()
     lite_k = re.search(r"lite startup surface: \d+ tools, ~([\d.]+)k",
                        _run("measure_surface.py")).group(1)
-    assert (lite, full, n_ops) == (29, 111, 220), (
+    assert (lite, full, n_ops) == (29, 112, 221), (
         f"scripts now report lite={lite} full={full} ops={n_ops}; update the "
         "public copy AND this test together (that is the whole point)."
     )
@@ -183,13 +183,13 @@ def test_i18n_dictionaries_carry_current_figures():
         return [base] + [base.replace(",", s)
                          for s in (".", " ", " ", " ")]
 
-    sep = forms_of("7,900")
-    full = forms_of("27,400")
+    sep = forms_of("8,000")
+    full = forms_of("27,800")
     old = forms_of("34,400")
     for i, lang in enumerate(langs):
         block = text[spans[i]:spans[i + 1]]
-        assert "220" in block, f"i18n {lang}: operations count 220 missing"
-        for name, forms in (("lite 7.9k", sep), ("full 27.4k", full),
+        assert "221" in block, f"i18n {lang}: operations count 221 missing"
+        for name, forms in (("lite 8.0k", sep), ("full 27.8k", full),
                             ("v1.6 34.4k", old)):
             assert any(f in block for f in forms), (
                 f"i18n {lang}: {name} figure missing in all accepted formats"

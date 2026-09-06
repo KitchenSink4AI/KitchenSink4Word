@@ -1,6 +1,6 @@
 """v2 Phase 4: tiered loading wired for real.
 
-Pack membership finalized against the 109-tool surface (+2 toggles),
+Pack membership finalized against the 110-tool surface (+2 toggles),
 enable_tools/disable_tools registered, KS4W_MODE/KS4W_PACK_POLICY
 startup handling, the fastmcp 3.x visibility route (global transform at
 startup, session-scoped toggles mid-session), and the discoverability
@@ -91,8 +91,8 @@ def test_lite_membership_finalized():
 
 
 def test_surface_counts():
-    """109 consolidated tools + enable_tools/disable_tools."""
-    assert len(_shipped_tools()) == 111
+    """110 consolidated tools + enable_tools/disable_tools."""
+    assert len(_shipped_tools()) == 112
     assert len(packs.pack_tools("lite")) == 29
 
 

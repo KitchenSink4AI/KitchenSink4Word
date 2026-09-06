@@ -45,6 +45,10 @@ MULTIPLEX = {
     # modes, two relative-frame vocabularies, and align-or-offset per axis.
     # An agent that cannot see the vocabulary cannot use the feature.
     "insert_image", "set_image",
+    # And both list tools, for the same reason: the numbering suite gave
+    # them a per-level format grammar (nine levels, nine numeral styles,
+    # a label template) that an agent cannot use unseen.
+    "insert_list", "set_list_numbering",
 }
 
 
