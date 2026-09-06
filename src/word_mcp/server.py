@@ -1480,7 +1480,8 @@ def get_workflows(task: str | None = None) -> dict:
     """Recommended tool sequences for common multi-step tasks, with a one-line
     why per step. Call with no task to list the available tasks
     ('process-feedback', 'prepare-submission', 'format-citations',
-    'build-from-template', 'heavy-editing', 'migrate-from-v1', 'bulk-edit');
+    'build-from-template', 'heavy-editing', 'live-editing', 'comment-partner',
+    'migrate-from-v1', 'bulk-edit');
     call with task='<name>' for that task's step-by-step sequence and notes.
     Pure guidance: reads nothing, changes nothing.
     """
