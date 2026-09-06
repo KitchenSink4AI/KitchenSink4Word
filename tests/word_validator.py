@@ -27,16 +27,20 @@ def validate_files(paths: list[Path]) -> int:
         for path in paths:
             abs_path = str(path.resolve())
             try:
+                # POSITIONAL, not named: pywin32 drops keyword arguments
+                # to Documents.Open when it is bound late, so the named
+                # form opened every document READ-WRITE and left an owner
+                # file beside it. Order: FileName, ConfirmConversions,
+                # ReadOnly, AddToRecentFiles, then eight parameters this
+                # call does not use, then OpenAndRepair.
                 doc = word.Documents.Open(
-                    abs_path,
-                    ReadOnly=True,
-                    AddToRecentFiles=False,
-                    OpenAndRepair=False,
+                    abs_path, False, True, False,
+                    *([pythoncom.Missing] * 8), False,
                 )
                 # Accessing content forces full load; corruption surfaces here.
                 _ = doc.Content.End
                 para_count = doc.Paragraphs.Count
-                doc.Close(SaveChanges=0)
+                doc.Close(0)
                 print(f"PASS  {path.name}  ({para_count} paragraphs)")
             except Exception as exc:  # noqa: BLE001 - COM errors are opaque
                 failures += 1

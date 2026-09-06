@@ -384,7 +384,9 @@ def test_word_roundtrip_three_equations(tmp_path):
         word = win32com.client.DispatchEx("Word.Application")
         word.Visible = False
         word.DisplayAlerts = 0
-        doc = word.Documents.Open(str(Path(path).resolve()), ReadOnly=True)
+        # Positional: pywin32 drops named arguments to Documents.Open
+        # when bound late, so ReadOnly=True never reached Word.
+        doc = word.Documents.Open(str(Path(path).resolve()), False, True)
         try:
             assert doc.OMaths.Count == 3
         finally:

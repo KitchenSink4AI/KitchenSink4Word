@@ -45,7 +45,7 @@ def _word_available():
         try:
             app = win32com.client.DispatchEx("Word.Application")
             app.Visible = False
-            app.Quit(SaveChanges=0)
+            app.Quit(0)
             return True
         except Exception:
             return False
@@ -149,15 +149,15 @@ app = win32com.client.DispatchEx("Word.Application")
 app.Visible = False
 app.DisplayAlerts = 0
 try:
-    doc = app.Documents.Open(r"{target.resolve()}", ReadOnly=True, AddToRecentFiles=False)
+    doc = app.Documents.Open(r"{target.resolve()}", False, True, False)
     print(f"PARAS={{doc.Paragraphs.Count}}")
     print(f"WORDS={{int(doc.ComputeStatistics(0))}}")
     chart_count = sum(1 for i in range(1, doc.InlineShapes.Count+1) if doc.InlineShapes(i).HasChart)
     print(f"CHARTS={{chart_count}}")
-    doc.Close(SaveChanges=0)
+    doc.Close(0)
     print("CLEAN=True")
 finally:
-    app.Quit(SaveChanges=0)
+    app.Quit(0)
     time.sleep(1)
 pythoncom.CoUninitialize()
 ''')
@@ -181,7 +181,7 @@ app = win32com.client.DispatchEx("Word.Application")
 app.Visible = False
 app.DisplayAlerts = 0
 try:
-    doc = app.Documents.Open(r"{target.resolve()}", ReadOnly=True, AddToRecentFiles=False)
+    doc = app.Documents.Open(r"{target.resolve()}", False, True, False)
     for i in range(1, doc.InlineShapes.Count+1):
         s = doc.InlineShapes(i)
         if s.HasChart:
@@ -191,9 +191,9 @@ try:
             print(f"TITLE={{title}}")
             print(f"SERIES={{count}}")
             break
-    doc.Close(SaveChanges=0)
+    doc.Close(0)
 finally:
-    app.Quit(SaveChanges=0)
+    app.Quit(0)
     time.sleep(1)
 pythoncom.CoUninitialize()
 ''')
@@ -218,7 +218,7 @@ app = win32com.client.DispatchEx("Word.Application")
 app.Visible = False
 app.DisplayAlerts = 0
 try:
-    doc = app.Documents.Open(r"{target.resolve()}", ReadOnly=False, AddToRecentFiles=False)
+    doc = app.Documents.Open(r"{target.resolve()}", False, False, False)
     for i in range(1, doc.InlineShapes.Count+1):
         s = doc.InlineShapes(i)
         if s.HasChart:
@@ -228,11 +228,11 @@ try:
             ws = wb.Worksheets(1)
             print(f"B2={{ws.Range('B2').Value}}")
             print(f"B3={{ws.Range('B3').Value}}")
-            wb.Close(SaveChanges=0)
+            wb.Close(0)
             break
-    doc.Close(SaveChanges=0)
+    doc.Close(0)
 finally:
-    app.Quit(SaveChanges=0)
+    app.Quit(0)
     time.sleep(2)
 pythoncom.CoUninitialize()
 ''')
@@ -271,11 +271,11 @@ app = win32com.client.DispatchEx("Word.Application")
 app.Visible = False
 app.DisplayAlerts = 0
 try:
-    doc = app.Documents.Open(r"{target.resolve()}", ReadOnly=False, AddToRecentFiles=False)
+    doc = app.Documents.Open(r"{target.resolve()}", False, False, False)
     doc.Save()
-    doc.Close(SaveChanges=0)
+    doc.Close(0)
 finally:
-    app.Quit(SaveChanges=0)
+    app.Quit(0)
     time.sleep(1)
 pythoncom.CoUninitialize()
 ''')
@@ -296,11 +296,11 @@ app = win32com.client.DispatchEx("Word.Application")
 app.Visible = False
 app.DisplayAlerts = 0
 try:
-    doc = app.Documents.Open(r"{target.resolve()}", ReadOnly=True, AddToRecentFiles=False)
+    doc = app.Documents.Open(r"{target.resolve()}", False, True, False)
     print("CLEAN=True")
-    doc.Close(SaveChanges=0)
+    doc.Close(0)
 finally:
-    app.Quit(SaveChanges=0)
+    app.Quit(0)
     time.sleep(1)
 pythoncom.CoUninitialize()
 ''')
@@ -343,11 +343,11 @@ import time; import pythoncom, win32com.client
 pythoncom.CoInitialize()
 app = win32com.client.DispatchEx("Word.Application"); app.Visible=False; app.DisplayAlerts=0
 try:
-    doc = app.Documents.Open(r"{target.resolve()}", ReadOnly=True, AddToRecentFiles=False)
+    doc = app.Documents.Open(r"{target.resolve()}", False, True, False)
     print(f"CLEAN=True IMGS={{doc.InlineShapes.Count}} TBLS={{doc.Tables.Count}} BMS={{doc.Bookmarks.Count}}")
-    doc.Close(SaveChanges=0)
+    doc.Close(0)
 finally:
-    app.Quit(SaveChanges=0); time.sleep(1)
+    app.Quit(0); time.sleep(1)
 pythoncom.CoUninitialize()
 ''')
         assert rc == 0, f"Opens_clean failed: {out}"
@@ -374,11 +374,11 @@ import time; import pythoncom, win32com.client
 pythoncom.CoInitialize()
 app = win32com.client.DispatchEx("Word.Application"); app.Visible=False; app.DisplayAlerts=0
 try:
-    doc = app.Documents.Open(r"{target.resolve()}", ReadOnly=True, AddToRecentFiles=False)
+    doc = app.Documents.Open(r"{target.resolve()}", False, True, False)
     print(f"CLEAN=True IMGS={{doc.InlineShapes.Count}} TBLS={{doc.Tables.Count}}")
-    doc.Close(SaveChanges=0)
+    doc.Close(0)
 finally:
-    app.Quit(SaveChanges=0); time.sleep(1)
+    app.Quit(0); time.sleep(1)
 pythoncom.CoUninitialize()
 ''')
         assert rc == 0
@@ -411,7 +411,7 @@ app = win32com.client.DispatchEx("Word.Application")
 app.Visible = False
 app.DisplayAlerts = 0
 try:
-    doc = app.Documents.Open(r"{target.resolve()}", ReadOnly=False, AddToRecentFiles=False)
+    doc = app.Documents.Open(r"{target.resolve()}", False, False, False)
 
     # --- get_text shape ---
     texts = _lo.get_text(str(r"{target.resolve()}"))
@@ -454,12 +454,12 @@ try:
     print(f"undo_count={{undos}}")
 
     # --- schema parity: file vs live ---
-    doc.Close(SaveChanges=0)
+    doc.Close(0)
     time.sleep(0.5)
     fpkg = DocxPackage(r"{target}")
     file_info = _rd.get_document_info(fpkg)
     file_text = _rd.get_paragraphs(fpkg, 0, None)
-    doc = app.Documents.Open(r"{target.resolve()}", ReadOnly=True, AddToRecentFiles=False)
+    doc = app.Documents.Open(r"{target.resolve()}", False, True, False)
     live_info = _lo.get_document_info(str(r"{target.resolve()}"))
     live_text = _lo.get_text(str(r"{target.resolve()}"))
     assert live_info.get("live") is True
@@ -470,10 +470,10 @@ try:
         assert k in file_keys and k in live_keys, f"Missing key {{k}}"
     print("schema_parity=OK")
 
-    doc.Close(SaveChanges=0)
+    doc.Close(0)
     print("ALL_LIVE_OK")
 finally:
-    app.Quit(SaveChanges=0)
+    app.Quit(0)
     time.sleep(1)
 pythoncom.CoUninitialize()
 ''', timeout=120)
@@ -503,15 +503,15 @@ from word_mcp.com import live_ops as _lo
 pythoncom.CoInitialize()
 app = win32com.client.DispatchEx("Word.Application"); app.Visible=False; app.DisplayAlerts=0
 try:
-    doc = app.Documents.Open(r"{target.resolve()}", ReadOnly=False, AddToRecentFiles=False)
+    doc = app.Documents.Open(r"{target.resolve()}", False, False, False)
     _lo.search_and_replace(str(r"{target.resolve()}"), [{{"find":"Alpha","replace":"LIVE_EDIT"}}])
     t = doc.Content.Text
     has_file = "FILE_INSERT" in t
     has_live = "LIVE_EDIT" in t
     print(f"FILE={{has_file}} LIVE={{has_live}}")
-    doc.Close(SaveChanges=0)
+    doc.Close(0)
 finally:
-    app.Quit(SaveChanges=0); time.sleep(1)
+    app.Quit(0); time.sleep(1)
 pythoncom.CoUninitialize()
 ''')
         assert rc == 0
@@ -540,7 +540,7 @@ from word_mcp.core.errors import DocumentLocked
 pythoncom.CoInitialize()
 app = win32com.client.DispatchEx("Word.Application"); app.Visible=False; app.DisplayAlerts=0
 try:
-    doc = app.Documents.Open(r"{target.resolve()}", ReadOnly=False, AddToRecentFiles=False)
+    doc = app.Documents.Open(r"{target.resolve()}", False, False, False)
     try:
         DocxPackage(r"{target}")
         print("LOCK_FAILED")  # should not reach here
@@ -548,9 +548,9 @@ try:
         print("LOCK_OK")
     except Exception as e:
         print(f"LOCK_OTHER={{e}}")
-    doc.Close(SaveChanges=0)
+    doc.Close(0)
 finally:
-    app.Quit(SaveChanges=0); time.sleep(1)
+    app.Quit(0); time.sleep(1)
 pythoncom.CoUninitialize()
 ''')
         assert rc == 0
@@ -570,12 +570,12 @@ from word_mcp.core.errors import DocumentLocked
 pythoncom.CoInitialize()
 app = win32com.client.DispatchEx("Word.Application"); app.Visible=False; app.DisplayAlerts=0
 try:
-    doc = app.Documents.Open(r"{target.resolve()}", ReadOnly=False, AddToRecentFiles=False)
+    doc = app.Documents.Open(r"{target.resolve()}", False, False, False)
     r = _route_live("auto", lambda: (_ for _ in ()).throw(DocumentLocked("test")), lambda: _lo.get_document_info(str(r"{target.resolve()}")))
     print(f"LIVE={{r.get('live')}}")
-    doc.Close(SaveChanges=0)
+    doc.Close(0)
 finally:
-    app.Quit(SaveChanges=0); time.sleep(1)
+    app.Quit(0); time.sleep(1)
 pythoncom.CoUninitialize()
 ''')
         assert rc == 0
@@ -619,16 +619,16 @@ pythoncom.CoInitialize()
 app = win32com.client.DispatchEx("Word.Application"); app.Visible=False; app.DisplayAlerts=0
 try:
     if True:
-        doc = app.Documents.Open(r"{prev.resolve()}", ReadOnly=True, AddToRecentFiles=False)
+        doc = app.Documents.Open(r"{prev.resolve()}", False, True, False)
         print("PREV_CLEAN=True")
-        doc.Close(SaveChanges=0)
+        doc.Close(0)
     if True:
-        doc = app.Documents.Open(r"{anchor.resolve()}", ReadOnly=True, AddToRecentFiles=False)
+        doc = app.Documents.Open(r"{anchor.resolve()}", False, True, False)
         has_alpha = "Alpha" in doc.Content.Text
         print(f"ANCHOR_CLEAN=True ALPHA={{has_alpha}}")
-        doc.Close(SaveChanges=0)
+        doc.Close(0)
 finally:
-    app.Quit(SaveChanges=0); time.sleep(1)
+    app.Quit(0); time.sleep(1)
 pythoncom.CoUninitialize()
 ''')
         assert rc == 0

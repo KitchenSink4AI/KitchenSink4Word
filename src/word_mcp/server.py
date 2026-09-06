@@ -5007,11 +5007,11 @@ def com_save_document(
     """Save, close, or encrypt a document through Word. Default: tells the
     user's running Word to save the open document so file tools read the
     current state (Option C: live edits stay unsaved until requested here
-    or by the user). close=True also closes it, releasing the file lock
-    (save=False discards unsaved changes). password saves an
-    AES-encrypted copy via an invisible instance (output_path saves it
-    elsewhere). Serialized, alert-suppressed, retried with backoff; no
-    save dialog can block Word. Requires Word installed.
+    or by the user). close=True also closes it, releasing the lock
+    (save=False discards unsaved changes). password saves a
+    VERIFIED AES-encrypted copy via an invisible instance (output_path saves it
+    elsewhere). Serialized, alert-suppressed, retried; no save
+    dialog can block Word. Requires Word installed.
     """
     from .com import bridge
 

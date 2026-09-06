@@ -198,7 +198,7 @@ def quit_instance_holding(path: str, wait: float = 8.0):
         d = win32com.client.Dispatch(
             obj.QueryInterface(pythoncom.IID_IDispatch)
         )
-        d.Application.Quit(SaveChanges=0)
+        d.Application.Quit(0)
         d = None
         obj = None
         deadline = time.monotonic() + wait
