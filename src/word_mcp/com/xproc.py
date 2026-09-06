@@ -367,7 +367,13 @@ def holder_info(scope: str = APP_SCOPE) -> dict | None:
     used by status reporting so a caller can see WHY it would queue."""
     lock_path = _lock_dir() / f"{scope}.lock"
     info = _read_lock_info(lock_path)
-    if not info or _is_stale(info):
+    if not info:
+        return None
+    # Rule out our own hold BEFORE the staleness test: _is_stale treats our
+    # own PID as a recycled number (its callers have already checked
+    # ownership), so probing it directly here reported this process's own
+    # live hold as no-holder and the "ours" field below could never be True.
+    if not _is_ours(info) and _is_stale(info):
         return None
     return {
         "pid": info.get("pid"),

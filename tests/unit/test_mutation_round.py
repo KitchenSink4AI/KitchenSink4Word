@@ -1226,6 +1226,59 @@ class TestLockDirFallback:
         assert xproc._lock_dir() == tmp_path / "word-mcp" / "live-locks"
 
 
+# =========================== holder_info and the own-hold bug (ppt port)
+# The pptx sibling's fix wave found holder_info could never report this
+# process's own live hold: _is_stale's pid == os.getpid() leg exists for
+# recycled-number detection and is valid only AFTER ownership has been
+# ruled out (its other callers do rule it out first), but holder_info
+# probed the raw lock info directly. A lock this process was actively
+# holding read as stale, holder_info returned None, and the "ours" field
+# in its return shape was dead code. The word twin had the identical
+# shape; these pin the ported fix.
+
+
+class TestHolderInfoOwnHold:
+    @pytest.fixture()
+    def lock_dir(self, tmp_path, monkeypatch):
+        d = tmp_path / "locks"
+        monkeypatch.setenv(xproc._LOCK_DIR_ENV, str(d))
+        return d
+
+    def test_holder_info_reports_our_own_hold_and_clears(self, lock_dir):
+        assert xproc.holder_info() is None
+        with xproc.cross_process_lock("test-op") as owns:
+            assert owns is True
+            hi = xproc.holder_info()
+            assert hi is not None
+            assert hi["ours"] is True
+            assert hi["holder"] == "test-op"
+            assert hi["pid"] == os.getpid()
+            assert hi["held_for_s"] >= 0
+        assert xproc.holder_info() is None
+
+    def test_holder_info_hides_stale_locks(self, lock_dir, dead_pid):
+        lock_dir.mkdir(parents=True, exist_ok=True)
+        (lock_dir / f"{xproc.APP_SCOPE}.lock").write_text(
+            json.dumps({"pid": dead_pid, "time": 1.0, "holder": "ghost"}),
+            encoding="utf-8",
+        )
+        assert xproc.holder_info() is None
+
+    def test_holder_info_reports_a_live_foreign_hold(self, lock_dir,
+                                                     sacrificial):
+        _proc, pid = sacrificial
+        lock_dir.mkdir(parents=True, exist_ok=True)
+        (lock_dir / f"{xproc.APP_SCOPE}.lock").write_text(
+            json.dumps({"pid": pid, "token": "foreign-token",
+                        "time": time.time(), "holder": "other-server"}),
+            encoding="utf-8",
+        )
+        hi = xproc.holder_info()
+        assert hi is not None
+        assert hi["ours"] is False
+        assert hi["holder"] == "other-server"
+
+
 # ======================= sandbox canonicalization internals (4 findings)
 # core/sandbox.py:100, :109, :112, :125, :83
 #
