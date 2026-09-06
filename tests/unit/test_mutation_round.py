@@ -735,7 +735,11 @@ class TestMeasuredBoundaries:
         assert safesave.source_doc_for(d) == doc
 
     def test_long_unicode_names_round_trip(self, tmp_path):
-        name = "한국어" * 30 + ".docx"
+        # 81 chars: one past _MAX_FOLDER_NAME, so the truncate+hash path
+        # runs on a multibyte name -- while the FILENAME stays 248 bytes
+        # in UTF-8, under the 255-byte per-name limit of Linux filesystems
+        # (90 chars of Hangul = 270 bytes, which ext4 refuses to create).
+        name = "한국어" * 27 + ".docx"
         doc = _doc(tmp_path, name)
         d = safesave.slot_dir(doc, create=True)
         assert safesave.source_doc_for(d) == doc
