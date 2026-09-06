@@ -355,6 +355,11 @@ def test_reading_a_corpus_document_does_not_change_it(tmp_path):
     overrides and could be tempted to normalize them."""
     dst = tmp_path / "outline.docx"
     shutil.copy(CORPUS / "outline.docx", dst)
+    # Seed one overridden list, so the guard holds whether or not the corpus
+    # document on this machine happens to number anything of its own.
+    seeded = DocxPackage(dst)
+    _add(seeded, ["alpha", {"text": "sub", "level": 1}], start_at=3)
+    seeded.save(do_backup=False)
     before = dst.read_bytes()
     groups = lists.get_lists(DocxPackage(dst))
     assert groups, "the corpus outline should carry lists"
