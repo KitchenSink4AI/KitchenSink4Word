@@ -10,7 +10,7 @@
 [Landing page](https://nometalalchemist.github.io/KitchenSink4Word/) · [llms.txt](https://nometalalchemist.github.io/KitchenSink4Word/llms.txt) (machine-readable capability manifest for agents and LLM crawlers)
 
 **Everything plus the kitchen sink for Microsoft Word.** The most complete
-Word (.docx) MCP server available: **220 document operations** across **109
+Word (.docx) MCP server available: **221 document operations** across **110
 tools**, one consistent grammar, engineered not to corrupt and stress-tested
 against long, heavily formatted real-world documents. Live editing included:
 documents open in Word are edited in place, visibly, with each tool call
@@ -18,7 +18,7 @@ landing as a single Ctrl+Z step.
 
 > ### ⚠️ v2.0 is a breaking change
 > Every v1.x tool name changed. The 189-tool v1.6 surface was rebuilt as a
-> consolidated set of 109 tools that cover every prior capability under one
+> consolidated set of 110 tools that cover every prior capability under one
 > grammar. If you are upgrading from v1.x, read the
 > **[migration guide](docs/MIGRATION_V2.md)** first: it maps every old tool
 > name to its v2 home, and `get_workflows("migrate-from-v1")` returns the
@@ -26,24 +26,24 @@ landing as a single Ctrl+Z step.
 
 ## Two numbers that matter
 
-- **220 document operations, 109 tools.** The operation count went up and the
+- **221 document operations, 110 tools.** The operation count went up and the
   tool count came down on purpose. v1 spread similar jobs across many
   competing names; v2 gives each concept exactly one name built from a small
   verb table (`insert_`, `set_`, `manage_`, `list_elements`, `validate`,
   `delete_element`), so an agent picks the right tool the first time and
   carries less schema to do it. Fewer tools, more reach. Measured with one
   yardstick on both trees, v1.6 performed 200 operations across its 189
-  tools and v2.0 performs 220 across 109: every v1.6 capability survived the
+  tools and v2.0 performs 221 across 110: every v1.6 capability survived the
   consolidation (the migration map covers all 189, test-guarded) and v2 adds
   the anchored batch editor, the anchored document view, deletion parity,
   and wider dispatch on the multiplexers. Both figures come from
   `scripts/count_operations.py`; the v1.6 run is
   `scripts/count_operations_v16.py`, which measures a v1.6 checkout with the
   same definition.
-- **Tiered loading: starts at about 7.9k tokens, scales to everything.** A
-  fresh session loads the 29-tool lite core (about 7,900 tokens) and turns on
+- **Tiered loading: starts at about 8.0k tokens, scales to everything.** A
+  fresh session loads the 29-tool lite core (about 8,000 tokens) and turns on
   capability packs only when a task needs them, with one `enable_tools` call.
-  Load every pack and the full surface measures about 27,400 tokens, down from
+  Load every pack and the full surface measures about 27,800 tokens, down from
   about 34,400 in v1.6: roughly 23% less for the whole sink, about 78% less at
   lite start. (All figures are script-measured; see
   [Context cost](#context-cost-measured) below.)
@@ -55,15 +55,15 @@ hand-counted. The lite core loads at startup; the seven packs load on demand.
 
 | Pack | Tools | Approx tokens | What it carries |
 |---|---:|---:|---|
-| **lite** (startup) | 29 | ~7.9k | Everyday reading and editing: text, paragraphs, tables, cells, lists, find and replace, outline, document view, backups, workflow guide, server info, pack toggles |
+| **lite** (startup) | 29 | ~8.0k | Everyday reading and editing: text, paragraphs, tables, cells, lists, find and replace, outline, document view, backups, workflow guide, server info, pack toggles |
 | references | 8 | ~2.4k | Word-native citations and bibliography, Zotero search and cite, parity checks, style conversion and detection |
 | review | 9 | ~1.8k | Tracked changes (read, accept/reject, reports), threaded comments, structured diff, anonymize and deanonymize |
-| academic | 23 | ~5.7k | Footnotes and endnotes, TOC, index, captions, cross-references, front matter, chapter headers, sections, styles, word counts, validation batteries, submission prep, accessibility |
+| academic | 24 | ~6.0k | Footnotes and endnotes, TOC, index, captions, cross-references, front matter, chapter headers, sections, styles, list numbering, word counts, validation batteries, submission prep, accessibility |
 | assembly | 7 | ~1.7k | Insert and split documents, move sections, copy tables across files, apply and fill templates, mail merge |
 | media-forms | 16 | ~4.6k | Images, charts, equations, text boxes, hyperlinks, table structure and styling, form fields, content controls, field codes |
 | com-live | 13 | ~2.2k | Drives a local Microsoft Word: PDF import/export, compare and combine, proofing, readability, field refresh, live editing of open documents |
 | protection-io | 6 | ~1.2k | Document protection, watermarks, redaction with verification, table data import and export |
-| **Full surface** | **111** | **~27.4k** | Everything (109 document tools plus `enable_tools` / `disable_tools`) |
+| **Full surface** | **112** | **~27.8k** | Everything (110 document tools plus `enable_tools` / `disable_tools`) |
 
 ## Quickstart: start lite, enable what you need
 
@@ -109,7 +109,7 @@ comparison is about what each one can do, not how many names it has:
 
 | Capability | KitchenSink4Word | GongRzhe Office-Word (2.1k★, archived) | word-mcp-live (195★) | SecurityRonin docx-mcp (43★) |
 |---|---|---|---|---|
-| Tiered context loading (lite core, packs on demand) | ✅ from ~7.9k tokens | ❌ | ❌ | ❌ |
+| Tiered context loading (lite core, packs on demand) | ✅ from ~8.0k tokens | ❌ | ❌ | ❌ |
 | Live editing while the doc is open in Word | ✅ cursor-safe, one Ctrl+Z per call | ❌ | ✅ | ❌ |
 | Table column insert/delete | ✅ merge-aware | ❌ | ❌ | ❌ |
 | Bulk cell edits (one call) | ✅ | ❌ | ❌ | ❌ |
@@ -128,7 +128,7 @@ comparison is about what each one can do, not how many names it has:
 Capability survey compiled from public repositories, documentation, and issue
 trackers. Corrections welcome: [open an issue](https://github.com/nometalalchemist/KitchenSink4Word/issues).
 
-## What the 220 operations cover
+## What the 221 operations cover
 
 The everyday core covers text and formatting, tables (including merge-aware
 column insert/delete and one-call bulk cell edits), footnotes and endnotes
@@ -221,9 +221,9 @@ claude mcp add word -s user -- <absolute-path>\.venv\Scripts\word-mcp.exe
 Almost no MCP server tells you what it costs to load. Here is the bill, from
 `scripts/measure_surface.py`:
 
-- **Lite start:** 29 tools, about 7,900 tokens, loaded when the session opens.
-- **Full surface:** 111 tools (109 document tools plus the two pack toggles),
-  about 27,400 tokens with every pack enabled.
+- **Lite start:** 29 tools, about 8,000 tokens, loaded when the session opens.
+- **Full surface:** 112 tools (110 document tools plus the two pack toggles),
+  about 27,800 tokens with every pack enabled.
 - **Versus v1.6:** the old full surface was about 34,400 tokens. v2 is roughly
   23% smaller at full load and about 78% smaller at lite start.
 - Clients that defer tool schemas until first use (for example Claude Code)

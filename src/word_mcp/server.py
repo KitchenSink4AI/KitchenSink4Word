@@ -3937,24 +3937,66 @@ def insert_list(
     items: list,
     kind: str = "bullet",
     location: dict | None = None,
+    continue_from: int | None = None,
+    start_at: int | None = None,
+    levels: list | None = None,
     backup: bool = True,
 ) -> dict:
     """Insert a bulleted or numbered list with real bullet/number glyphs
-    (numbering.xml infrastructure created as needed). items: strings or
-    {text, level} dicts (level 0-8 nests); kind: bullet | number. Each call
-    is an independent list, so numbering restarts at 1. location picks the
-    insertion point (omit for document end). Auto-backup: prev/anchor slots
-    in .ks4w-backups (backup=False skips rotation only); atomic validated
-    save. Refuses documents open in Word.
+    (numbering.xml as needed). items: strings or {text, level}
+    dicts (level 0-8 nests); kind: bullet | number. A call makes its own
+    list, so numbering restarts at 1; continue_from (a num_id from
+    list_elements) carries on an existing one and start_at restarts the new
+    one at N. levels sets per-level formats: [{level, format, text, start,
+    suffix, align, indent_pt, hanging_pt, font}], format one of decimal |
+    lowerLetter | upperLetter | lowerRoman | upperRoman | bullet | none,
+    text a label like '%1.%2.'.
+    location picks the insertion point (omit for document end).
+    Auto-backup to .ks4w-backups; atomic validated save. Refuses documents
+    open in Word.
     """
 
     def _do(pkg: DocxPackage) -> dict:
         after_index, at_end = _loc_insert_args(pkg, location)
         return _ls.add_list(
-            pkg, items, kind=kind, after_index=after_index, at_end=at_end
+            pkg, items, kind=kind, after_index=after_index, at_end=at_end,
+            continue_from=continue_from, start_at=start_at, levels=levels,
         )
 
     return _edit(file_path, _do, backup=backup)
+
+
+@_tool("academic")
+def set_list_numbering(
+    file_path: str,
+    num_id: int,
+    restart_at: int | None = None,
+    level: int = 0,
+    continue_from: int | None = None,
+    levels: list | None = None,
+    force: bool = False,
+    backup: bool = True,
+) -> dict:
+    """Change how one existing list numbers itself (num_id from
+    list_elements(type='lists')). restart_at makes the list start at N by
+    writing a startOverride on that level of this instance only, leaving
+    every other list alone. continue_from folds this list into another
+    instance so the two count as one run, and refuses when the two look
+    different unless force. levels rewrites the per-level formats
+    (insert_list documents the shape), first cloning the definition when
+    other lists share it, so a per-list change stays per-list. Returns the
+    resulting definition. Auto-backup: prev/anchor slots in .ks4w-backups
+    (backup=False skips rotation only); atomic validated save. Refuses
+    documents open in Word.
+    """
+    return _edit(
+        file_path,
+        lambda pkg: _ls.set_numbering(
+            pkg, num_id, restart_at=restart_at, level=level,
+            continue_from=continue_from, levels=levels, force=force,
+        ),
+        backup=backup,
+    )
 
 
 @_tool("media-forms")
