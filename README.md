@@ -89,9 +89,11 @@ guessing. `KS4W_MODE` beats the first and `KS4W_PACK_POLICY` beats the second
 whenever they are set, so a pinned pack list survives an install, and the
 server writes one line to stderr at startup naming what decided the surface.
 
-Tip: in Claude Desktop's Tool permissions, set the Read-only tools group to
-Always Allow: those tools cannot change anything, and it stops most
-permission prompts.
+One tip that removes most permission pop-ups: In Claude Desktop's Tool
+permissions for this server, set the Read-only tools group to Always Allow.
+Those tools cannot change anything, so approving them once is safe, and Claude
+stops asking about every read. Leave the acting tools on Ask, so anything that
+changes things still checks with you first.
 
 One client-side caveat: some MCP clients drop a tool's schema when a pack is
 disabled and do not pick it back up on re-enable, even though the server sends

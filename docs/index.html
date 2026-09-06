@@ -195,6 +195,18 @@ th.us{background:var(--copper)!important;color:var(--paper)}
 .step .go{display:inline-block;font-size:11px;letter-spacing:.18em;text-transform:uppercase;
   color:var(--copper);font-weight:600;text-decoration:none;border-bottom:2px solid var(--copper);
   padding-bottom:2px}
+/* the counter tip: the advice that belongs on the way out, so it sits across the
+   full width between the two install stations and the trade counter. Built from
+   parts already on the page: the guarantee's double rule and seal, the tale's
+   deep paper. Nothing here is a new motif; the width and the double border are
+   what make it read as a notice rather than a third install card. */
+.tip{border:3px double var(--ink);background:var(--paper-deep);box-shadow:var(--shadow);
+  padding:24px 28px 22px;margin-top:30px;display:flex;gap:20px;align-items:flex-start}
+.tip .seal{font-size:34px;line-height:1.1;flex:none}
+.tip h3{font-size:17px;font-weight:800;margin-bottom:8px}
+.tip p{font-size:13px;color:var(--ink-soft);line-height:1.62}
+@media(max-width:640px){.tip{flex-direction:column;gap:10px;padding:20px 20px 18px}}
+
 /* the parts window: a pegboard field behind, an accent spine down the hinge side,
    and the instructions themselves on a slip of paper laid on the counter. The two
    install stations above are paper; this one is the back wall of the trade counter,
@@ -235,6 +247,26 @@ details.devfold .term{margin-bottom:14px;font-size:13px;padding:16px 18px}
 .counter p{font-size:12.5px;color:var(--ink-soft);line-height:1.55}
 .counter .go{display:inline-block;margin-top:14px;font-size:11px;letter-spacing:.18em;
   text-transform:uppercase;color:var(--copper);font-weight:600}
+
+/* family row: one compact strip rather than a grid. Three fixtures sit in the row
+   today; a fourth slots in beside them at launch, and the strip starts scrolling
+   sideways instead of wrapping or stretching the cards. The cards never shrink,
+   so the one at the edge is always cut off rather than squeezed, which is what
+   tells you the row keeps going. */
+.famrow{display:flex;gap:18px;overflow-x:auto;overscroll-behavior-x:contain;
+  scroll-snap-type:x proximity;padding:3px 3px 12px;margin:0 -3px;
+  scrollbar-width:thin;scrollbar-color:var(--rule) transparent}
+.famrow::-webkit-scrollbar{height:9px}
+.famrow::-webkit-scrollbar-track{background:transparent}
+.famrow::-webkit-scrollbar-thumb{background:var(--rule);border:2px solid var(--paper)}
+.famrow .counter{flex:1 0 250px;scroll-snap-align:start;padding:20px 20px 18px;
+  display:flex;flex-direction:column}
+.famrow .counter .icon{font-size:26px;margin-bottom:8px}
+.famrow .counter h3{font-size:16px;margin-bottom:6px}
+.famrow .counter p{font-size:12px;line-height:1.5}
+/* the blurbs run different lengths, so the calls to action are pushed to the
+   floor of each card and read along one line across the row */
+.famrow .counter .go{margin-top:auto;padding-top:12px;font-size:10.5px}
 
 /* footer */
 footer{border-top:3px double var(--ink);padding:36px 0 48px;font-size:12px;color:var(--ink-soft)}
@@ -414,6 +446,13 @@ footer a{color:var(--copper)}
         <div class="term"><div><span class="p">$</span> claude mcp add word -s user -- uvx kitchensink4word</div></div>
       </div>
     </div>
+    <div class="tip">
+      <span class="seal">🔑</span>
+      <div>
+        <h3 data-i18n="tip.t">One tip that removes most permission pop-ups</h3>
+        <p data-i18n="tip.p">In Claude Desktop's Tool permissions for this server, set the Read-only tools group to Always Allow. Those tools cannot change anything, so approving them once is safe, and Claude stops asking about every read. Leave the acting tools on Ask, so anything that changes things still checks with you first.</p>
+      </div>
+    </div>
     <details class="devfold">
       <summary data-i18n="inst.dev">For developers: pip, uvx, source, other MCP clients</summary>
       <div class="devbody">
@@ -467,12 +506,18 @@ footer a{color:var(--copper)}
 <section id="family">
   <div class="wrap">
     <div class="sec-head"><span class="no" data-i18n="no7">DEPT. 07</span><h2 data-i18n="h2.fam">The family</h2></div>
-    <div class="service-grid">
+    <div class="famrow">
       <a class="counter" href="https://nometalalchemist.github.io/KitchenSink4PPT/">
         <span class="icon">💡</span>
         <h3 data-i18n="fam1.t">KitchenSink4PPT</h3>
         <p data-i18n="fam1.p">Everything plus the kitchen sink for Microsoft PowerPoint. Move the node, the arrows follow: diagrams your hands can still move. Tables that behave, and the same never-corrupts promise, now for slides.</p>
         <span class="go" data-i18n="fam1.g">Visit the lighting aisle →</span>
+      </a>
+      <a class="counter" href="https://nometalalchemist.github.io/KitchenSink4XL/">
+        <span class="icon">🔌</span>
+        <h3 data-i18n="fam3.t">KitchenSink4XL</h3>
+        <p data-i18n="fam3.p">Everything plus the kitchen sink for Excel (.xlsx): every value labeled calculated, cached, or missing, so the AI never repeats a stale number as a fresh one. Same never-corrupts promise, now for spreadsheets.</p>
+        <span class="go" data-i18n="fam3.g">Visit the electrical aisle →</span>
       </a>
       <a class="counter" href="https://nometalalchemist.github.io/">
         <span class="icon">🏪</span>
@@ -480,6 +525,9 @@ footer a{color:var(--copper)}
         <p data-i18n="fam2.p">The whole hardware store on one page: every KitchenSink server, its fixture, and its counter, plus a shelf or two that are not empty by accident.</p>
         <span class="go" data-i18n="fam2.g">Browse the store →</span>
       </a>
+      <!-- KitchenSink4Web slots in here at launch: the same <a class="counter"> block
+           with its own fixture and fam4.t / fam4.p / fam4.g keys in all seven
+           dictionaries. Nothing else changes; the row starts scrolling on its own. -->
     </div>
   </div>
 </section>
@@ -523,6 +571,8 @@ en: {
 "inst.b2": "One command",
 "inst.p2": "One line in a terminal and you are done. It fetches and runs the server for you, so there is nothing to install first.",
 "inst.dev": "For developers: pip, uvx, source, other MCP clients",
+"tip.t": "One tip that removes most permission pop-ups",
+"tip.p": "In Claude Desktop's Tool permissions for this server, set the Read-only tools group to Always Allow. Those tools cannot change anything, so approving them once is safe, and Claude stops asking about every read. Leave the acting tools on Ask, so anything that changes things still checks with you first.",
 "inst.dp1": "Install the package and point any MCP client at the executable:",
 "inst.dp2": "Then in any client's config: <code>{&quot;mcpServers&quot;: {&quot;word&quot;: {&quot;command&quot;: &quot;kitchensink4word&quot;}}}</code>. Running from a clone works the same way; point the command at the <code>word-mcp</code> executable in the clone's virtual environment. Full setup, including the sandbox options, is in the <a href='https://github.com/nometalalchemist/KitchenSink4Word#install'>README</a>.",
 "m.left": "<b>EST. 2026</b> · FINE INSTRUMENTS FOR DOCUMENT PLUMBING",
@@ -559,6 +609,9 @@ en: {
 "fam2.t": "The storefront",
 "fam2.p": "The whole hardware store on one page: every KitchenSink server, its fixture, and its counter, plus a shelf or two that are not empty by accident.",
 "fam2.g": "Browse the store →",
+"fam3.t": "KitchenSink4XL",
+"fam3.p": "Everything plus the kitchen sink for Excel (.xlsx): every value labeled calculated, cached, or missing, so the AI never repeats a stale number as a fresh one. Same never-corrupts promise, now for spreadsheets.",
+"fam3.g": "Visit the electrical aisle →",
 "inv.lead": "The stock is arranged in capability packs, the way a good hardware store is arranged in aisles. Browse the shelves below; your agent only carries an aisle when the job calls for it.",
 "cmp.lead": "Tool counts flatter everybody. What matters is what happens when you actually ask:",
 "hero.invite": "↓ or start with what it protects you from: the morning Word offers to repair your manuscript",
@@ -653,6 +706,8 @@ ko: {
 "inst.b2": "명령 한 줄",
 "inst.p2": "터미널에 한 줄이면 끝입니다. 서버를 알아서 받아 실행하므로 미리 설치할 것이 없습니다.",
 "inst.dev": "개발자용: pip, uvx, 소스, 다른 MCP 클라이언트",
+"tip.t": "권한 팝업 대부분을 없애는 요령 하나",
+"tip.p": "Claude Desktop에서 이 서버의 Tool permissions로 들어가 Read-only tools 그룹을 Always Allow로 설정하세요. 이 도구들은 아무것도 바꾸지 못하므로 한 번 허용해도 안전하고, 읽을 때마다 Claude가 묻는 일이 없어집니다. 실제로 작업하는 도구는 Ask로 두면, 무언가를 바꾸는 일은 여전히 먼저 확인을 거칩니다.",
 "inst.dp1": "패키지를 설치하고 원하는 MCP 클라이언트가 실행 파일을 가리키게 하면 됩니다:",
 "inst.dp2": "그다음 클라이언트 설정에 <code>{&quot;mcpServers&quot;: {&quot;word&quot;: {&quot;command&quot;: &quot;kitchensink4word&quot;}}}</code>를 넣으세요. 클론에서 실행할 때도 같은 방식이며, 클론의 가상 환경에 있는 <code>word-mcp</code> 실행 파일을 가리키면 됩니다. 샌드박스 옵션을 포함한 전체 설정은 <a href='https://github.com/nometalalchemist/KitchenSink4Word#install'>README</a>에 있습니다.",
 "m.left": "<b>EST. 2026</b> · 문서 배관을 위한 정밀 기구점",
@@ -689,6 +744,9 @@ ko: {
 "fam2.t": "본점",
 "fam2.p": "철물점 전체를 한 페이지에: 모든 KitchenSink 서버와 그 설비, 그 창구, 그리고 우연히 비어 있는 게 아닌 선반 한두 개까지.",
 "fam2.g": "매장 둘러보기 →",
+"fam3.t": "KitchenSink4XL",
+"fam3.p": "Excel(.xlsx)을 위한 것도 없는 게 없습니다. 돌려주는 모든 값에 계산됨, 캐시됨, 없음 중 하나가 라벨로 붙기 때문에, AI가 오래된 숫자를 새 숫자처럼 되풀이하는 일이 없습니다. 손상시키지 않겠다는 똑같은 약속을, 이제 스프레드시트에서.",
+"fam3.g": "전기 코너 방문하기 →",
 "inv.lead": "재고는 기능 팩으로 정리되어 있습니다. 좋은 철물점이 통로별로 정리되어 있는 것과 같습니다. 아래 선반을 둘러보세요. 에이전트는 일이 부를 때만 그 통로를 챙겨 갑니다.",
 "cmp.lead": "도구 개수는 누구에게나 후한 숫자입니다. 중요한 것은 실제로 시켰을 때 무슨 일이 벌어지는가입니다.",
 "hero.invite": "↓ 아니면 이것이 무엇을 막아 주는지부터: Word가 원고를 복구하겠다고 나서는 그 아침",
@@ -783,6 +841,8 @@ ja: {
 "inst.b2": "コマンド一行",
 "inst.p2": "ターミナルに一行で終わりです。サーバーは自動で取得して実行されるので、先に入れておくものはありません。",
 "inst.dev": "開発者向け: pip、uvx、ソース、その他の MCP クライアント",
+"tip.t": "権限の確認ポップアップをほとんど無くす、ひとつのコツ",
+"tip.p": "Claude Desktop でこのサーバーの Tool permissions を開き、Read-only tools のグループを Always Allow にしてください。これらのツールは何も変更できないので、一度許可しても安全で、読み取りのたびに Claude が尋ねてくることがなくなります。実際に手を加えるツールは Ask のままにしておけば、何かを変える操作は今までどおり先に確認を取ります。",
 "inst.dp1": "パッケージを入れて、任意の MCP クライアントから実行ファイルを指すだけです:",
 "inst.dp2": "そのうえでクライアントの設定に <code>{&quot;mcpServers&quot;: {&quot;word&quot;: {&quot;command&quot;: &quot;kitchensink4word&quot;}}}</code> を書きます。クローンから動かす場合も同じで、クローンの仮想環境にある <code>word-mcp</code> 実行ファイルを指してください。サンドボックス設定を含む完全な手順は <a href='https://github.com/nometalalchemist/KitchenSink4Word#install'>README</a> にあります。",
 "m.left": "<b>EST. 2026</b> · 文書配管のための精密器具",
@@ -819,6 +879,9 @@ ja: {
 "fam2.t": "本店",
 "fam2.p": "金物屋まるごと1ページに:すべての KitchenSink サーバーとその器具、その窓口、そして偶然ではなく空けてある棚が一つ二つ。",
 "fam2.g": "店内を見る →",
+"fam3.t": "KitchenSink4XL",
+"fam3.p": "Excel (.xlsx) のためなら何でも揃う。値はすべて「計算済み」「キャッシュ」「なし」のいずれかとして返るので、AI が古い数字を新しい数字として繰り返すことはありません。壊さないという同じ約束を、こんどは表計算に。",
+"fam3.g": "電気コーナーへ →",
 "inv.lead": "在庫は機能パックごとに並べてあります。いい金物屋が売り場の通路ごとに整えてあるのと同じです。下の棚をご覧ください。エージェントがその通路を担いでいくのは、仕事が呼んだときだけです。",
 "cmp.lead": "ツールの数は、どこの数字も良く見えます。大事なのは、実際に頼んだときに何が起きるかです。",
 "hero.invite": "↓ あるいは、何から守るのかから:Word が原稿の修復を申し出てくるあの朝",
@@ -913,6 +976,8 @@ zh: {
 "inst.b2": "一条命令",
 "inst.p2": "在终端里贴一行就完事了。它会替你取回并运行服务器,不需要事先安装任何东西。",
 "inst.dev": "开发者选项:pip、uvx、源码、其他 MCP 客户端",
+"tip.t": "一个小窍门，去掉大部分权限弹窗",
+"tip.p": "在 Claude Desktop 里打开这台服务器的 Tool permissions，把 Read-only tools 这一组设为 Always Allow。这些工具改不了任何东西，所以允许一次是安全的，Claude 也不会每读一次就问一次。真正动手的工具留在 Ask，凡是会改动内容的操作，依然会先征求你的同意。",
 "inst.dp1": "安装这个包,然后让任意 MCP 客户端指向可执行文件:",
 "inst.dp2": "然后在客户端配置里写 <code>{&quot;mcpServers&quot;: {&quot;word&quot;: {&quot;command&quot;: &quot;kitchensink4word&quot;}}}</code>。从克隆仓库运行的方式相同,指向克隆虚拟环境里的 <code>word-mcp</code> 可执行文件即可。包含沙箱选项的完整说明见 <a href='https://github.com/nometalalchemist/KitchenSink4Word#install'>README</a>。",
 "m.left": "<b>EST. 2026</b> · 文档管道精密器具行",
@@ -949,6 +1014,9 @@ zh: {
 "fam2.t": "总店门面",
 "fam2.p": "整间五金店放在一页里:每台 KitchenSink 服务器、它的设备、它的柜台,外加一两个绝非碰巧空着的货架。",
 "fam2.g": "逛逛店里 →",
+"fam3.t": "KitchenSink4XL",
+"fam3.p": "为 Excel（.xlsx）而备，应有尽有。每个值都标注为已计算、缓存或缺失，所以 AI 不会把过期的数字当成新数字再说一遍。以及同样“绝不损坏”的承诺，如今用在电子表格上。",
+"fam3.g": "去电工货架逛逛 →",
 "inv.lead": "货品按能力包摆放,就像像样的五金店按通道分区。下面的货架请随意翻看;只有活儿开口要,你的智能体才会把某条通道带上。",
 "cmp.lead": "工具数量对谁都好看。真正要紧的是你真开口时会发生什么:",
 "hero.invite": "↓ 或者先看它替你挡下什么:Word 提出要修复你稿子的那个早晨",
@@ -1043,6 +1111,8 @@ de: {
 "inst.b2": "Ein Befehl",
 "inst.p2": "Eine Zeile im Terminal, fertig. Der Server wird dabei geholt und gestartet, vorher ist nichts zu installieren.",
 "inst.dev": "Für Entwickler: pip, uvx, Quellcode, andere MCP-Clients",
+"tip.t": "Ein Tipp, der die meisten Berechtigungsabfragen erspart",
+"tip.p": "Öffnen Sie in Claude Desktop die Tool permissions dieses Servers und stellen Sie die Gruppe Read-only tools auf Always Allow. Diese Werkzeuge können nichts verändern, ein einmaliges Erlauben ist also unbedenklich, und Claude fragt nicht mehr bei jedem Lesen nach. Lassen Sie die handelnden Werkzeuge auf Ask, damit alles, was etwas verändert, weiterhin zuerst bei Ihnen nachfragt.",
 "inst.dp1": "Paket installieren und einen beliebigen MCP-Client auf die ausführbare Datei zeigen lassen:",
 "inst.dp2": "Dann in der Konfiguration des Clients: <code>{&quot;mcpServers&quot;: {&quot;word&quot;: {&quot;command&quot;: &quot;kitchensink4word&quot;}}}</code>. Aus einem Klon heraus läuft es genauso, dann zeigt der Befehl auf die ausführbare Datei <code>word-mcp</code> in der virtuellen Umgebung des Klons. Das vollständige Setup samt Sandbox-Optionen steht in der <a href='https://github.com/nometalalchemist/KitchenSink4Word#install'>README</a>.",
 "m.left": "<b>GEGR. 2026</b> · FEINE INSTRUMENTE FÜR DOKUMENTEN-KLEMPNEREI",
@@ -1079,6 +1149,9 @@ de: {
 "fam2.t": "Das Ladengeschäft",
 "fam2.p": "Der ganze Baumarkt auf einer Seite: jeder KitchenSink-Server, seine Armatur und sein Schalter, dazu ein, zwei Regale, die nicht aus Versehen leer sind.",
 "fam2.g": "Den Laden durchstöbern →",
+"fam3.t": "KitchenSink4XL",
+"fam3.p": "Für Excel (.xlsx) mit allem Drum und Dran. Jeder Wert ist als berechnet, zwischengespeichert oder fehlend ausgewiesen, damit die KI eine veraltete Zahl nie als frische wiederholt. Dasselbe Versprechen, nichts zu beschädigen, jetzt für Tabellen.",
+"fam3.g": "Zum Elektrogang →",
 "inv.lead": "Die Ware ist in Fähigkeitspaketen sortiert, so wie ein guter Baumarkt in Gänge sortiert ist. Stöbern Sie in den Regalen unten; Ihr Agent trägt einen Gang nur dann mit, wenn der Auftrag danach verlangt.",
 "cmp.lead": "Werkzeugzahlen schmeicheln jedem. Worauf es ankommt, ist, was passiert, wenn Sie tatsächlich fragen:",
 "hero.invite": "↓ oder fangen Sie damit an, wovor es Sie schützt: dem Morgen, an dem Word anbietet, Ihr Manuskript zu reparieren",
@@ -1173,6 +1246,8 @@ fr: {
 "inst.b2": "Une commande",
 "inst.p2": "Une ligne dans un terminal et c'est fini. Le serveur est récupéré et lancé pour vous, il n'y a rien à installer avant.",
 "inst.dev": "Pour les développeurs : pip, uvx, sources, autres clients MCP",
+"tip.t": "Une astuce qui supprime la plupart des fenêtres d'autorisation",
+"tip.p": "Dans Claude Desktop, ouvrez les Tool permissions de ce serveur et réglez le groupe Read-only tools sur Always Allow. Ces outils ne peuvent rien modifier, les autoriser une fois est donc sans risque, et Claude cesse de demander à chaque lecture. Laissez les outils qui agissent sur Ask, pour que tout ce qui modifie quelque chose vous demande toujours d'abord.",
 "inst.dp1": "Installez le paquet, puis pointez n'importe quel client MCP sur l'exécutable :",
 "inst.dp2": "Ensuite, dans la configuration du client : <code>{&quot;mcpServers&quot;: {&quot;word&quot;: {&quot;command&quot;: &quot;kitchensink4word&quot;}}}</code>. Depuis un clone, c'est identique : pointez la commande sur l'exécutable <code>word-mcp</code> de l'environnement virtuel du clone. L'installation complète, options de bac à sable comprises, est dans le <a href='https://github.com/nometalalchemist/KitchenSink4Word#install'>README</a>.",
 "m.left": "<b>FONDÉ EN 2026</b> · INSTRUMENTS DE PRÉCISION POUR PLOMBERIE DOCUMENTAIRE",
@@ -1209,6 +1284,9 @@ fr: {
 "fam2.t": "La devanture",
 "fam2.p": "Toute la quincaillerie sur une page : chaque serveur KitchenSink, son installation et son comptoir, plus une étagère ou deux qui ne sont pas vides par hasard.",
 "fam2.g": "Parcourir la boutique →",
+"fam3.t": "KitchenSink4XL",
+"fam3.p": "Absolument tout pour Excel (.xlsx), jusqu'au moindre détail. Chaque valeur est étiquetée calculée, mise en cache ou absente, si bien que l'IA ne répète jamais un chiffre périmé comme s'il était frais. La même promesse de ne rien corrompre, désormais pour les tableurs.",
+"fam3.g": "Visiter le rayon électricité →",
 "inv.lead": "Le stock est rangé en packs de capacités, comme une bonne quincaillerie est rangée en rayons. Parcourez les étagères ci-dessous ; votre agent n'emporte un rayon que lorsque le travail le réclame.",
 "cmp.lead": "Le nombre d'outils flatte tout le monde. Ce qui compte, c'est ce qui se passe quand vous demandez vraiment :",
 "hero.invite": "↓ ou commencez par ce dont il vous protège : le matin où Word propose de réparer votre manuscrit",
@@ -1303,6 +1381,8 @@ es: {
 "inst.b2": "Un comando",
 "inst.p2": "Una línea en la terminal y listo. El servidor se descarga y se ejecuta solo, no hay que instalar nada antes.",
 "inst.dev": "Para desarrolladores: pip, uvx, código fuente, otros clientes MCP",
+"tip.t": "Un consejo que elimina la mayoría de los avisos de permiso",
+"tip.p": "En Claude Desktop, abra las Tool permissions de este servidor y ponga el grupo Read-only tools en Always Allow. Esas herramientas no pueden cambiar nada, así que permitirlas una vez es seguro y Claude deja de preguntar en cada lectura. Deje en Ask las herramientas que actúan, para que todo lo que modifica algo siga consultándole antes.",
 "inst.dp1": "Instale el paquete y apunte cualquier cliente MCP al ejecutable:",
 "inst.dp2": "Después, en la configuración del cliente: <code>{&quot;mcpServers&quot;: {&quot;word&quot;: {&quot;command&quot;: &quot;kitchensink4word&quot;}}}</code>. Desde un clon funciona igual: apunte el comando al ejecutable <code>word-mcp</code> del entorno virtual del clon. La instalación completa, con las opciones de espacio aislado, está en el <a href='https://github.com/nometalalchemist/KitchenSink4Word#install'>README</a>.",
 "m.left": "<b>EST. 2026</b> · INSTRUMENTOS FINOS PARA FONTANERÍA DOCUMENTAL",
@@ -1339,6 +1419,9 @@ es: {
 "fam2.t": "La tienda",
 "fam2.p": "Toda la ferretería en una página: cada servidor KitchenSink, su accesorio y su mostrador, más un estante o dos que no están vacíos por casualidad.",
 "fam2.g": "Recorrer la tienda →",
+"fam3.t": "KitchenSink4XL",
+"fam3.p": "De todo para Excel (.xlsx), hasta lo que no imaginas. Cada valor va etiquetado como calculado, en caché o ausente, así que la IA nunca repite un número caducado como si fuera nuevo. La misma promesa de no corromper nada, ahora para las hojas de cálculo.",
+"fam3.g": "Visite el pasillo de electricidad →",
 "inv.lead": "La mercancía está ordenada en paquetes de capacidades, igual que una buena ferretería está ordenada en pasillos. Recorra los estantes de abajo; su agente solo se lleva un pasillo cuando el trabajo lo pide.",
 "cmp.lead": "El número de herramientas favorece a todos. Lo que importa es qué ocurre cuando de verdad lo pide:",
 "hero.invite": "↓ o empiece por aquello de lo que le protege: la mañana en que Word se ofrece a reparar su manuscrito",
