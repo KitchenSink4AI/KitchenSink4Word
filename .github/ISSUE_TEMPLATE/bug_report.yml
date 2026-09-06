@@ -10,6 +10,9 @@ body:
         **never attach a private document.** If the bug needs a document to
         reproduce, recreate it with placeholder text — the structure matters,
         the words don't.
+
+        Before filing: ask your AI to run `get_server_info` and paste the
+        output here; it is designed to be safe to share.
   - type: input
     id: tool
     attributes:
