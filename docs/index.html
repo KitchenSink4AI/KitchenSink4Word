@@ -195,15 +195,26 @@ th.us{background:var(--copper)!important;color:var(--paper)}
 .step .go{display:inline-block;font-size:11px;letter-spacing:.18em;text-transform:uppercase;
   color:var(--copper);font-weight:600;text-decoration:none;border-bottom:2px solid var(--copper);
   padding-bottom:2px}
-details.devfold{margin-top:26px;border:2px dashed var(--rule);background:transparent;padding:0}
-details.devfold summary{cursor:pointer;padding:14px 20px;font-size:11.5px;letter-spacing:.2em;
-  text-transform:uppercase;color:var(--ink-soft);list-style:none}
+/* the parts window: a pegboard field behind, an accent spine down the hinge side,
+   and the instructions themselves on a slip of paper laid on the counter. The two
+   install stations above are paper; this one is the back wall of the trade counter,
+   so a developer's eye catches it as its own department, not as a caveat. */
+details.devfold{margin-top:30px;border:2px solid var(--ink);border-left:5px solid var(--copper);
+  box-shadow:var(--shadow);padding:0;position:relative;
+  background-color:var(--paper-deep);
+  background-image:radial-gradient(circle at center, rgba(30,53,80,.17) 1.1px, transparent 1.4px);
+  background-size:14px 14px}
+details.devfold summary{cursor:pointer;padding:16px 20px;font-size:11.5px;letter-spacing:.2em;
+  text-transform:uppercase;color:var(--ink);font-weight:600;list-style:none}
 details.devfold summary::-webkit-details-marker{display:none}
 details.devfold summary:before{content:"▸ ";color:var(--copper)}
 details.devfold[open] summary:before{content:"▾ "}
+details.devfold[open] summary{border-bottom:1px dashed var(--rule)}
 details.devfold summary:hover{color:var(--copper)}
-details.devfold .devbody{padding:0 20px 20px}
+details.devfold .devbody{margin:16px;padding:20px 20px 16px;background:var(--paper);
+  border:1px solid var(--rule)}
 details.devfold .devbody p{font-size:12.5px;color:var(--ink-soft);margin:0 0 10px}
+details.devfold .devbody p:last-child{margin-bottom:0}
 details.devfold .term{margin-bottom:14px;font-size:13px;padding:16px 18px}
 
 /* guarantee */
@@ -417,7 +428,7 @@ footer a{color:var(--copper)}
 
 <section id="service">
   <div class="wrap">
-    <div class="sec-head"><span class="no" data-i18n="no6">DEPT. 06</span><h2 data-i18n="h2.svc">Service department</h2></div>
+    <div class="sec-head"><span class="no" data-i18n="no6">DEPT. 06</span><h2 data-i18n="h2.svc">CUSTOMER SERVICE</h2></div>
     <div class="service-grid">
       <a class="counter" href="https://github.com/nometalalchemist/KitchenSink4Word/issues/new?template=bug_report.yml">
         <span class="icon">🔧</span>
@@ -552,7 +563,7 @@ en: {
 "cmp.lead": "Tool counts flatter everybody. What matters is what happens when you actually ask:",
 "hero.invite": "↓ or start with what it protects you from: the morning Word offers to repair your manuscript",
 "h2.install": "Installation",
-"h2.svc": "Service department",
+"h2.svc": "CUSTOMER SERVICE",
 "tale.label": "A CAUTIONARY TALE",
 "tale.p1": "An AI agent once needed <em>fifteen minutes</em> to edit <em>twenty table cells</em> in a Word document. Not because the agent was slow, but because every Word MCP server on the market was missing something. One couldn't delete a table column. Another had no footnotes. A third couldn't touch a table of contents. Installing all three still couldn't do the job.",
 "tale.p2": "So instead, this got built: one server with <em>everything</em>. The twenty-cell edit now takes one call and finishes in twenty milliseconds. Your agents will simply never know the struggle.",
@@ -682,7 +693,7 @@ ko: {
 "cmp.lead": "도구 개수는 누구에게나 후한 숫자입니다. 중요한 것은 실제로 시켰을 때 무슨 일이 벌어지는가입니다.",
 "hero.invite": "↓ 아니면 이것이 무엇을 막아 주는지부터: Word가 원고를 복구하겠다고 나서는 그 아침",
 "h2.install": "설치",
-"h2.svc": "서비스 창구",
+"h2.svc": "고객 서비스",
 "tale.label": "교훈이 있는 이야기",
 "tale.p1": "한 AI 에이전트가 Word 문서의 <em>표 셀 스무 개</em>를 고치는 데 <em>15분</em>이 걸린 적이 있습니다. 에이전트가 느려서가 아니라, 시중의 모든 Word MCP 서버가 하나씩 빠져 있었기 때문입니다. 어떤 서버는 표 열을 삭제하지 못했고, 다른 서버는 각주가 없었고, 또 다른 서버는 목차를 건드리지 못했습니다. 셋을 모두 설치해도 그 작업을 끝낼 수 없었습니다.",
 "tale.p2": "그래서 대신 이것을 만들었습니다: <em>전부</em> 들어 있는 서버 하나. 그 스무 개 셀 수정은 이제 호출 한 번, 20밀리초면 끝납니다. 여러분의 에이전트는 그 고생을 영영 모를 겁니다.",
@@ -812,7 +823,7 @@ ja: {
 "cmp.lead": "ツールの数は、どこの数字も良く見えます。大事なのは、実際に頼んだときに何が起きるかです。",
 "hero.invite": "↓ あるいは、何から守るのかから:Word が原稿の修復を申し出てくるあの朝",
 "h2.install": "設置方法",
-"h2.svc": "サービス窓口",
+"h2.svc": "カスタマーサービス",
 "tale.label": "教訓ばなし",
 "tale.p1": "ある AI エージェントが、Word 文書の<em>表のセル20個</em>を直すのに<em>15分</em>かかったことがありました。エージェントが遅かったのではありません。市場のどの Word MCP サーバーにも、何かが欠けていたのです。ある物は表の列を削除できず、別の物には脚注がなく、また別の物は目次に触れられませんでした。3つ全部を入れても、その仕事は終わりませんでした。",
 "tale.p2": "そこで代わりに、これが作られました。<em>全部</em>入りのサーバーが1つ。あの20セルの修正は、いまでは呼び出し1回、20ミリ秒で終わります。あなたのエージェントは、その苦労を知らずに済むのです。",
@@ -942,7 +953,7 @@ zh: {
 "cmp.lead": "工具数量对谁都好看。真正要紧的是你真开口时会发生什么:",
 "hero.invite": "↓ 或者先看它替你挡下什么:Word 提出要修复你稿子的那个早晨",
 "h2.install": "安装",
-"h2.svc": "服务柜台",
+"h2.svc": "客户服务",
 "tale.label": "一则前车之鉴",
 "tale.p1": "曾有一个 AI 智能体，改 Word 文档里的<em>二十个表格单元格</em>用了<em>十五分钟</em>。不是智能体慢，而是市面上每一个 Word MCP 服务器都缺点什么：一个删不了表格列，一个没有脚注，还有一个碰不了目录。三个全装上，活儿还是干不完。",
 "tale.p2": "于是干脆造了这个：一台<em>什么都有</em>的服务器。那二十个单元格的修改，如今一次调用、二十毫秒完事。你的智能体将永远不知道那段苦日子。",
@@ -1072,7 +1083,7 @@ de: {
 "cmp.lead": "Werkzeugzahlen schmeicheln jedem. Worauf es ankommt, ist, was passiert, wenn Sie tatsächlich fragen:",
 "hero.invite": "↓ oder fangen Sie damit an, wovor es Sie schützt: dem Morgen, an dem Word anbietet, Ihr Manuskript zu reparieren",
 "h2.install": "Installation",
-"h2.svc": "Serviceabteilung",
+"h2.svc": "KUNDENSERVICE",
 "tale.label": "EIN WARNENDES BEISPIEL",
 "tale.p1": "Ein KI-Agent brauchte einmal <em>fünfzehn Minuten</em>, um <em>zwanzig Tabellenzellen</em> in einem Word-Dokument zu ändern. Nicht weil der Agent langsam war, sondern weil jedem Word-MCP-Server auf dem Markt etwas fehlte. Einer konnte keine Tabellenspalte löschen. Ein anderer hatte keine Fußnoten. Ein dritter kam an kein Inhaltsverzeichnis heran. Selbst alle drei zusammen schafften die Aufgabe nicht.",
 "tale.p2": "Also wurde stattdessen dies gebaut: ein Server mit <em>allem</em>. Die Änderung der zwanzig Zellen ist heute ein Aufruf und in zwanzig Millisekunden erledigt. Ihre Agenten werden diese Mühsal schlicht nie kennenlernen.",
@@ -1202,7 +1213,7 @@ fr: {
 "cmp.lead": "Le nombre d'outils flatte tout le monde. Ce qui compte, c'est ce qui se passe quand vous demandez vraiment :",
 "hero.invite": "↓ ou commencez par ce dont il vous protège : le matin où Word propose de réparer votre manuscrit",
 "h2.install": "Installation",
-"h2.svc": "Service après-vente",
+"h2.svc": "SERVICE CLIENT",
 "tale.label": "UN CONTE ÉDIFIANT",
 "tale.p1": "Un agent IA a un jour mis <em>quinze minutes</em> à modifier <em>vingt cellules de tableau</em> dans un document Word. Non pas que l'agent fût lent : c'est que chaque serveur MCP Word du marché avait une lacune. L'un ne savait pas supprimer une colonne de tableau. Un autre n'avait pas de notes de bas de page. Un troisième ne pouvait pas toucher à une table des matières. Même installés tous les trois, le travail restait impossible.",
 "tale.p2": "Alors, à la place, ceci a été construit : un seul serveur avec <em>tout</em>. La modification des vingt cellules tient désormais en un appel et s'achève en vingt millisecondes. Vos agents ne connaîtront tout simplement jamais cette galère.",
@@ -1332,7 +1343,7 @@ es: {
 "cmp.lead": "El número de herramientas favorece a todos. Lo que importa es qué ocurre cuando de verdad lo pide:",
 "hero.invite": "↓ o empiece por aquello de lo que le protege: la mañana en que Word se ofrece a reparar su manuscrito",
 "h2.install": "Instalación",
-"h2.svc": "Departamento de servicio",
+"h2.svc": "ATENCIÓN AL CLIENTE",
 "tale.label": "UN CUENTO CON MORALEJA",
 "tale.p1": "Un agente de IA necesitó una vez <em>quince minutos</em> para editar <em>veinte celdas de tabla</em> en un documento de Word. No porque el agente fuera lento, sino porque a cada servidor MCP de Word del mercado le faltaba algo. Uno no podía eliminar una columna de tabla. Otro no tenía notas al pie. Un tercero no podía tocar una tabla de contenido. Ni instalando los tres se podía terminar el trabajo.",
 "tale.p2": "Así que, en su lugar, se construyó esto: un solo servidor con <em>todo</em>. Aquella edición de veinte celdas ahora es una llamada y termina en veinte milisegundos. Sus agentes sencillamente nunca conocerán aquel calvario.",
