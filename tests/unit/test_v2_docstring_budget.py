@@ -41,6 +41,10 @@ MULTIPLEX = {
     "search_and_replace", "resolve_revisions", "manage_backups",
     "enable_tools", "get_workflows", "diagnose_document",
     "insert_document", "convert_citation_style", "delete_element",
+    # Both grew a placement grammar with the anchored-image work: six wrap
+    # modes, two relative-frame vocabularies, and align-or-offset per axis.
+    # An agent that cannot see the vocabulary cannot use the feature.
+    "insert_image", "set_image",
 }
 
 

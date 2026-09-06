@@ -4106,13 +4106,25 @@ def insert_image(
     location: dict | None = None,
     width_pt: float | None = None,
     alignment: str = "center",
+    wrap: str | None = None,
+    position: dict | None = None,
+    z_order: int | None = None,
+    allow_overlap: bool = True,
+    distance_pt: dict | None = None,
+    wrap_text: str | None = None,
     backup: bool = True,
 ) -> dict:
-    """Insert an inline image (PNG/JPEG/GIF/BMP/TIFF) in its own paragraph at
-    the located position (omit location for document end); aspect ratio is
-    kept, width defaults to the native size capped at 6.5in. The returned
-    image is addressable afterwards via list_elements(type='images') ids
-    for set_image and delete_element. Auto-backup: prev/anchor slots in
+    """Insert an image (PNG/JPEG/GIF/BMP/TIFF) at the located position (omit
+    location for document end); aspect ratio kept, width defaults to the
+    native size capped at 6.5in. Without wrap the image is INLINE in its own
+    paragraph, aligned by alignment. With wrap it FLOATS, anchored to the
+    located paragraph and adding no paragraph of its own: wrap is square |
+    tight | through | top_and_bottom | behind | in_front; wrap_text is the
+    side text flows down (both_sides | left | right | largest); position is
+    {horizontal, vertical}, each taking relative_to (page | margin | column
+    | character | paragraph | line | *_margin) plus align or offset_pt;
+    z_order stacks; distance_pt is the gap per side. Addressable via
+    list_elements(type='images'). Auto-backup: prev/anchor slots in
     .ks4w-backups (backup=False skips rotation only); atomic validated
     save. Refuses documents open in Word.
     """
@@ -4121,7 +4133,9 @@ def insert_image(
         after_index, at_end = _loc_insert_args(pkg, location)
         return _md.add_image(
             pkg, image_path, after_index=after_index, at_end=at_end,
-            width_pt=width_pt, alignment=alignment,
+            width_pt=width_pt, alignment=alignment, wrap=wrap,
+            position=position, z_order=z_order, allow_overlap=allow_overlap,
+            distance_pt=distance_pt, wrap_text=wrap_text,
         )
 
     return _edit(file_path, _do, backup=backup)
@@ -4135,20 +4149,40 @@ def set_image(
     width_pt: float | None = None,
     alt_text: str | None = None,
     alt_title: str | None = None,
+    wrap: str | None = None,
+    position: dict | None = None,
+    z_order: int | None = None,
+    allow_overlap: bool | None = None,
+    distance_pt: dict | None = None,
+    wrap_text: str | None = None,
+    force: bool = False,
     backup: bool = True,
 ) -> dict:
     """Set properties on one image (image_id from
     list_elements(type='images')): source swaps the image file keeping
     placement and display size (same file type as the original); width_pt
-    resizes with aspect ratio kept; alt_text (plus optional alt_title) sets
-    accessibility alt text. Parameters are complementary; give any
-    combination in one call. Auto-backup: prev/anchor slots in
-    .ks4w-backups (backup=False skips rotation only); atomic validated
-    save. Refuses documents open in Word.
+    resizes with aspect ratio kept, inline or floating; alt_text (plus
+    optional alt_title) sets accessibility alt text. wrap moves the image
+    between the text flow and the page: 'inline' returns it to the flow,
+    square | tight | through | top_and_bottom | behind | in_front float it,
+    and position, z_order, wrap_text, allow_overlap, and distance_pt (see
+    insert_image) adjust a floating one. Anything not named is left as it
+    was. A hand-edited wrap outline refuses unless force. Parameters are
+    complementary. Auto-backup: prev/anchor slots in .ks4w-backups
+    (backup=False skips rotation only); atomic validated save. Refuses
+    documents open in Word.
     """
-    if source is None and width_pt is None and alt_text is None:
+    placement = any(
+        v is not None for v in
+        (wrap, position, z_order, allow_overlap, distance_pt, wrap_text)
+    )
+    if source is None and width_pt is None and alt_text is None and (
+        not placement
+    ):
         raise WordMcpError(
-            "give source, width_pt, and/or alt_text; nothing to set"
+            "give source, width_pt, alt_text, and/or a placement "
+            "(wrap, position, z_order, wrap_text, allow_overlap, "
+            "distance_pt); nothing to set"
         )
     if alt_title is not None and alt_text is None:
         raise WordMcpError("alt_title goes with alt_text")
@@ -4162,6 +4196,12 @@ def set_image(
         if alt_text is not None:
             changed.update(_sx.set_image_alt_text(
                 pkg, image_id, description=alt_text, title=alt_title
+            ))
+        if placement:
+            changed.update(_md.set_image_placement(
+                pkg, image_id, wrap=wrap, position=position,
+                z_order=z_order, allow_overlap=allow_overlap,
+                distance_pt=distance_pt, wrap_text=wrap_text, force=force,
             ))
         return changed
 
