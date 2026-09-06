@@ -33,7 +33,8 @@ READ_ONLY: frozenset[str] = frozenset({
     "diagnose_document", "find_text", "get_comments",
     "get_document_info", "get_headers_footers", "get_outline",
     "get_paragraph_format", "get_protection", "get_revision_report",
-    "get_styles", "get_table", "get_text", "get_tracked_changes",
+    "get_server_info", "get_styles", "get_table", "get_text",
+    "get_tracked_changes",
     "get_workflows", "list_elements", "parse_references",
     "structured_diff", "validate", "word_count",
 })

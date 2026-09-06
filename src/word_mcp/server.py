@@ -35,6 +35,8 @@ from __future__ import annotations
 import functools
 import inspect as _inspect
 import json as _json
+import platform as _platform
+import sys as _sys
 from typing import Any
 
 from fastmcp import FastMCP
@@ -44,6 +46,7 @@ from fastmcp.server.transforms.visibility import Visibility as _Visibility
 from fastmcp.tools.function_tool import FunctionTool as _FunctionTool
 from fastmcp.tools.tool import ToolResult as _FmcpToolResult
 
+from . import __version__
 from . import envelope as _envelope
 from . import packs as _packs
 from .core.errors import (
@@ -52,6 +55,7 @@ from .core.errors import (
     WordMcpError,
 )
 from .core import readonly as _readonly
+from .core import sandbox as _sandbox
 from .core import update_check as _upd
 from .core.locate import is_range_spec, resolve_location, resolve_range
 from .core.package import DocxPackage, qn
@@ -1491,6 +1495,117 @@ def get_workflows(task: str | None = None) -> dict:
     notice = _upd.update_notice()
     if notice and isinstance(out, dict):
         out = {**out, "update": notice}
+    return out
+
+
+# --------------------------------------------------------- the environment
+# get_server_info is the family's support-bundle call: the one place a user
+# can be asked "paste what this returns" without being asked to redact
+# anything first. Every helper below is therefore built to report SHAPE,
+# never content: which capability is present, how many roots are allowed,
+# which mode decided the surface. No file path, no document name, no
+# environment-variable value that could carry a path, no user name.
+
+
+def _word_environment() -> dict:
+    """Can the Word application tier (the com_/live_ tools) run here?
+
+    Import and registry lookups only. Nothing starts Word, nothing
+    attaches to a running Word, and no open-document path is read: that
+    is com_word_status' job, and it is the reason this call stays free
+    of both COM traffic and anything a user would have to redact.
+    """
+    if _sys.platform != "win32":
+        return {
+            "application": "unavailable (not Windows)",
+            "pywin32": "unavailable (not Windows)",
+            "com_tools": "unavailable",
+            "note": (
+                "the com_ and live_ tools need Windows with Word "
+                "installed; every file-based tool works here"
+            ),
+        }
+    out: dict = {}
+    try:
+        import pythoncom
+    except Exception:
+        return {
+            "application": "unknown",
+            "pywin32": "not installed",
+            "com_tools": "unavailable",
+            "note": "pywin32 is not installed; the com_ and live_ tools need it",
+        }
+    out["pywin32"] = "installed"
+    try:
+        pythoncom.CLSIDFromProgID("Word.Application")
+    except Exception:
+        out["application"] = "not registered"
+        out["com_tools"] = "unavailable"
+        out["note"] = (
+            "no Word.Application registration found on this machine"
+        )
+        return out
+    out["application"] = "installed"
+    out["com_tools"] = "available"
+    return out
+
+
+def _update_check_status() -> dict:
+    """What the background update check knows, without its cache path.
+
+    state is one of: disabled (the operator opted out), not yet run (no
+    readable cache), current, or update available. Reads the cache only:
+    no network, and never raises.
+    """
+    if _upd.disabled():
+        return {"state": "disabled", "opt_out": _upd.OPT_OUT_ENV}
+    try:
+        cache = _upd.read_cache()
+    except Exception:
+        cache = None
+    if not cache:
+        return {"state": "not yet run"}
+    out = {"state": "current", "last_check": str(cache.get("last_check", ""))}
+    if not cache.get("ok"):
+        out["last_attempt"] = "failed"
+    latest = cache.get("latest_version")
+    if latest:
+        out["latest_known"] = str(latest)
+    if _upd.update_notice():
+        out["state"] = "update available"
+    return out
+
+
+@_tool("lite")
+def get_server_info() -> dict:
+    """Report this server's build and environment: version, the active tool
+    surface (tool count, approximate token bill, per-pack state), the packs
+    enable_tools can load, what decided the startup surface and whether it
+    is locked, whether the Word application tier can run here, whether path
+    sandboxing is on, the host OS and Python, and the update-check state.
+    Needs no document, opens no file, starts no Word. Paste-safe: no path,
+    document name, or user name, so a bug report can carry it as it stands.
+    """
+    out = {
+        "name": "kitchensink4word",
+        "version": __version__,
+        "surface": _packs.surface_report(),
+        "packs_available": _packs.pack_names(),
+        "startup_mode": _packs.resolve_startup_mode(),
+        "surface_locked": _packs.resolve_lock(),
+        "startup_note": _packs.startup_note(),
+        "word": _word_environment(),
+        "sandbox": {
+            "active": _sandbox.active(),
+            "allowed_roots": _sandbox.root_count(),
+        },
+        "os": _platform.platform(),
+        "python": _sys.version.split()[0],
+        "update_check": _update_check_status(),
+    }
+    notice = _upd.update_notice()
+    if notice:
+        out["update"] = notice
     return out
 
 

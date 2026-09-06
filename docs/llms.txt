@@ -1,6 +1,6 @@
 # KitchenSink4Word
 
-> Word (.docx) MCP server for agents. 219 operations across 108 tools, one verb
+> Word (.docx) MCP server for agents. 220 operations across 109 tools, one verb
 > grammar. Windows, stdio. Every mutation is preceded by an automatic backup and
 > committed by an atomic verified save.
 
@@ -15,10 +15,10 @@ below is a behavior you can rely on without testing it first.
 
 ## 1. Token economics
 
-- Session start loads 28 tools, about 7,700 tokens. Nothing else is on the wire until you ask for it.
+- Session start loads 29 tools, about 7,900 tokens. Nothing else is on the wire until you ask for it.
 - `enable_tools(["<pack>"])` adds a pack mid-session. `disable_tools([...])` removes one. Both take effect on the next `tools/list`, announced by `tools/list_changed`.
 - Pack costs, from `scripts/measure_surface.py`: references 8 tools / 2.4k, review 9 / 1.8k, academic 23 / 5.7k, assembly 7 / 1.7k, media-forms 16 / 4.1k, com-live 13 / 2.2k, protection-io 6 / 1.2k.
-- Everything enabled: 110 tools (108 document tools plus the two pack toggles), about 26,700 tokens.
+- Everything enabled: 111 tools (109 document tools plus the two pack toggles), about 26,900 tokens.
 - Set `KS4W_MODE=full` at server start to skip tiering and load every pack at startup.
 - `KS4W_ALL_TOOLS=true` does the same from the `.mcpb` "Load every tool at startup" checkbox; `KS4W_LOCK_TOOLS=true` fixes the surface at startup so `enable_tools` refuses. Both accept `true`/`false`, treat empty as false, and refuse an unrecognized value at startup. There is no per-pack startup toggle by design: the client's own tool permissions and `enable_tools` already cover that ground.
 - Startup precedence: `KS4W_MODE` (non-empty) beats `KS4W_ALL_TOOLS` beats lite; `KS4W_PACK_POLICY` beats `KS4W_LOCK_TOOLS`. One stderr line at startup names what decided the surface.
@@ -82,10 +82,10 @@ These are contracts. Handle them; do not retry blindly.
 - `diagnose_document` reads saved XML and has no live route. Save first; `com_validate_opens_clean` checks the open copy instead.
 - A view taken before `com_save_document` does not see unsaved live edits. Save, then view, then edit.
 
-## 6. Inventory: 219 operations, 108 tools, 8 packs
+## 6. Inventory: 220 operations, 109 tools, 8 packs
 
-### lite core: 28 tools, 75 operations, loaded at startup
-`create_document`, `copy_document`, `get_document_info`, `get_document_view`, `get_outline`, `get_text`, `find_text`, `search_and_replace`, `insert_paragraphs`, `delete_paragraphs`, `set_paragraph_text`, `set_paragraph_format`, `format_text`, `apply_style`, `insert_list`, `insert_break`, `create_table`, `get_table`, `set_cells`, `delete_table`, `delete_element`, `list_elements`, `apply_edits`, `diagnose_document`, `manage_backups`, `get_workflows`, `enable_tools`, `disable_tools`.
+### lite core: 29 tools, 76 operations, loaded at startup
+`create_document`, `copy_document`, `get_document_info`, `get_document_view`, `get_outline`, `get_text`, `find_text`, `search_and_replace`, `insert_paragraphs`, `delete_paragraphs`, `set_paragraph_text`, `set_paragraph_format`, `format_text`, `apply_style`, `insert_list`, `insert_break`, `create_table`, `get_table`, `set_cells`, `delete_table`, `delete_element`, `list_elements`, `apply_edits`, `diagnose_document`, `manage_backups`, `get_workflows`, `get_server_info`, `enable_tools`, `disable_tools`.
 
 ### references: 8 tools, 9 operations
 `insert_citation`, `manage_source`, `set_bibliography_style`, `insert_zotero_citation`, `search_zotero_library`, `convert_citation_style`, `detect_citation_system`, `parse_references`.
@@ -119,7 +119,7 @@ These are contracts. Handle them; do not retry blindly.
 ## 7. Version and migration
 
 v2.0.0 renamed every tool. Measured with one definition on both trees,
-v1.6 performed 200 operations across 189 tools; v2.0 performs 219 across 108.
+v1.6 performed 200 operations across 189 tools; v2.0 performs 220 across 109.
 Every v1.6 capability is mapped into v2 and the operation count went up.
 Upgrading from v1.x: call `get_workflows("migrate-from-v1")`, or read
 `migration/v1_to_v2.json` or `docs/MIGRATION_V2.md`. New installs need nothing.
