@@ -45,6 +45,7 @@ ENFORCED = (
     "bundle/manifest.json",
     "README.md",
     "docs/llms.txt",
+    "docs/QUICKSTART.md",
 )
 
 #: (needle, what it means) for the plain-text patterns. Written as literals

@@ -24,6 +24,8 @@ landing as a single Ctrl+Z step.
 > name to its v2 home, and `get_workflows("migrate-from-v1")` returns the
 > same map in-session. New installs need nothing extra.
 
+New here? Start with the [Quickstart](docs/QUICKSTART.md).
+
 ## Two numbers that matter
 
 - **221 document operations, 110 tools.** The operation count went up and the
@@ -289,7 +291,7 @@ runs against untrusted or semi-trusted agent traffic.
 
 ## Testing
 
-1,324 tests (1,258 run everywhere; 66 live-marked tests drive a real Word
+1,839 tests (1,769 run everywhere; 70 live-marked tests drive a real Word
 instance on Windows): the suite was developed against a private corpus of
 real-world documents (book-length chapters, a document with 171 footnotes, a
 manuscript with 126 tracked changes and reviewer comments), and CI
