@@ -6,7 +6,7 @@ installs and Smithery's Local (MCPB Bundle) listing.
 **Design: thin uvx launcher.** The archive carries only `manifest.json` and
 `icon.png` (~4 kB). The manifest's `mcp_config` tells the client to run
 `uvx kitchensink4word==<version>`, so the actual server is fetched from PyPI
-at first launch. Nothing from `src/` is bundled — bundling the server was
+at first launch. Nothing from `src/` is bundled: bundling the server was
 ruled out in `research/20260828_v15_omml_mcpb_research.md` Topic 2 (pywin32's
 `.pth` bootstrap and pydantic-core compiled wheels are not portable under
 `server/lib` bundling). End users need uv installed (`uvx` ships with uv);
@@ -42,7 +42,7 @@ mcpb pack bundle bundle/kitchensink4word.mcpb
 
 (`mcpb` comes from `npm install -g @anthropic-ai/mcpb`. The smoke test
 verifies archive contents, manifest shape, the version pin, and performs a
-live stdio initialize handshake through uvx against the published package —
+live stdio initialize handshake through uvx against the published package,
 so run it only after the new version is actually on PyPI.)
 
 The icon only needs regenerating if the design changes:
@@ -115,7 +115,7 @@ gh release upload vX.Y.Z bundle/kitchensink4word.mcpb --repo nometalalchemist/Ki
 
 or include it in `gh release create vX.Y.Z ... bundle/kitchensink4word.mcpb`.
 Because the manifest pins the PyPI version, each release's asset is specific
-to that release — never re-upload an old `.mcpb` to a new tag.
+to that release; never re-upload an old `.mcpb` to a new tag.
 
 ## Platform note
 
@@ -124,13 +124,13 @@ Windows with Word installed, and Windows is the primary audience. The
 file-based majority of the toolset is cross-platform; the manifest format has
 no per-tool capability notes, so that story lives in `long_description` and
 the README. If a macOS/Linux Desktop install path is wanted later, widen
-`platforms` to `["win32", "darwin", "linux"]` — the uvx launcher itself works
+`platforms` to `["win32", "darwin", "linux"]`; the uvx launcher itself works
 on all three (pywin32 is gated behind `sys_platform == 'win32'` in the
 package metadata).
 
 ## Signing
 
-`mcpb sign` is optional and currently skipped — unsigned bundles install
+`mcpb sign` is optional and currently skipped; unsigned bundles install
 with a warning. Revisit if a directory submission requires a signature.
 
 

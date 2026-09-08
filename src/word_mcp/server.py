@@ -1551,29 +1551,18 @@ def _word_environment() -> dict:
 
 
 def _update_check_status() -> dict:
-    """What the background update check knows, without its cache path.
+    """The update report, without its cache path.
 
-    state is one of: disabled (the operator opted out), not yet run (no
-    readable cache), current, or update available. Reads the cache only:
-    no network, and never raises.
+    THIS is the server's one and only on-demand check: it may ask PyPI, at
+    most once every seven days, with a two-second cap. No other tool path can
+    reach the network, nothing runs at startup, and a check that fails or
+    is switched off reports that fact rather than going quiet. state is one
+    of: disabled, update_available, current, unknown. Never raises.
     """
-    if _upd.disabled():
-        return {"state": "disabled", "opt_out": _upd.OPT_OUT_ENV}
     try:
-        cache = _upd.read_cache()
+        return _upd.status()
     except Exception:
-        cache = None
-    if not cache:
-        return {"state": "not yet run"}
-    out = {"state": "current", "last_check": str(cache.get("last_check", ""))}
-    if not cache.get("ok"):
-        out["last_attempt"] = "failed"
-    latest = cache.get("latest_version")
-    if latest:
-        out["latest_known"] = str(latest)
-    if _upd.update_notice():
-        out["state"] = "update available"
-    return out
+        return {"state": "unknown", "note": _upd.NOTE_UNKNOWN}
 
 
 @_tool("lite")
@@ -2411,18 +2400,18 @@ def get_table(
     table_index: int,
     nested: dict | None = None,
 ) -> dict:
-    """Read one table in full: every cell's text, the merge map (gridSpan
-    horizontal, vMerge vertical), and column widths. table_index is 0-based
-    among body-level tables in document order. For a table nested inside a
-    cell, pass nested={row, cell, index} addressing the host cell (index
-    picks among several, default 0). Write values with set_cells; reshape
-    with modify_table_structure (media-forms pack). Read-only; reads the
-    last-saved state of a document open in Word.
-    Row/column surgery, styling, and sort: media-forms pack.
+    """Read one table in full: every cell's text, the merge map, and
+    column widths. table_index is 0-based among body-level tables in
+    document order. has_merges=false returns rows of strings;
+    has_merges=true returns {text, grid_span, vmerge} cells. For a table
+    nested inside a cell, pass nested={row, cell, index} addressing the
+    host cell (index picks among several, default 0). Write with
+    set_cells; reshape with modify_table_structure (media-forms pack).
+    Read-only; reads the last-saved state of a document open in Word.
     """
     pkg = DocxPackage(file_path)
     if nested is None:
-        return _rd.get_table(pkg, table_index)
+        return _rd.compact_table(_rd.get_table(pkg, table_index))
     unknown = sorted(set(nested) - {"row", "cell", "index"})
     if unknown:
         raise WordMcpError(
@@ -2432,10 +2421,12 @@ def get_table(
     for key in ("row", "cell"):
         if key not in nested:
             raise WordMcpError(f"nested requires {key!r} (the host cell)")
-    return _tb.get_nested_table(
-        pkg, table_index,
-        row=nested["row"], cell=nested["cell"],
-        nested_index=nested.get("index", 0),
+    return _rd.compact_table(
+        _tb.get_nested_table(
+            pkg, table_index,
+            row=nested["row"], cell=nested["cell"],
+            nested_index=nested.get("index", 0),
+        )
     )
 
 
@@ -5254,12 +5245,8 @@ def main() -> None:
     disabled = _startup_disabled_names()
     if disabled:
         mcp.add_transform(_Visibility(False, names=disabled))
-    # Fire and forget: a daemon thread asks PyPI whether a newer release
-    # exists (at most every 14 days, off entirely under
-    # KS4W_NO_UPDATE_CHECK). Nothing waits on it, nothing it does can
-    # delay or break serving, and the answer only ever appears as one line
-    # in get_workflows.
-    _upd.start_background_check()
+    # No update check here. It runs ON DEMAND, inside get_server_info, and
+    # nowhere else: startup starts no thread and asks PyPI nothing.
     mcp.run()
 
 

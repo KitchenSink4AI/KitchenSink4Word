@@ -1,6 +1,6 @@
 [project]
 name = "kitchensink4word"
-version = "2.0.3"
+version = "2.1.0"
 description = "Everything plus the kitchen sink for Microsoft Word - the most complete .docx MCP server: live editing of open documents (one Ctrl+Z per call, cursor-safe), mail merge, batch operations, redaction, accessibility and template-compliance audits, cross-reference validation, native citations/bibliography, index, merge-aware tables, footnotes/endnotes, TOC, tracked-change writing, document compare/merge, protection, PDF import/export, engineered not to corrupt"
 readme = "README.md"
 license = "AGPL-3.0-only"
@@ -30,6 +30,12 @@ dev = [
     "pytest",
     "pytest-timeout",
 ]
+
+[project.urls]
+Homepage = "https://kitchensink4.ai"
+Documentation = "https://github.com/KitchenSink4AI/KitchenSink4Word#readme"
+Repository = "https://github.com/KitchenSink4AI/KitchenSink4Word"
+Issues = "https://github.com/KitchenSink4AI/KitchenSink4Word/issues"
 
 [project.scripts]
 word-mcp = "word_mcp.server:main"

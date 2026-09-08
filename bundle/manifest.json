@@ -2,9 +2,9 @@
   "manifest_version": "0.3",
   "name": "kitchensink4word",
   "display_name": "KitchenSink4Word",
-  "version": "2.0.3",
-  "description": "Everything plus the kitchen sink for Microsoft Word. 219 document operations across 108 tools, plus live in-Word editing.",
-  "long_description": "A Model Context Protocol server for Microsoft Word documents. 219 distinct operations across 108 tools, covering document creation, text and formatting, tables, styles, images, charts, document assembly, headers and footers, footnotes, comments, tracked changes, mail merge, batch operations, redaction, accessibility audit and repair, compliance audits, path sandboxing, and document diagnostics. Tools load in tiers: a 28 tool lite surface opens the session at about 7,700 tokens, and packs are enabled on demand. Live mode edits documents open in Word in place, with each tool call landing as a single undo step; live mode requires Windows with Microsoft Word installed. The file-based majority of the toolset works on any .docx file without Word running. Launching this bundle requires uv (the uvx command) on your machine; the server itself is fetched from PyPI on first launch. Tip: in Claude Desktop's Tool permissions, set the Read-only tools group to Always Allow: those tools cannot change anything, and it stops most permission prompts.",
+  "version": "2.1.0",
+  "description": "Lets Claude write and edit Word documents for you: text, tables, footnotes, citations, tracked changes, comments, and live edits to the document you have open in Word.",
+  "long_description": "KitchenSink4Word connects Claude to your Word documents. Ask it to draft sections, fix citations, apply tracked changes, build tables, or edit the document you have open in Word while you watch. Every change lands after an automatic backup, the work is checked when it saves, and nothing about your documents leaves your machine. Part of the KitchenSink4 family (Word, PowerPoint, Excel, Web) from KitchenSink4AI (kitchensink4.ai).",
   "author": {
     "name": "nometalalchemist"
   },
@@ -30,7 +30,7 @@
     "mcp_config": {
       "command": "uvx",
       "args": [
-        "kitchensink4word==2.0.3"
+        "kitchensink4word==2.1.0"
       ],
       "env": {
         "KS4W_ALL_TOOLS": "${user_config.all_tools}",
@@ -42,14 +42,14 @@
     "all_tools": {
       "type": "boolean",
       "title": "Load every tool at startup",
-      "description": "On: all 108 tools are loaded when a chat starts, which uses about 26,700 tokens of the conversation before you type anything. Off (recommended): the chat starts with the 28 everyday tools and Claude switches the rest on by itself when a task needs them.",
+      "description": "Off: starts with the core set, and Claude can ask for more mid-session. On: every tool loads from the first message, which costs more of Claude's working memory but never needs a follow-up. Use with care: the full set includes the tools that drive the real application.",
       "default": false,
       "required": false
     },
     "lock_tools": {
       "type": "boolean",
       "title": "Lock the tool set at startup",
-      "description": "On: whatever tools are loaded when the chat opens are the only tools it can use, and Claude cannot add more. Off (recommended): Claude can switch extra tools on mid-chat when a task calls for them, such as tracked changes or citations.",
+      "description": "On: the tools chosen at startup are final, and nothing can add more mid-session. A safety preference; most people leave it off.",
       "default": false,
       "required": false
     }
