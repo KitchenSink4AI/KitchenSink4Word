@@ -6,8 +6,8 @@ or network I/O by installing landmines on both.
 
 The properties pinned:
 
-1. HORIZON. Any answer, good or bad, is trusted for 24 hours, which is
-   what caps the server at one real network call a day. An offline
+1. HORIZON. Any answer, good or bad, is trusted for seven days, which
+   is what caps the server at one real network call a week. An offline
    machine is neither hammered nor stuck on a stale answer forever.
 2. OPT-OUT IS TOTAL. KS4W_NO_UPDATE_CHECK does not merely hide the line;
    it prevents the network call, the cache read, and the cache write.
@@ -67,10 +67,10 @@ def test_fresh_success_cache_is_not_due():
 
 
 @pytest.mark.parametrize("age_days,ok,due", [
-    (0.9, True, False),    # inside the 24-hour horizon
-    (1.1, True, True),     # past it
-    (0.5, False, False),   # a failed attempt holds the same horizon
-    (1.5, False, True),    # past it
+    (6.0, True, False),    # inside the seven-day horizon
+    (8.0, True, True),     # past it
+    (3.0, False, False),   # a failed attempt holds the same horizon
+    (8.0, False, True),    # past it
 ])
 def test_the_one_horizon(age_days, ok, due):
     stamp = datetime.now(timezone.utc) - timedelta(days=age_days)
@@ -92,7 +92,7 @@ def test_fresh_cache_skips_the_network(monkeypatch):
 
 
 def test_aged_cache_refetches(monkeypatch):
-    _write_cache("9.9.9", ok=True, age_days=20.0)
+    _write_cache("9.9.9", ok=True, age_days=20.0)  # past the seven-day mark
     monkeypatch.setattr(uc, "_fetch", lambda *a, **k: _payload("9.9.9",
                                                               "10.0.0"))
     assert uc.run_check() == "10.0.0"
@@ -249,15 +249,15 @@ def test_network_failure_is_silent(blow_up, monkeypatch, capsys):
     assert captured.out == "" and captured.err == ""
 
 
-def test_failed_attempt_is_recorded_with_the_short_horizon(monkeypatch):
+def test_failed_attempt_is_recorded_and_holds_the_same_horizon(monkeypatch):
     monkeypatch.setattr(uc, "_fetch", lambda *a, **k: (_ for _ in ()).throw(
         OSError("down")))
     uc.run_check()
     cache = uc.read_cache()
     assert cache["ok"] is False
     assert cache["latest_version"] is None
-    assert uc.is_due(cache) is False               # not hammered today
-    stamp = datetime.now(timezone.utc) - timedelta(days=2)
+    assert uc.is_due(cache) is False               # not hammered this week
+    stamp = datetime.now(timezone.utc) - timedelta(days=8)
     assert uc.is_due({**cache, "last_check": stamp.isoformat()}) is True
 
 

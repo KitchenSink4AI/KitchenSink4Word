@@ -8,7 +8,7 @@ variable names):
   is status(), and exactly one tool calls it: the server's info/diagnostic
   surface. Every other tool path reads the cache or nothing at all.
 - It asks PyPI's public JSON endpoint for the package it was installed
-  from, at most once every 24 hours. The answer is cached in a tiny JSON
+  from, at most once every seven days. The answer is cached in a tiny JSON
   file under the server's own state directory, never beside a user's
   documents.
 - Two seconds or nothing. A timeout, a network error, or a malformed
@@ -64,8 +64,11 @@ OPT_OUT_ENV = LEGACY_OFF_ENV
 CACHE_DIR_ENV = "KS4W_UPDATE_CACHE_DIR"
 
 #: How long any answer, good or bad, is trusted before asking again. One
-#: real network call per 24 hours, whatever happened last time.
-CHECK_INTERVAL = timedelta(hours=24)
+#: real network call per week, whatever happened last time. A week, not a
+#: day: these products ship small releases often, and a user does not want
+#: a notice for each of them. The report always dates its own answer, so a
+#: week-old "latest version" is still an honest one.
+CHECK_INTERVAL = timedelta(days=7)
 
 #: Kept as a separate name for readability; same horizon (see above).
 RETRY_INTERVAL = CHECK_INTERVAL
@@ -179,8 +182,8 @@ def _parse_stamp(value) -> datetime | None:
 def is_due(cache: dict | None, now: datetime | None = None) -> bool:
     """Has the cached answer aged out?
 
-    One horizon, 24 hours, whether the last attempt succeeded or failed:
-    that is what caps the server at one real network call a day. No cache,
+    One horizon, seven days, whether the last attempt succeeded or failed:
+    that is what caps the server at one real network call a week. No cache,
     or an unreadable timestamp, means due.
     """
     if not cache:
@@ -295,7 +298,7 @@ def _run_check(force: bool, path: Path | None) -> str | None:
         error = _reason(exc)
     if latest is None:
         # The attempt is recorded (that is what caps the network at one call
-        # a day), the last answer that DID arrive is kept, and the reason is
+        # a week), the last answer that DID arrive is kept, and the reason is
         # kept with it so the surface can say what went wrong.
         write_cache({"last_check": stamp, "latest_version": known,
                      "ok": False, "last_success": last_success,
@@ -314,7 +317,7 @@ def status(force: bool = False) -> dict:
     that was last confirmed, and what went wrong when it could not be.
 
     THIS is the only function that can reach the network, and it does so at
-    most once every 24 hours. It never raises, and a failed or disabled
+    most once every seven days. It never raises, and a failed or disabled
     check produces a report saying so rather than an absent one.
     """
     running = current_version()
