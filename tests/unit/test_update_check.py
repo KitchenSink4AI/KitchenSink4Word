@@ -1,4 +1,4 @@
-"""The startup update check: cache aging, opt-out, prereleases, silence.
+"""The on-demand update check: cache aging, opt-out, prereleases, quiet.
 
 Nothing here touches the network. Every test that would reach PyPI patches
 the fetch, and one test proves the opt-out short-circuits BEFORE any file
@@ -6,9 +6,9 @@ or network I/O by installing landmines on both.
 
 The properties pinned:
 
-1. HORIZONS. A successful answer is trusted for 14 days; a failed attempt
-   is retried after 1 day, so an offline machine is neither hammered nor
-   stuck on a stale answer forever.
+1. HORIZON. Any answer, good or bad, is trusted for 24 hours, which is
+   what caps the server at one real network call a day. An offline
+   machine is neither hammered nor stuck on a stale answer forever.
 2. OPT-OUT IS TOTAL. KS4W_NO_UPDATE_CHECK does not merely hide the line;
    it prevents the network call, the cache read, and the cache write.
 3. NO PRERELEASES. A prerelease is never offered to a stable build, even
@@ -16,8 +16,10 @@ The properties pinned:
 4. ONE SURFACE, ONLY WHEN BEHIND. get_workflows carries the line when a
    newer stable exists and carries nothing otherwise. No other tool ever
    mentions it.
-5. FAILURE IS SILENCE. Timeouts, connection errors, HTTP errors, and
-   malformed payloads raise nothing, print nothing, and surface nothing.
+5. FAILURE IS QUIET, NOT HIDDEN. Timeouts, connection errors, HTTP
+   errors, and malformed payloads raise nothing and print nothing; the
+   cached-line reader stays silent, and status() reports the failure
+   (see test_update_notice.py).
 """
 
 from __future__ import annotations
@@ -37,6 +39,7 @@ from word_mcp.core import update_check as uc
 @pytest.fixture(autouse=True)
 def _isolated(tmp_path, monkeypatch):
     """Every test gets its own cache directory and no opt-out set."""
+    monkeypatch.delenv(uc.OFF_ENV, raising=False)
     monkeypatch.delenv(uc.OPT_OUT_ENV, raising=False)
     monkeypatch.setenv(uc.CACHE_DIR_ENV, str(tmp_path / "state"))
     return tmp_path
@@ -64,12 +67,12 @@ def test_fresh_success_cache_is_not_due():
 
 
 @pytest.mark.parametrize("age_days,ok,due", [
-    (13.0, True, False),   # inside the 14-day success horizon
-    (14.5, True, True),    # past it
-    (0.5, False, False),   # inside the 1-day retry horizon
+    (0.9, True, False),    # inside the 24-hour horizon
+    (1.1, True, True),     # past it
+    (0.5, False, False),   # a failed attempt holds the same horizon
     (1.5, False, True),    # past it
 ])
-def test_both_horizons(age_days, ok, due):
+def test_the_one_horizon(age_days, ok, due):
     stamp = datetime.now(timezone.utc) - timedelta(days=age_days)
     cache = {"last_check": stamp.isoformat(), "latest_version": "1.0",
              "ok": ok}
@@ -83,7 +86,7 @@ def test_missing_or_garbage_cache_is_due():
 
 
 def test_fresh_cache_skips_the_network(monkeypatch):
-    _write_cache("9.9.9", ok=True, age_days=1.0)
+    _write_cache("9.9.9", ok=True, age_days=0.25)
     monkeypatch.setattr(uc, "_fetch", _boom)
     assert uc.run_check() == "9.9.9"
 
@@ -122,8 +125,8 @@ def test_opt_out_does_no_io_at_all(monkeypatch):
     monkeypatch.setattr(uc, "read_cache", _boom)
     monkeypatch.setattr(uc, "write_cache", _boom)
     assert uc.run_check() is None
-    assert uc.start_background_check() is None
     assert uc.update_notice() is None
+    assert uc.status()["state"] == "disabled"
 
 
 def test_opt_out_hides_a_real_pending_update(monkeypatch):
@@ -284,21 +287,20 @@ def test_an_unwritable_cache_dir_does_not_raise(monkeypatch):
     monkeypatch.setattr(uc, "cache_path", _boom)
     monkeypatch.setattr(uc, "_fetch", lambda *a, **k: _payload("1.0.0"))
     # run_check resolves the path itself; a raising resolver is the worst
-    # case, and the caller (a daemon thread) must still not see it.
-    thread = uc.start_background_check()
-    if thread is not None:
-        thread.join(timeout=5)
+    # case, and the calling tool must still not see it.
+    assert uc.run_check() is None
     assert uc.update_notice() is None
 
 
 # ------------------------------------------------------------ plumbing
 
 
-def test_background_check_never_blocks(monkeypatch):
+def test_there_is_no_background_starter(monkeypatch):
+    """The check runs on demand only: no thread, no scheduler, nothing at
+    startup. run_check is synchronous and the caller owns the wait."""
+    assert not hasattr(uc, "start_background_check")
     monkeypatch.setattr(uc, "_fetch", lambda *a, **k: _payload("1.0", "2.0"))
-    thread = uc.start_background_check()
-    assert thread is not None and thread.daemon is True
-    thread.join(timeout=10)
+    assert uc.run_check() == "2.0"
     assert uc.read_cache()["latest_version"] == "2.0"
 
 
