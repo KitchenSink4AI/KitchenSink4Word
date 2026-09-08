@@ -34,6 +34,7 @@ from ..core.errors import (
     WordNotRunning,
 )
 from . import dialogs as _dialogs
+from . import rot as _rot
 from . import serial as _serial
 from . import xproc as _xproc
 
@@ -314,19 +315,12 @@ def _attach_app(win32com, pythoncom):
 def _find_doc_via_rot(pythoncom, win32com, target_lower: str):
     """Multi-instance fallback: open documents register their full path as a
     file moniker; bind to the Document directly and reach its Application."""
-    rot = pythoncom.GetRunningObjectTable()
-    for moniker in rot.EnumRunning():
-        ctx = pythoncom.CreateBindCtx(0)
-        try:
-            name = moniker.GetDisplayName(ctx, None)
-        except Exception:
+    for rot, moniker, name in _rot.iter_entries(pythoncom):
+        if name != target_lower:
             continue
-        if name.lower() == target_lower:
-            with contextlib.suppress(Exception):
-                obj = rot.GetObject(moniker)
-                doc = win32com.Dispatch(
-                    obj.QueryInterface(pythoncom.IID_IDispatch)
-                )
+        with contextlib.suppress(Exception):
+            doc = _rot.bind_document(pythoncom, win32com, rot, moniker, name)
+            if doc is not None:
                 return doc.Application, doc
     return None, None
 
@@ -874,31 +868,20 @@ def _interactive_status_locked() -> dict:
                 for i in range(1, app.ProtectedViewWindows.Count + 1)
             ]
         # Other instances: open docs register file monikers in the ROT.
-        # Template monikers are excluded — binding a STARTUP add-in
-        # template (e.g. Zotero.dotm) and touching any attribute is a hard
-        # ACCESS VIOLATION (native crash, not a catchable exception), and
-        # loaded add-in templates are not open documents anyway.
+        # The STARTUP add-in template exclusion that this loop discovered
+        # now lives in com/rot.bind_document, which is the only place the
+        # server binds a moniker, so the three other ROT paths carry it too.
         with contextlib.suppress(Exception):
-            rot = pythoncom.GetRunningObjectTable()
-            for moniker in rot.EnumRunning():
-                ctx = pythoncom.CreateBindCtx(0)
-                try:
-                    name = moniker.GetDisplayName(ctx, None)
-                except Exception:
-                    continue
-                low = name.lower()
-                if (
-                    low in seen
-                    or not low.endswith((".docx", ".docm", ".doc", ".rtf"))
-                    or "\\microsoft\\word\\startup\\" in low
+            for rot, moniker, low in _rot.iter_entries(pythoncom):
+                if low in seen or not low.endswith(
+                    (".docx", ".docm", ".doc", ".rtf")
                 ):
                     continue
                 with contextlib.suppress(Exception):
-                    obj = rot.GetObject(moniker)
-                    doc = win32com.Dispatch(
-                        obj.QueryInterface(pythoncom.IID_IDispatch)
+                    doc = _rot.bind_document(
+                        pythoncom, win32com, rot, moniker, low
                     )
-                    if doc.FullName.lower() == low:
+                    if doc is not None and doc.FullName.lower() == low:
                         seen.add(low)
                         out["open_documents"].append(_doc_entry(doc))
     except Exception:

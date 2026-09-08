@@ -463,6 +463,25 @@ def _table_dict(tbl: etree._Element, index: int) -> dict:
     }
 
 
+def compact_table(d: dict) -> dict:
+    """The wire shape for a table read.
+
+    A cell is {text, grid_span, vmerge}. On a table with no merges every
+    cell carries grid_span 1 and vmerge None, which the payload already
+    states once in has_merges, so a 20x6 read spent about 2,200 of its
+    2,900 tokens repeating the two defaults 120 times. When has_merges is
+    false the rows collapse to lists of plain strings and no fact is lost;
+    when it is true every cell keeps the full object. has_merges is always
+    present and says which shape came back.
+
+    Internal callers (stats, journalcount, reviewcycle, the table ops) go
+    on using _table_dict directly and never see this.
+    """
+    if d.get("has_merges"):
+        return d
+    return {**d, "cells": [[c["text"] for c in row] for row in d["cells"]]}
+
+
 def list_tables(pkg: DocxPackage) -> list[dict]:
     out = []
     for kind, idx, el in body_items(pkg):
@@ -858,6 +877,21 @@ def find_text(
         )
     matches = []
     pattern = _regex.compile_user_pattern(query) if regex else None
+
+    def _hit(location: dict, src: str, start: int, end: int) -> dict:
+        """One match entry. `match` is emitted for regex queries only: a
+        literal query's every hit is the query itself, so echoing it back
+        on each hit spent ~1,900 tokens on a 288-hit search telling the
+        caller a string it had just sent. Regex hits genuinely differ, so
+        there the field stays."""
+        entry = dict(location)
+        if pattern is not None:
+            entry["match"] = src[start:end]
+        entry["context"] = src[
+            max(0, start - context_chars) : end + context_chars
+        ]
+        return entry
+
     for kind, idx, el in body_items(pkg):
         if kind == "paragraph":
             text = paragraph_text(el)
@@ -867,15 +901,7 @@ def find_text(
                 else _literal_spans(text, query)
             )
             for start, end in spans:
-                matches.append(
-                    {
-                        "paragraph_index": idx,
-                        "match": text[start:end],
-                        "context": text[
-                            max(0, start - context_chars) : end + context_chars
-                        ],
-                    }
-                )
+                matches.append(_hit({"paragraph_index": idx}, text, start, end))
         else:
             for r_i, tr in enumerate(el.findall(qn("w:tr"))):
                 for c_i, tc in enumerate(tr.findall(qn("w:tc"))):
@@ -892,15 +918,14 @@ def find_text(
                     )
                     for start, end in spans:
                         matches.append(
-                            {
-                                "table_index": idx,
-                                "row": r_i,
-                                "cell": c_i,
-                                "match": cell_text[start:end],
-                                "context": cell_text[
-                                    max(0, start - context_chars) : end + context_chars
-                                ],
-                            }
+                            _hit(
+                                {
+                                    "table_index": idx,
+                                    "row": r_i,
+                                    "cell": c_i,
+                                },
+                                cell_text, start, end,
+                            )
                         )
     # Text-box content: clearly-labeled ADDITIONAL matches (source "textbox")
     # read via ops/textboxes.py — never by re-including w:txbxContent in the
@@ -916,17 +941,18 @@ def find_text(
             )
             for start, end in spans:
                 matches.append(
-                    {
-                        "source": "textbox",
-                        "box_index": box["box_index"],
-                        "part": box["part"],
-                        "shape_name": box["shape_name"],
-                        "anchor_paragraph_index": box["anchor_paragraph_index"],
-                        "match": box_text[start:end],
-                        "context": box_text[
-                            max(0, start - context_chars) : end + context_chars
-                        ],
-                    }
+                    _hit(
+                        {
+                            "source": "textbox",
+                            "box_index": box["box_index"],
+                            "part": box["part"],
+                            "shape_name": box["shape_name"],
+                            "anchor_paragraph_index": box[
+                                "anchor_paragraph_index"
+                            ],
+                        },
+                        box_text, start, end,
+                    )
                 )
     return matches
 

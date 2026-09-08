@@ -2400,18 +2400,18 @@ def get_table(
     table_index: int,
     nested: dict | None = None,
 ) -> dict:
-    """Read one table in full: every cell's text, the merge map (gridSpan
-    horizontal, vMerge vertical), and column widths. table_index is 0-based
-    among body-level tables in document order. For a table nested inside a
-    cell, pass nested={row, cell, index} addressing the host cell (index
-    picks among several, default 0). Write values with set_cells; reshape
-    with modify_table_structure (media-forms pack). Read-only; reads the
-    last-saved state of a document open in Word.
-    Row/column surgery, styling, and sort: media-forms pack.
+    """Read one table in full: every cell's text, the merge map, and
+    column widths. table_index is 0-based among body-level tables in
+    document order. has_merges=false returns rows of strings;
+    has_merges=true returns {text, grid_span, vmerge} cells. For a table
+    nested inside a cell, pass nested={row, cell, index} addressing the
+    host cell (index picks among several, default 0). Write with
+    set_cells; reshape with modify_table_structure (media-forms pack).
+    Read-only; reads the last-saved state of a document open in Word.
     """
     pkg = DocxPackage(file_path)
     if nested is None:
-        return _rd.get_table(pkg, table_index)
+        return _rd.compact_table(_rd.get_table(pkg, table_index))
     unknown = sorted(set(nested) - {"row", "cell", "index"})
     if unknown:
         raise WordMcpError(
@@ -2421,10 +2421,12 @@ def get_table(
     for key in ("row", "cell"):
         if key not in nested:
             raise WordMcpError(f"nested requires {key!r} (the host cell)")
-    return _tb.get_nested_table(
-        pkg, table_index,
-        row=nested["row"], cell=nested["cell"],
-        nested_index=nested.get("index", 0),
+    return _rd.compact_table(
+        _tb.get_nested_table(
+            pkg, table_index,
+            row=nested["row"], cell=nested["cell"],
+            nested_index=nested.get("index", 0),
+        )
     )
 
 

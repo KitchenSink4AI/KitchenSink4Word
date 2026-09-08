@@ -11,6 +11,8 @@ Em-dash sweep also covers docs/MIGRATION_V2.md.
 
 from __future__ import annotations
 
+import functools
+import json
 import re
 import subprocess
 import sys
@@ -25,6 +27,7 @@ PUBLIC = [
 EM_DASH_FILES = PUBLIC + [ROOT / "docs" / "MIGRATION_V2.md"]
 
 
+@functools.cache
 def _run(script: str) -> str:
     out = subprocess.run(
         [sys.executable, "-X", "utf8", str(ROOT / "scripts" / script)],
@@ -133,6 +136,39 @@ def test_189_only_as_v1_history():
                 f"{path.name}:{i}: bare 189 not qualified as v1 history: "
                 f"{line.strip()[:90]!r}"
             )
+
+
+_SRC_TOOLS_CLAIM = re.compile(r"\b(\d+)\+?\s+(?:v1(?:\.6|\.x)?\s+)?tools\b")
+
+
+def test_src_tool_counts_are_measured_figures():
+    """The guards above cover README, llms.txt, and index.html. The
+    server's own source is public copy too: get_workflows serves
+    ops/workflows.py prose straight to the agent, and nothing measured it.
+    That is how "With 175+ tools" (a v1.6 figure) survived into v2.0.3
+    unnoticed while the README stayed exact. Every tool-count claim under
+    src/ must now be a number something measures: the lite surface, the
+    full surface, the document-tool count, or the shipped migration map's
+    v1 entry count."""
+    lite, full, _ = _measured()
+    v1_tools = len(
+        json.loads(
+            (ROOT / "migration" / "v1_to_v2.json").read_text(encoding="utf-8")
+        )["tools"]
+    )
+    allowed = {lite, full, full - 2, v1_tools}
+    for py in sorted((ROOT / "src").rglob("*.py")):
+        lines = py.read_text(encoding="utf-8").splitlines()
+        for i, line in enumerate(lines, 1):
+            for m in _SRC_TOOLS_CLAIM.finditer(line):
+                claimed = int(m.group(1))
+                assert claimed in allowed, (
+                    f"{py.relative_to(ROOT)}:{i} claims {claimed} tools; "
+                    f"measured figures are {sorted(allowed)} "
+                    f"(lite={lite}, full={full}, documents={full - 2}, "
+                    f"v1 migration entries={v1_tools}). Line: "
+                    f"{line.strip()[:90]!r}"
+                )
 
 
 def test_readme_pack_table_matches_measurement():

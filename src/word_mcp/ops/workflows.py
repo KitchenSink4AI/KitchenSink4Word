@@ -1,6 +1,6 @@
 """Workflow guidance: recommended tool sequences for common multi-step tasks.
 
-With 175+ tools, discoverability is a real problem for both agents and
+With 110 tools, discoverability is a real problem for both agents and
 integrators (API review, item 7). This module holds the curated sequences as
 plain data; get_workflows serves them. Every tool named in a step MUST be a
 registered tool on the server (tests assert this against the live registry),

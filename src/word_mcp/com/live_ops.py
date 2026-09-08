@@ -977,7 +977,11 @@ def find_text(
                 lo = max(0, m.start() - context_chars)
                 hi = min(len(text), m.end() + context_chars)
                 entry = dict(location)
-                entry["match"] = m.group(0)
+                if regex:
+                    # File-mode parity (ops/read.find_text._hit): a
+                    # literal query's every hit is the query, so the echo
+                    # is dropped; regex hits differ and keep it.
+                    entry["match"] = m.group(0)
                 entry["context"] = text[lo:hi]
                 matches.append(entry)
                 if len(matches) >= 500:

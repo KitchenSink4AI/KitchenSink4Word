@@ -74,6 +74,14 @@ def stamped_doc(tmp_path) -> Path:
     return path
 
 
+def _cell(g, row, col):
+    """get_table's wire shape is two shapes, and has_merges says which:
+    rows of plain strings on a merge-free table, {text, grid_span, vmerge}
+    objects once anything is merged."""
+    v = g["cells"][row][col]
+    return v if isinstance(v, str) else v["text"]
+
+
 def _md5(path: Path) -> str:
     return hashlib.md5(Path(path).read_bytes()).hexdigest()
 
@@ -270,10 +278,10 @@ def test_apply_edits_all_eight_ops(stamped_doc):
     # so it is body table 0 and the original shifted to 1; the set_cell op
     # still hit the original (element identity, not index)
     tbl_new = srv.get_table(str(stamped_doc), 0)
-    assert tbl_new["cells"][0][0]["text"] == "X"
-    assert tbl_new["cells"][1][1]["text"] == "2"
+    assert _cell(tbl_new, 0, 0) == "X"
+    assert _cell(tbl_new, 1, 1) == "2"
     tbl_orig = srv.get_table(str(stamped_doc), 1)
-    assert tbl_orig["cells"][0][0]["text"] == "Header!"
+    assert _cell(tbl_orig, 0, 0) == "Header!"
     assert out["changed"]["6"]["table"] == 1  # current index reported
     # heading landed in the outline; list paragraphs carry real numbering
     outline = [h["text"] for h in srv.get_outline(str(stamped_doc), live="off")]
