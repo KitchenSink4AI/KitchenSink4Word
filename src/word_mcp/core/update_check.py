@@ -79,19 +79,41 @@ TIMEOUT_SECONDS = 2.0
 _CACHE_NAME = "update-check.json"
 _STATE_DIR_NAME = "word-mcp"
 
-# --------------------------------------------------------------- placeholders
-# PLACEHOLDER STRINGS. The wording is ratified by the main thread; the facts
-# each one must convey are listed in the wave report
-# (Agent Results/20260908_update_notice.md). Machine-readable values (state
-# names, version numbers, ISO timestamps) are final; these sentences are not.
+# ---------------------------------------------------------------- the copy
+# The sentences a caller reads out of this module, ratified 2026-09-09.
+# Machine-readable values (state names, version numbers, ISO timestamps)
+# live in the payload beside them and are never restated here.
 
-NOTE_UPDATE_AVAILABLE = "[PLACEHOLDER ks4-update-notice/note_update_available]"
-NOTE_CURRENT = "[PLACEHOLDER ks4-update-notice/note_current]"
-NOTE_UNKNOWN = "[PLACEHOLDER ks4-update-notice/note_unknown]"
-NOTE_NOT_REACHED = "[PLACEHOLDER ks4-update-notice/note_not_reached]"
-NOTE_DISABLED = "[PLACEHOLDER ks4-update-notice/note_disabled]"
-INSTALL_NOTE = "[PLACEHOLDER ks4-update-notice/install_note]"
-PRIVACY_NOTE = "[PLACEHOLDER ks4-update-notice/privacy_note]"
+NOTE_UPDATE_AVAILABLE = (
+    "A newer version is published; the numbers are beside this note. "
+    "Nothing was downloaded and nothing was installed.")
+NOTE_CURRENT = (
+    "This build is not behind the index. PyPI answered at the time shown "
+    "in last_successful_check.")
+NOTE_UNKNOWN = (
+    "The newest published version is not known right now, and no version "
+    "is being guessed. When there is a failure reason, it is in error.")
+NOTE_NOT_REACHED = (
+    "PyPI could not be reached on the last attempt; the reason is in "
+    "error, and the last time an answer did arrive is in "
+    "last_successful_check. The check tries again after seven days. "
+    "Nothing else about the server is affected.")
+NOTE_DISABLED = (
+    "The update check is off by configuration: the variable that turned it "
+    "off is in disabled_by, and the value that does it is \"off\". While "
+    "off, the server makes no network call and reads and writes no cache.")
+INSTALL_NOTE = (
+    "This install is pinned, so a newer version never arrives on its own. "
+    "Updating means installing the new bundle, or upgrading the package "
+    "with pip install -U kitchensink4word. The server never downloads, "
+    "installs, or runs anything itself.")
+PRIVACY_NOTE = (
+    "This check is one plain HTTPS GET to pypi.org for the package's "
+    "public JSON. It sends nothing but the request itself (no document, no "
+    "path, no identifier, no telemetry), and the request carries only a "
+    "User-Agent naming the package and its version. This product sends "
+    "nothing else off the machine, ever. Set KS4W_UPDATE_CHECK=off to turn the check "
+    "off.")
 
 
 # ---------------------------------------------------------------- off switch

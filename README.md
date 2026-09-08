@@ -260,25 +260,22 @@ Almost no MCP server tells you what it costs to load. Here is the bill, from
 
 | Variable | Effect |
 |---|---|
-| `KS4W_NO_UPDATE_CHECK` | `1` or `true` turns the update check off completely: no network call, no cache file |
+| `KS4W_UPDATE_CHECK` | `off` turns the update check off completely: no network call, no cache file (the older `KS4W_NO_UPDATE_CHECK=1` still works) |
 
-The server checks PyPI, the package index it was installed from, at most once
-every 14 days to see whether a newer version exists; the check sends nothing
-but a standard HTTP request for that package's public JSON, and setting
-`KS4W_NO_UPDATE_CHECK=1` turns it off entirely.
-
-It runs on a background thread at startup, so it never delays a call, and it
-fails silently: a timeout or an offline machine leaves no error anywhere. When
-a newer release exists, `get_workflows` adds one line saying so. That is the
-only place it ever appears, and the server never downloads or installs
-anything on its own.
+**Update check.** The server looks for a newer release on PyPI only when you
+call `get_server_info`, never at startup and never on a timer, at most one
+request every seven days, capped at two seconds. The check is a single plain HTTPS
+GET to pypi.org that sends nothing but the request itself. A failed check is
+reported with its reason rather than hidden. Set `KS4W_UPDATE_CHECK=off` to turn it off
+completely (the older `KS4W_NO_UPDATE_CHECK=1` still works). The server never
+downloads or installs anything.
 
 ### Sandboxing (opt-in)
 
 Off by default: with nothing configured, the server behaves exactly as it
 always has. Set the `KS4W_ALLOWED_ROOTS` environment variable to a list of
 directories separated by the OS path separator (`;` on Windows, `:`
-elsewhere), for example `C:\Users\me\Documents;D:\Work`, and every path the
+elsewhere), for example `%USERPROFILE%\Documents;D:\Work`, and every path the
 server touches must resolve inside one of those directories. Reads are gated
 as well as writes, since a read outside the sandbox exfiltrates content just
 as surely as a write plants it. The containment check runs on canonicalized
