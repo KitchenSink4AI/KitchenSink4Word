@@ -11,8 +11,8 @@ The properties pinned:
 2. HONEST FAILURE. A check that cannot reach PyPI reports that it could
    not, with the reason and the age of the last answer that did arrive.
    It is never silently absent and it never invents a version.
-3. ONE CALL A DAY. A second call inside 24 hours reaches the cache, not
-   the network; past 24 hours it asks again.
+3. ONE CALL A WEEK. A second call inside seven days reaches the cache,
+   not the network; past seven days it asks again.
 4. THE OFF SWITCH. KS4W_UPDATE_CHECK=off produces a report saying the
    check is off, and performs no network, no cache read, no cache write.
 5. HOSTILE INPUT. Malformed, wrong-typed, and adversarial PyPI payloads
@@ -124,7 +124,7 @@ def test_an_unreachable_index_is_reported_not_hidden(blow_up, monkeypatch):
 
 
 def test_a_failure_reports_the_age_of_the_last_good_answer(monkeypatch):
-    _write_cache("999.0.0", ok=True, age_hours=48.0)
+    _write_cache("999.0.0", ok=True, age_hours=24.0 * 8)
     stamp = uc.read_cache()["last_success"]
     monkeypatch.setattr(uc, "_fetch", _Counter(raises=OSError("down")))
     out = uc.status()
@@ -141,10 +141,10 @@ def test_a_never_successful_check_admits_it_knows_nothing(monkeypatch):
     assert out["state"] == "unknown"
 
 
-# ------------------------------------------------------- 3. one call a day
+# ------------------------------------------------------ 3. one call a week
 
 
-def test_a_second_call_inside_24h_does_not_reach_the_network(monkeypatch):
+def test_a_second_call_inside_the_window_skips_the_network(monkeypatch):
     counter = _Counter(_payload("999.0.0"))
     monkeypatch.setattr(uc, "_fetch", counter)
     first = uc.status()
@@ -153,7 +153,8 @@ def test_a_second_call_inside_24h_does_not_reach_the_network(monkeypatch):
     assert second["latest_version"] == first["latest_version"] == "999.0.0"
 
 
-def test_a_failed_attempt_also_holds_the_network_off_for_24h(monkeypatch):
+def test_a_failed_attempt_also_holds_the_network_off_for_the_window(
+        monkeypatch):
     counter = _Counter(raises=OSError("down"))
     monkeypatch.setattr(uc, "_fetch", counter)
     uc.status()
@@ -161,8 +162,8 @@ def test_a_failed_attempt_also_holds_the_network_off_for_24h(monkeypatch):
     assert counter.calls == 1
 
 
-def test_past_24h_the_check_asks_again(monkeypatch):
-    _write_cache("1.0.0", ok=True, age_hours=25.0)
+def test_past_the_window_the_check_asks_again(monkeypatch):
+    _write_cache("1.0.0", ok=True, age_hours=24.0 * 8)
     counter = _Counter(_payload("999.0.0"))
     monkeypatch.setattr(uc, "_fetch", counter)
     out = uc.status()
@@ -170,10 +171,23 @@ def test_past_24h_the_check_asks_again(monkeypatch):
     assert out["latest_version"] == "999.0.0"
 
 
-def test_the_horizon_is_24_hours(monkeypatch):
-    assert uc.CHECK_INTERVAL == timedelta(hours=24)
-    fresh = datetime.now(timezone.utc) - timedelta(hours=23)
-    aged = datetime.now(timezone.utc) - timedelta(hours=25)
+def test_a_days_old_answer_is_still_good_enough_to_skip_the_network(
+        monkeypatch):
+    """Three days in, the cached answer still serves. This is the cadence
+    the products want: a release a week does not become a notice a week."""
+    _write_cache("999.0.0", ok=True, age_hours=24.0 * 3)
+    counter = _Counter(_payload("1000.0.0"))
+    monkeypatch.setattr(uc, "_fetch", counter)
+    out = uc.status()
+    assert counter.calls == 0
+    assert out["latest_version"] == "999.0.0"
+
+
+def test_the_horizon_is_seven_days(monkeypatch):
+    assert uc.CHECK_INTERVAL == timedelta(days=7)
+    assert uc.CHECK_INTERVAL.total_seconds() == 604800
+    fresh = datetime.now(timezone.utc) - timedelta(days=6)
+    aged = datetime.now(timezone.utc) - timedelta(days=8)
     assert uc.is_due({"last_check": fresh.isoformat(), "ok": True}) is False
     assert uc.is_due({"last_check": aged.isoformat(), "ok": True}) is True
 
