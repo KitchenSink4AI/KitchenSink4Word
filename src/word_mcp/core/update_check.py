@@ -1,26 +1,31 @@
-"""Is a newer KitchenSink4Word published? A quiet, opt-out startup check.
+"""Is a newer KitchenSink4Word published? A check-on-demand version report.
 
-The family spec (identical in KS4W, KS4P, KS4XL, and KS4Web, modulo the
-package and variable names):
+The family spec (identical in KS4W, KS4P, and KS4XL, modulo the package and
+variable names):
 
-- The check runs in a BACKGROUND daemon thread started after the server is
-  built, so it can never delay serving. Nothing waits on it.
+- CHECK ON DEMAND ONLY. Nothing runs at import, nothing runs at server
+  startup, no thread, no scheduler. The one call that can reach the network
+  is status(), and exactly one tool calls it: the server's info/diagnostic
+  surface. Every other tool path reads the cache or nothing at all.
 - It asks PyPI's public JSON endpoint for the package it was installed
-  from, at most once every 14 days. The answer is cached in a tiny JSON
+  from, at most once every 24 hours. The answer is cached in a tiny JSON
   file under the server's own state directory, never beside a user's
   documents.
-- Failure is silence. Timeouts (3 seconds), network errors, and malformed
-  payloads are swallowed; nothing reaches stderr and nothing reaches the
-  caller. A failed attempt IS recorded, with a 1-day retry horizon, so an
-  offline machine is neither hammered nor stuck forever.
-- Comparison uses packaging.version and is prerelease-aware: a prerelease
-  is never offered to somebody running a stable build.
-- The result surfaces as ONE line in get_workflows() and nowhere else. No
-  startup banner, no per-call nagging.
-- KS4W_NO_UPDATE_CHECK=1 (or "true") disables the whole thing: no network
-  call, no cache read, no cache write.
-- The server never downloads, installs, or executes anything. It reports a
-  version number and the command a human can run.
+- Two seconds or nothing. A timeout, a network error, or a malformed
+  payload never raises and never blocks; it is RECORDED and REPORTED, with
+  the reason and the age of the last answer that did arrive. The report is
+  honest about not knowing rather than silent.
+- The PyPI payload is untrusted input. Comparison uses packaging.version,
+  is prerelease-aware (a prerelease is never offered to a stable build),
+  and anything unparseable yields "unknown", never a fabricated version.
+- OFF SWITCH: KS4W_UPDATE_CHECK=off disables the whole thing (no network
+  call, no cache read, no cache write); the surface then says so. The
+  older KS4W_NO_UPDATE_CHECK=1 still disables it too.
+- PRIVACY: the check is one plain HTTPS GET to pypi.org. It sends nothing
+  but the request itself: no document, no path, no identifier, no
+  telemetry. The payload discloses this the first time it runs.
+- The server never downloads, installs, or executes anything. It reports
+  version numbers and facts.
 """
 
 from __future__ import annotations
@@ -28,7 +33,6 @@ from __future__ import annotations
 import json
 import os
 import tempfile
-import threading
 import urllib.request
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -44,36 +48,61 @@ PRODUCT = "KitchenSink4Word"
 #: The public JSON endpoint. Read-only, unauthenticated, no payload.
 PYPI_URL = f"https://pypi.org/pypi/{PACKAGE}/json"
 
-#: The opt-out. "1" or "true" (case-insensitive) turns everything off.
-OPT_OUT_ENV = "KS4W_NO_UPDATE_CHECK"
+#: The off switch. The value "off" (case-insensitive) turns everything off.
+OFF_ENV = "KS4W_UPDATE_CHECK"
+
+#: The value that means off.
+OFF_VALUE = "off"
+
+#: The original opt-out, still honored: "1"/"true"/"yes"/"on" turns it off.
+LEGACY_OFF_ENV = "KS4W_NO_UPDATE_CHECK"
+
+#: Back-compat alias for the legacy name.
+OPT_OUT_ENV = LEGACY_OFF_ENV
 
 #: Test/ops seam: point the cache somewhere else. Undocumented on purpose.
 CACHE_DIR_ENV = "KS4W_UPDATE_CACHE_DIR"
 
-#: How long a successful answer is trusted before asking again.
-CHECK_INTERVAL = timedelta(days=14)
+#: How long any answer, good or bad, is trusted before asking again. One
+#: real network call per 24 hours, whatever happened last time.
+CHECK_INTERVAL = timedelta(hours=24)
 
-#: How long a FAILED attempt is honored before retrying (shorter, so an
-#: offline machine catches up the day it comes back online).
-RETRY_INTERVAL = timedelta(days=1)
+#: Kept as a separate name for readability; same horizon (see above).
+RETRY_INTERVAL = CHECK_INTERVAL
 
-#: Hard cap on the request. Three seconds or nothing.
-TIMEOUT_SECONDS = 3.0
+#: Hard cap on the request. Two seconds or nothing.
+TIMEOUT_SECONDS = 2.0
 
 _CACHE_NAME = "update-check.json"
 _STATE_DIR_NAME = "word-mcp"
 
+# --------------------------------------------------------------- placeholders
+# PLACEHOLDER STRINGS. The wording is ratified by the main thread; the facts
+# each one must convey are listed in the wave report
+# (Agent Results/20260908_update_notice.md). Machine-readable values (state
+# names, version numbers, ISO timestamps) are final; these sentences are not.
 
-# ----------------------------------------------------------------- opt-out
+NOTE_UPDATE_AVAILABLE = "[PLACEHOLDER ks4-update-notice/note_update_available]"
+NOTE_CURRENT = "[PLACEHOLDER ks4-update-notice/note_current]"
+NOTE_UNKNOWN = "[PLACEHOLDER ks4-update-notice/note_unknown]"
+NOTE_NOT_REACHED = "[PLACEHOLDER ks4-update-notice/note_not_reached]"
+NOTE_DISABLED = "[PLACEHOLDER ks4-update-notice/note_disabled]"
+INSTALL_NOTE = "[PLACEHOLDER ks4-update-notice/install_note]"
+PRIVACY_NOTE = "[PLACEHOLDER ks4-update-notice/privacy_note]"
+
+
+# ---------------------------------------------------------------- off switch
 
 
 def disabled() -> bool:
     """True when the operator has turned the update check off.
 
-    Checked BEFORE any file or network I/O in every entry point here, so
-    an opt-out machine performs neither.
+    Checked BEFORE any file or network I/O in every entry point here, so a
+    machine with the check off performs neither.
     """
-    return (os.environ.get(OPT_OUT_ENV) or "").strip().lower() in {
+    if (os.environ.get(OFF_ENV) or "").strip().lower() == OFF_VALUE:
+        return True
+    return (os.environ.get(LEGACY_OFF_ENV) or "").strip().lower() in {
         "1", "true", "yes", "on",
     }
 
@@ -150,8 +179,9 @@ def _parse_stamp(value) -> datetime | None:
 def is_due(cache: dict | None, now: datetime | None = None) -> bool:
     """Has the cached answer aged out?
 
-    Two horizons: 14 days after a successful check, 1 day after a failed
-    one. No cache, or an unreadable timestamp, means due.
+    One horizon, 24 hours, whether the last attempt succeeded or failed:
+    that is what caps the server at one real network call a day. No cache,
+    or an unreadable timestamp, means due.
     """
     if not cache:
         return True
@@ -168,9 +198,12 @@ def is_due(cache: dict | None, now: datetime | None = None) -> bool:
 def _latest_stable(payload: dict) -> str | None:
     """The newest NON-prerelease release in a PyPI JSON payload.
 
-    Prefers the full releases map (so a prerelease published after the
-    last stable cannot win), and falls back to info.version when the map
-    is absent. Returns None for anything malformed.
+    The payload is untrusted input: every field is type-checked, every
+    version string goes through packaging.version, and anything that does
+    not parse is skipped rather than passed along. Prefers the full
+    releases map (so a prerelease published after the last stable cannot
+    win), and falls back to info.version when the map is absent. Returns
+    None for anything malformed.
     """
     if not isinstance(payload, dict):
         return None
@@ -207,7 +240,7 @@ def _latest_stable(payload: dict) -> str | None:
 
 
 def _fetch(url: str = PYPI_URL) -> dict | None:
-    """One GET, 3-second cap, no payload beyond a standard request. Returns
+    """One GET, 2-second cap, no payload beyond a standard request. Returns
     the decoded JSON or None."""
     request = urllib.request.Request(
         url,
@@ -220,13 +253,20 @@ def _fetch(url: str = PYPI_URL) -> dict | None:
     return data if isinstance(data, dict) else None
 
 
+def _reason(exc: BaseException) -> str:
+    """A short, mechanical description of why the call did not land. Carries
+    the exception class and its own message, truncated; no user data can
+    reach it because nothing user-supplied goes into the request."""
+    text = f"{type(exc).__name__}: {exc}".strip()
+    return text[:200]
+
+
 def run_check(force: bool = False, path: Path | None = None) -> str | None:
     """Perform the check if it is due, refresh the cache, and return the
-    latest stable version when one was learned.
+    latest stable version when one is known.
 
-    Never raises. Never prints. This is the background thread's body, so
-    the outer guard matters: an escaping exception would reach the thread
-    excepthook and print a traceback into a stdio transport.
+    Never raises. Never prints. Called from status() and from nowhere else,
+    so no other tool path can reach the network.
     """
     if disabled():
         return None
@@ -242,41 +282,108 @@ def _run_check(force: bool, path: Path | None) -> str | None:
     if not force and not is_due(cache):
         return (cache or {}).get("latest_version")
     known = (cache or {}).get("latest_version")
+    last_success = (cache or {}).get("last_success")
+    disclosed = bool((cache or {}).get("disclosed"))
     stamp = datetime.now(timezone.utc).isoformat()
+    error: str | None = None
     try:
         latest = _latest_stable(_fetch())
-    except Exception:
+        if latest is None:
+            error = "unusable response: no parseable stable release"
+    except Exception as exc:
         latest = None
+        error = _reason(exc)
     if latest is None:
-        # Failed or unusable answer: record the ATTEMPT (1-day horizon) and
-        # keep whatever we already knew. The user sees nothing.
+        # The attempt is recorded (that is what caps the network at one call
+        # a day), the last answer that DID arrive is kept, and the reason is
+        # kept with it so the surface can say what went wrong.
         write_cache({"last_check": stamp, "latest_version": known,
-                     "ok": False}, target)
+                     "ok": False, "last_success": last_success,
+                     "error": error, "disclosed": disclosed}, target)
         return None
-    write_cache({"last_check": stamp, "latest_version": latest, "ok": True},
-                target)
+    write_cache({"last_check": stamp, "latest_version": latest, "ok": True,
+                 "last_success": stamp, "disclosed": disclosed}, target)
     return latest
 
 
-def start_background_check() -> threading.Thread | None:
-    """Kick the check off on a daemon thread and return immediately.
-
-    Returns None when the check is disabled or the thread cannot start;
-    either way the caller carries on to serve.
-    """
-    if disabled():
-        return None
-    try:
-        thread = threading.Thread(
-            target=run_check, name="ks4w-update-check", daemon=True,
-        )
-        thread.start()
-        return thread
-    except Exception:
-        return None
-
-
 # ------------------------------------------------------------- the surface
+
+
+def status(force: bool = False) -> dict:
+    """The honest version report: what is running, what is published, when
+    that was last confirmed, and what went wrong when it could not be.
+
+    THIS is the only function that can reach the network, and it does so at
+    most once every 24 hours. It never raises, and a failed or disabled
+    check produces a report saying so rather than an absent one.
+    """
+    running = current_version()
+    if disabled():
+        return {
+            "state": "disabled",
+            "current_version": running,
+            "disabled_by": OFF_ENV,
+            "off_value": OFF_VALUE,
+            "note": NOTE_DISABLED,
+        }
+
+    try:
+        before = read_cache() or {}
+    except Exception:
+        before = {}
+    first_time = not before.get("disclosed")
+
+    try:
+        run_check(force=force)
+    except Exception:
+        pass
+
+    try:
+        cache = read_cache() or {}
+    except Exception:
+        cache = {}
+
+    out: dict = {"state": "unknown", "current_version": running}
+    latest = cache.get("latest_version")
+    reachable = bool(cache.get("ok"))
+    out["reachable"] = reachable
+    last_success = cache.get("last_success")
+    out["last_successful_check"] = str(last_success) if last_success else None
+    if cache.get("last_check"):
+        out["last_attempt"] = str(cache.get("last_check"))
+    if not reachable:
+        out["error"] = str(cache.get("error") or "unknown")
+        out["note"] = NOTE_NOT_REACHED
+
+    if latest:
+        out["latest_version"] = str(latest)
+    try:
+        newer = bool(
+            latest and running and Version(str(latest)) > Version(str(running))
+        )
+        known = bool(latest and running)
+    except Exception:
+        newer, known = False, False
+    if not known:
+        out["state"] = "unknown"
+        out.setdefault("note", NOTE_UNKNOWN)
+    elif newer:
+        out["state"] = "update_available"
+        out["install_note"] = INSTALL_NOTE
+        if reachable:
+            out["note"] = NOTE_UPDATE_AVAILABLE
+    else:
+        out["state"] = "current"
+        if reachable:
+            out["note"] = NOTE_CURRENT
+
+    if first_time:
+        out["privacy"] = PRIVACY_NOTE
+        out["privacy_endpoint"] = PYPI_URL
+        if cache:
+            write_cache({**cache, "disclosed": True})
+
+    return out
 
 
 def update_notice() -> str | None:

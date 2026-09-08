@@ -1551,29 +1551,18 @@ def _word_environment() -> dict:
 
 
 def _update_check_status() -> dict:
-    """What the background update check knows, without its cache path.
+    """The update report, without its cache path.
 
-    state is one of: disabled (the operator opted out), not yet run (no
-    readable cache), current, or update available. Reads the cache only:
-    no network, and never raises.
+    THIS is the server's one and only on-demand check: it may ask PyPI, at
+    most once every 24 hours, with a two-second cap. No other tool path can
+    reach the network, nothing runs at startup, and a check that fails or
+    is switched off reports that fact rather than going quiet. state is one
+    of: disabled, update_available, current, unknown. Never raises.
     """
-    if _upd.disabled():
-        return {"state": "disabled", "opt_out": _upd.OPT_OUT_ENV}
     try:
-        cache = _upd.read_cache()
+        return _upd.status()
     except Exception:
-        cache = None
-    if not cache:
-        return {"state": "not yet run"}
-    out = {"state": "current", "last_check": str(cache.get("last_check", ""))}
-    if not cache.get("ok"):
-        out["last_attempt"] = "failed"
-    latest = cache.get("latest_version")
-    if latest:
-        out["latest_known"] = str(latest)
-    if _upd.update_notice():
-        out["state"] = "update available"
-    return out
+        return {"state": "unknown", "note": _upd.NOTE_UNKNOWN}
 
 
 @_tool("lite")
@@ -5254,12 +5243,8 @@ def main() -> None:
     disabled = _startup_disabled_names()
     if disabled:
         mcp.add_transform(_Visibility(False, names=disabled))
-    # Fire and forget: a daemon thread asks PyPI whether a newer release
-    # exists (at most every 14 days, off entirely under
-    # KS4W_NO_UPDATE_CHECK). Nothing waits on it, nothing it does can
-    # delay or break serving, and the answer only ever appears as one line
-    # in get_workflows.
-    _upd.start_background_check()
+    # No update check here. It runs ON DEMAND, inside get_server_info, and
+    # nowhere else: startup starts no thread and asks PyPI nothing.
     mcp.run()
 
 

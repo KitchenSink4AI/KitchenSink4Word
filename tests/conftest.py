@@ -7,6 +7,7 @@ expected names below — documents with genuine footnotes, tracked changes, and
 comments give the most meaningful coverage.
 """
 
+import os
 from pathlib import Path
 
 import pytest
@@ -31,6 +32,11 @@ def pytest_configure(config):
     """Missing corpus files are GENERATED as structural stand-ins (see
     tests/make_corpus.py), so the full suite runs anywhere — CI included.
     Real local documents, when present, always take precedence."""
+    # NO NETWORK IN TESTS. get_server_info runs the on-demand update check,
+    # so the suite turns it off for every test by default; the update tests
+    # switch it back on for themselves and mock the fetch. setdefault, so a
+    # developer who exports the variable still wins.
+    os.environ.setdefault("KS4W_UPDATE_CHECK", "off")
     present = {p.name for p in CORPUS.glob("*.docx")}
     if set(EXPECTED) - present:
         import make_corpus  # noqa: F401  (lives beside this file)

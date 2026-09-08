@@ -18,6 +18,7 @@ import asyncio
 import json
 import os
 import re
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
@@ -120,52 +121,80 @@ def test_root_count_matches_the_env(monkeypatch, tmp_path):
 # -------------------------------------------------------- the update check
 
 
-def test_update_check_opt_out_is_reported(monkeypatch):
-    monkeypatch.setenv(update_check.OPT_OUT_ENV, "true")
+def _enable(monkeypatch, tmp_path):
+    """Switch the check on for one test (the suite turns it off globally),
+    point it at a scratch cache, and make sure nothing here can reach the
+    network: an unpatched fetch raises."""
+    monkeypatch.delenv(update_check.OFF_ENV, raising=False)
+    monkeypatch.delenv(update_check.LEGACY_OFF_ENV, raising=False)
+    monkeypatch.setenv(update_check.CACHE_DIR_ENV, str(tmp_path))
+    monkeypatch.setattr(update_check, "_fetch", _no_network)
+
+
+def _no_network(*args, **kwargs):
+    raise AssertionError("a test reached for the network")
+
+
+def _fresh(latest):
+    """A cache young enough that no test will trigger a fetch."""
+    return {"last_check": datetime.now(timezone.utc).isoformat(),
+            "last_success": datetime.now(timezone.utc).isoformat(),
+            "latest_version": latest, "ok": True}
+
+
+def test_update_check_off_is_reported(monkeypatch):
+    monkeypatch.setenv(update_check.OFF_ENV, "off")
+    out = server.get_server_info()
+    assert out["update_check"]["state"] == "disabled"
+    assert out["update_check"]["disabled_by"] == update_check.OFF_ENV
+    assert "update" not in out
+
+
+def test_update_check_legacy_opt_out_is_reported(monkeypatch):
+    monkeypatch.delenv(update_check.OFF_ENV, raising=False)
+    monkeypatch.setenv(update_check.LEGACY_OFF_ENV, "true")
     out = server.get_server_info()
     assert out["update_check"]["state"] == "disabled"
     assert "update" not in out
 
 
-def test_update_check_reports_not_yet_run_without_a_cache(
+def test_update_check_without_a_cache_says_it_does_not_know(
     monkeypatch, tmp_path
 ):
-    monkeypatch.delenv(update_check.OPT_OUT_ENV, raising=False)
-    monkeypatch.setenv(update_check.CACHE_DIR_ENV, str(tmp_path))
-    out = server.get_server_info()
-    assert out["update_check"]["state"] == "not yet run"
+    """No cache and no answer: the report says unknown and admits the
+    index was not reached. It never goes missing and never guesses."""
+    _enable(monkeypatch, tmp_path)
+    out = server.get_server_info()["update_check"]
+    assert out["state"] == "unknown"
+    assert out["reachable"] is False
+    assert out["last_successful_check"] is None
+    assert "latest_version" not in out
 
 
 def test_update_check_reports_a_newer_release(monkeypatch, tmp_path):
-    monkeypatch.delenv(update_check.OPT_OUT_ENV, raising=False)
-    monkeypatch.setenv(update_check.CACHE_DIR_ENV, str(tmp_path))
-    update_check.write_cache(
-        {"last_check": "2026-09-06T00:00:00+00:00",
-         "latest_version": "99.0.0", "ok": True},
-        tmp_path / "update-check.json",
-    )
+    _enable(monkeypatch, tmp_path)
+    update_check.write_cache(_fresh("99.0.0"), tmp_path / "update-check.json")
     out = server.get_server_info()
-    assert out["update_check"]["state"] == "update available"
-    assert out["update_check"]["latest_known"] == "99.0.0"
+    assert out["update_check"]["state"] == "update_available"
+    assert out["update_check"]["latest_version"] == "99.0.0"
+    assert out["update_check"]["install_note"]
     assert "99.0.0" in out["update"]
 
 
 def test_update_check_never_leaks_its_cache_path(monkeypatch, tmp_path):
-    monkeypatch.setenv(update_check.CACHE_DIR_ENV, str(tmp_path))
-    update_check.write_cache(
-        {"last_check": "2026-09-06T00:00:00+00:00",
-         "latest_version": "0.0.1", "ok": True},
-        tmp_path / "update-check.json",
-    )
+    _enable(monkeypatch, tmp_path)
+    update_check.write_cache(_fresh("0.0.1"), tmp_path / "update-check.json")
     out = server.get_server_info()
     assert str(tmp_path) not in json.dumps(out)
     assert out["update_check"]["state"] == "current"
 
 
 def test_update_check_survives_an_unreadable_cache(monkeypatch, tmp_path):
-    monkeypatch.setenv(update_check.CACHE_DIR_ENV, str(tmp_path))
+    _enable(monkeypatch, tmp_path)
     (tmp_path / "update-check.json").write_text("{not json", encoding="utf-8")
-    assert server._update_check_status()["state"] == "not yet run"
+    out = server._update_check_status()
+    assert out["state"] == "unknown"
+    assert out["reachable"] is False
 
 
 # --------------------------------------------------------- the paste-safety
