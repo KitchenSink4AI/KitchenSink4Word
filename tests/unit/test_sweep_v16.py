@@ -140,7 +140,9 @@ def test_find_text_include_textboxes_single_labeled_match(boxed_doc):
     m = matches[0]
     assert m["source"] == "textbox"
     assert m["box_index"] == 0
-    assert m["match"] == "Callout"
+    # A literal query's every hit is the query, so find_text no longer
+    # echoes it back per hit; the context carries the evidence.
+    assert "match" not in m
     assert "Callout text lives here." in m["context"]
     # body matches keep their shape and indices
     body = srv.find_text(

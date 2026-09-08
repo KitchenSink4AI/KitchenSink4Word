@@ -72,8 +72,16 @@ def _grid(path, index=0, **kw):
     return srv.get_table(str(path), index, **kw)
 
 
+def _cell(g, row, col):
+    """get_table's wire shape is two shapes, and has_merges says which:
+    rows of plain strings on a merge-free table, {text, grid_span, vmerge}
+    objects once anything is merged."""
+    v = g["cells"][row][col]
+    return v if isinstance(v, str) else v["text"]
+
+
 def _texts(g, row):
-    return [c["text"] for c in g["cells"][row]]
+    return [_cell(g, row, c) for c in range(len(g["cells"][row]))]
 
 
 # ------------------------------------------------------------- create_table
@@ -290,8 +298,8 @@ def test_scatter_edits(doc):
         backup=False, live="off",
     )
     g = _grid(doc)
-    assert g["cells"][1][0]["text"] == "X"
-    assert g["cells"][3][3]["text"] == "Y"
+    assert _cell(g, 1, 0) == "X"
+    assert _cell(g, 3, 3) == "Y"
 
 
 def test_block_mode(doc):
@@ -313,7 +321,7 @@ def test_nested_mode(nested_doc):
         nested={"row": 1, "cell": 1}, backup=False,
     )
     g = _grid(nested_doc, 0, nested={"row": 1, "cell": 1})
-    assert g["cells"][0][1]["text"] == "edited"
+    assert _cell(g, 0, 1) == "edited"
 
 
 def test_both_modes_refused(doc):
@@ -355,7 +363,7 @@ def test_nested_plus_track_refused(nested_doc):
 def test_get_table_nested_read(nested_doc):
     g = _grid(nested_doc, 0, nested={"row": 1, "cell": 1})
     assert g["rows"] == 2
-    assert g["cells"][0][0]["text"] == "in00"
+    assert _cell(g, 0, 0) == "in00"
     assert g["nested_in"] == {"table": 0, "row": 1, "cell": 1}
 
 
@@ -403,7 +411,7 @@ def test_sort_table_identity(doc):
     srv.sort_table(str(doc), 0, column=0, backup=False)
     g = _grid(doc)
     # Lexicographic ascending: "a2" < "aa" < "zz"; header row stays put.
-    assert [g["cells"][r][0]["text"] for r in (1, 2, 3)] == ["a2", "aa", "zz"]
+    assert [_cell(g, r, 0) for r in (1, 2, 3)] == ["a2", "aa", "zz"]
 
 
 def test_sort_refused_on_vertical_merge(doc):

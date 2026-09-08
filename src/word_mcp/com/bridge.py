@@ -33,6 +33,7 @@ from ..core.errors import (
 )
 from ..core.sandbox import check_path
 from . import callargs as _args
+from . import rot as _rot
 from . import serial as _serial
 
 _WD_ALERTS_NONE = 0
@@ -213,14 +214,8 @@ def _open_in_running_word(path) -> bool:
                 if doc.FullName.lower() == target:
                     return True
         with contextlib.suppress(Exception):
-            rot = pythoncom.GetRunningObjectTable()
-            for moniker in rot.EnumRunning():
-                ctx = pythoncom.CreateBindCtx(0)
-                try:
-                    name = moniker.GetDisplayName(ctx, None)
-                except Exception:
-                    continue
-                if name.lower() == target:
+            for _, _moniker, name in _rot.iter_entries(pythoncom):
+                if name == target:
                     return True
         return False
     finally:
@@ -610,21 +605,15 @@ def _find_open_document(path: str):
         # documents held by OTHER instances
         pass
     with contextlib.suppress(Exception):
-        rot = pythoncom.GetRunningObjectTable()
-        for moniker in rot.EnumRunning():
-            ctx = pythoncom.CreateBindCtx(0)
-            try:
-                name = moniker.GetDisplayName(ctx, None)
-            except Exception:
-                continue
-            if name.lower() != target:
+        for rot, moniker, name in _rot.iter_entries(pythoncom):
+            if name != target:
                 continue
             with contextlib.suppress(Exception):
-                obj = rot.GetObject(moniker)
-                doc = win32com.client.Dispatch(
-                    obj.QueryInterface(pythoncom.IID_IDispatch)
+                doc = _rot.bind_document(
+                    pythoncom, win32com.client, rot, moniker, name
                 )
-                return pythoncom, doc.Application, doc
+                if doc is not None:
+                    return pythoncom, doc.Application, doc
             word_seen = True  # moniker exists but binding failed
     pythoncom.CoUninitialize()
     if not word_seen:
