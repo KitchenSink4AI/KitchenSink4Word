@@ -4,9 +4,9 @@
   "title": "KitchenSink4Word",
   "description": "Everything plus the kitchen sink for Microsoft Word: 221 document ops, one grammar, tiered loading.",
   "version": "2.1.0",
-  "websiteUrl": "https://nometalalchemist.github.io/KitchenSink4Word/",
+  "websiteUrl": "https://kitchensink4ai.github.io/KitchenSink4Word/",
   "repository": {
-    "url": "https://github.com/nometalalchemist/KitchenSink4Word",
+    "url": "https://github.com/KitchenSink4AI/KitchenSink4Word",
     "source": "github"
   },
   "packages": [

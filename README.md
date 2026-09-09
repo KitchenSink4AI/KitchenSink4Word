@@ -2,12 +2,12 @@
 
 # 🚰 KitchenSink4Word
 
-[![Tests](https://github.com/nometalalchemist/KitchenSink4Word/actions/workflows/tests.yml/badge.svg)](https://github.com/nometalalchemist/KitchenSink4Word/actions/workflows/tests.yml)
+[![Tests](https://github.com/KitchenSink4AI/KitchenSink4Word/actions/workflows/tests.yml/badge.svg)](https://github.com/KitchenSink4AI/KitchenSink4Word/actions/workflows/tests.yml)
 [![PyPI](https://img.shields.io/pypi/v/kitchensink4word)](https://pypi.org/project/kitchensink4word/)
 [![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue)](LICENSE)
 [![Listed on mcpservers.org](https://mcpservers.org/badge.svg)](https://mcpservers.org/servers/nometalalchemist/kitchensink4word)
 
-[Landing page](https://nometalalchemist.github.io/KitchenSink4Word/) · [llms.txt](https://nometalalchemist.github.io/KitchenSink4Word/llms.txt) (machine-readable capability manifest for agents and LLM crawlers)
+[Landing page](https://kitchensink4ai.github.io/KitchenSink4Word/) · [llms.txt](https://kitchensink4ai.github.io/KitchenSink4Word/llms.txt) (machine-readable capability manifest for agents and LLM crawlers)
 
 **Everything plus the kitchen sink for Microsoft Word.** The most complete
 Word (.docx) MCP server available: **221 document operations** across **110
@@ -128,7 +128,7 @@ comparison is about what each one can do, not how many names it has:
 | Atomic saves + auto-backup | ✅ | ❌ | ❌ | ❌ |
 
 Capability survey compiled from public repositories, documentation, and issue
-trackers. Corrections welcome: [open an issue](https://github.com/nometalalchemist/KitchenSink4Word/issues).
+trackers. Corrections welcome: [open an issue](https://github.com/KitchenSink4AI/KitchenSink4Word/issues).
 
 ## What the 221 operations cover
 
@@ -179,7 +179,7 @@ validation on Windows.
 ### Claude Desktop: one click
 
 Download `kitchensink4word.mcpb` from the
-[latest release](https://github.com/nometalalchemist/KitchenSink4Word/releases/latest)
+[latest release](https://github.com/KitchenSink4AI/KitchenSink4Word/releases/latest)
 and double-click it, or drag it into the Claude Desktop window. Desktop adds
 it as an extension and the sink is connected. Nothing to type, nothing to
 configure. The bundle launches the server with
@@ -211,7 +211,7 @@ pip install kitchensink4word
 The `word-mcp` executable is an equivalent entry point. From a clone:
 
 ```
-git clone https://github.com/nometalalchemist/KitchenSink4Word
+git clone https://github.com/KitchenSink4AI/KitchenSink4Word
 cd KitchenSink4Word
 python -m venv .venv
 .venv\Scripts\pip install -e .
@@ -322,7 +322,7 @@ display name), RTL scripts, and the diversity of documents only real users
 bring. The safety net while the tool earns that mileage is structural:
 automatic slot backups before every mutation and atomic validated saves, so a
 bad outcome is a restore, not a loss. If something misbehaves on your
-documents, [an issue](https://github.com/nometalalchemist/KitchenSink4Word/issues)
+documents, [an issue](https://github.com/KitchenSink4AI/KitchenSink4Word/issues)
 with the symptom (never the document itself, unless it contains nothing
 private) is the most valuable thing you can send. Before filing: ask your AI
 to run `get_server_info` and paste the output here; it is designed to be safe
@@ -381,7 +381,7 @@ The remaining 63 writers and 14 readers are file-only: they refuse while the doc
 
 If your company wants to build this into a product of its own, that needs a
 commercial license, and terms are worked out case by case.
-[Open an issue](https://github.com/nometalalchemist/KitchenSink4Word/issues/new?template=commercial_license.yml)
+[Open an issue](https://github.com/KitchenSink4AI/KitchenSink4Word/issues/new?template=commercial_license.yml)
 on the repo and we will talk it through.
 
 ---
