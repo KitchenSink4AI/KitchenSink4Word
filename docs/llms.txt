@@ -134,18 +134,18 @@ Upgrading from v1.x: call `get_workflows("migrate-from-v1")`, or read
 
 ## 9. Links
 
-- GitHub: https://github.com/nometalalchemist/KitchenSink4Word
+- GitHub: https://github.com/KitchenSink4AI/KitchenSink4Word
 - PyPI: https://pypi.org/project/kitchensink4word/
-- Migration guide: https://github.com/nometalalchemist/KitchenSink4Word/blob/main/docs/MIGRATION_V2.md
-- Landing page: https://nometalalchemist.github.io/KitchenSink4Word/
-- Issues, including licensing: https://github.com/nometalalchemist/KitchenSink4Word/issues/new/choose
+- Migration guide: https://github.com/KitchenSink4AI/KitchenSink4Word/blob/main/docs/MIGRATION_V2.md
+- Landing page: https://kitchensink4ai.github.io/KitchenSink4Word/
+- Issues, including licensing: https://github.com/KitchenSink4AI/KitchenSink4Word/issues/new/choose
 
 ## 10. License
 
 AGPL-3.0. Free for individuals and personal use. A company building this into a
 product of its own needs a commercial license, with terms worked out case by
 case, arranged here:
-https://github.com/nometalalchemist/KitchenSink4Word/issues/new?template=commercial_license.yml
+https://github.com/KitchenSink4AI/KitchenSink4Word/issues/new?template=commercial_license.yml
 
 ## 11. Trademarks
 

@@ -110,7 +110,7 @@ sneaks into the packed manifest.
 Attach the `.mcpb` as a release asset (do not commit the binary):
 
 ```
-gh release upload vX.Y.Z bundle/kitchensink4word.mcpb --repo nometalalchemist/KitchenSink4Word
+gh release upload vX.Y.Z bundle/kitchensink4word.mcpb --repo KitchenSink4AI/KitchenSink4Word
 ```
 
 or include it in `gh release create vX.Y.Z ... bundle/kitchensink4word.mcpb`.

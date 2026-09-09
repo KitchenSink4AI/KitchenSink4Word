@@ -11,9 +11,9 @@
   "license": "AGPL-3.0-only",
   "repository": {
     "type": "git",
-    "url": "https://github.com/nometalalchemist/KitchenSink4Word"
+    "url": "https://github.com/KitchenSink4AI/KitchenSink4Word"
   },
-  "homepage": "https://nometalalchemist.github.io/KitchenSink4Word",
+  "homepage": "https://kitchensink4ai.github.io/KitchenSink4Word",
   "icon": "icon.png",
   "keywords": [
     "word",
