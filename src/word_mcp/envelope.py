@@ -171,9 +171,23 @@ def pack_hint(exc: BaseException) -> str | None:
     )
 
 
+def _declared_code(exc: BaseException) -> str | None:
+    """A refusal code the raise site declared, but only if it is one of ours.
+
+    The vocabulary in CLOSED_CODES is a CONTRACT, not a convention: clients
+    branch on the code, and a string that is not in the set is a code they
+    cannot handle. Taking `.code` verbatim let any exception carrying that
+    attribute (a typo at a raise site, or a third-party error whose library
+    happens to use the same attribute name) put an arbitrary string on the
+    wire. Anything unrecognized falls through to classify().
+    """
+    code = getattr(exc, "code", None)
+    return code if isinstance(code, str) and code in CLOSED_CODES else None
+
+
 def refusal(exc: BaseException) -> dict:
     """Build the {ok: false, error: {code, message, hint}} payload."""
-    code = getattr(exc, "code", None) or classify(exc)
+    code = _declared_code(exc) or classify(exc)
     message = str(exc)
     if isinstance(exc, LookupError) and len(message) < 40:
         # A bare KeyError/IndexError repr ("0") is useless on its own;

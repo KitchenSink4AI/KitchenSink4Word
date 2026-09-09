@@ -11,6 +11,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from ..core.errors import DocumentNotFound, WordMcpError
+from . import callargs as _args
 from .bridge import _WD_DO_NOT_SAVE, _bounded_op, _word
 
 _WD_FORMAT_DOCX_DEFAULT = 16  # wdFormatDocumentDefault (.docx)
@@ -74,20 +75,23 @@ def import_pdf(pdf_path: str, output_path: str | None = None) -> dict:
 
     try:
         with _word() as app:
-            doc = app.Documents.Open(
-                str(src.resolve()),
+            doc = _args.call(
+                app.Documents.Open, "Documents.Open",
+                FileName=str(src.resolve()),
                 ConfirmConversions=False,
                 ReadOnly=True,
                 AddToRecentFiles=False,
             )
             try:
-                doc.SaveAs2(
-                    str(out.resolve()), FileFormat=_WD_FORMAT_DOCX_DEFAULT
+                _args.call(
+                    doc.SaveAs2, "Document.SaveAs2",
+                    FileName=str(out.resolve()),
+                    FileFormat=_WD_FORMAT_DOCX_DEFAULT,
                 )
                 words = int(doc.ComputeStatistics(_WD_STAT_WORDS))
                 pages = int(doc.ComputeStatistics(_WD_STAT_PAGES))
             finally:
-                doc.Close(SaveChanges=_WD_DO_NOT_SAVE)
+                doc.Close(_WD_DO_NOT_SAVE)
     except WordMcpError:
         raise
     except Exception as exc:

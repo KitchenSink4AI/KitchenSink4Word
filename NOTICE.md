@@ -9,4 +9,4 @@ cannot comply with AGPL copyleft requirements, a commercial license
 is available: open a GitHub issue or contact the maintainer.
 
 Required Notice: Copyright (c) 2026 nometalalchemist
-(https://github.com/nometalalchemist/KitchenSink4Word)
+(https://github.com/KitchenSink4AI/KitchenSink4Word)

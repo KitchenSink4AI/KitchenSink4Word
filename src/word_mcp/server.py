@@ -35,6 +35,8 @@ from __future__ import annotations
 import functools
 import inspect as _inspect
 import json as _json
+import platform as _platform
+import sys as _sys
 from typing import Any
 
 from fastmcp import FastMCP
@@ -44,6 +46,7 @@ from fastmcp.server.transforms.visibility import Visibility as _Visibility
 from fastmcp.tools.function_tool import FunctionTool as _FunctionTool
 from fastmcp.tools.tool import ToolResult as _FmcpToolResult
 
+from . import __version__
 from . import envelope as _envelope
 from . import packs as _packs
 from .core.errors import (
@@ -52,6 +55,7 @@ from .core.errors import (
     WordMcpError,
 )
 from .core import readonly as _readonly
+from .core import sandbox as _sandbox
 from .core import update_check as _upd
 from .core.locate import is_range_spec, resolve_location, resolve_range
 from .core.package import DocxPackage, qn
@@ -1479,7 +1483,8 @@ def get_workflows(task: str | None = None) -> dict:
     """Recommended tool sequences for common multi-step tasks, with a one-line
     why per step. Call with no task to list the available tasks
     ('process-feedback', 'prepare-submission', 'format-citations',
-    'build-from-template', 'heavy-editing', 'migrate-from-v1', 'bulk-edit');
+    'build-from-template', 'heavy-editing', 'live-editing', 'comment-partner',
+    'migrate-from-v1', 'bulk-edit');
     call with task='<name>' for that task's step-by-step sequence and notes.
     Pure guidance: reads nothing, changes nothing.
     """
@@ -1489,6 +1494,106 @@ def get_workflows(task: str | None = None) -> dict:
     notice = _upd.update_notice()
     if notice and isinstance(out, dict):
         out = {**out, "update": notice}
+    return out
+
+
+# --------------------------------------------------------- the environment
+# get_server_info is the family's support-bundle call: the one place a user
+# can be asked "paste what this returns" without being asked to redact
+# anything first. Every helper below is therefore built to report SHAPE,
+# never content: which capability is present, how many roots are allowed,
+# which mode decided the surface. No file path, no document name, no
+# environment-variable value that could carry a path, no user name.
+
+
+def _word_environment() -> dict:
+    """Can the Word application tier (the com_/live_ tools) run here?
+
+    Import and registry lookups only. Nothing starts Word, nothing
+    attaches to a running Word, and no open-document path is read: that
+    is com_word_status' job, and it is the reason this call stays free
+    of both COM traffic and anything a user would have to redact.
+    """
+    if _sys.platform != "win32":
+        return {
+            "application": "unavailable (not Windows)",
+            "pywin32": "unavailable (not Windows)",
+            "com_tools": "unavailable",
+            "note": (
+                "the com_ and live_ tools need Windows with Word "
+                "installed; every file-based tool works here"
+            ),
+        }
+    out: dict = {}
+    try:
+        import pythoncom
+    except Exception:
+        return {
+            "application": "unknown",
+            "pywin32": "not installed",
+            "com_tools": "unavailable",
+            "note": "pywin32 is not installed; the com_ and live_ tools need it",
+        }
+    out["pywin32"] = "installed"
+    try:
+        pythoncom.CLSIDFromProgID("Word.Application")
+    except Exception:
+        out["application"] = "not registered"
+        out["com_tools"] = "unavailable"
+        out["note"] = (
+            "no Word.Application registration found on this machine"
+        )
+        return out
+    out["application"] = "installed"
+    out["com_tools"] = "available"
+    return out
+
+
+def _update_check_status() -> dict:
+    """The update report, without its cache path.
+
+    THIS is the server's one and only on-demand check: it may ask PyPI, at
+    most once every seven days, with a two-second cap. No other tool path can
+    reach the network, nothing runs at startup, and a check that fails or
+    is switched off reports that fact rather than going quiet. state is one
+    of: disabled, update_available, current, unknown. Never raises.
+    """
+    try:
+        return _upd.status()
+    except Exception:
+        return {"state": "unknown", "note": _upd.NOTE_UNKNOWN}
+
+
+@_tool("lite")
+def get_server_info() -> dict:
+    """Report this server's build and environment: version, the active tool
+    surface (tool count, approximate token bill, per-pack state), the packs
+    enable_tools can load, what decided the startup surface and whether it
+    is locked, whether the Word application tier can run here, whether path
+    sandboxing is on, the host OS and Python, and the update-check state.
+    Needs no document, opens no file, starts no Word. Paste-safe: no path,
+    document name, or user name, so a bug report can carry it as it stands.
+    """
+    out = {
+        "name": "kitchensink4word",
+        "version": __version__,
+        "surface": _packs.surface_report(),
+        "packs_available": _packs.pack_names(),
+        "startup_mode": _packs.resolve_startup_mode(),
+        "surface_locked": _packs.resolve_lock(),
+        "startup_note": _packs.startup_note(),
+        "word": _word_environment(),
+        "sandbox": {
+            "active": _sandbox.active(),
+            "allowed_roots": _sandbox.root_count(),
+        },
+        "os": _platform.platform(),
+        "python": _sys.version.split()[0],
+        "update_check": _update_check_status(),
+    }
+    notice = _upd.update_notice()
+    if notice:
+        out["update"] = notice
     return out
 
 
@@ -2294,18 +2399,18 @@ def get_table(
     table_index: int,
     nested: dict | None = None,
 ) -> dict:
-    """Read one table in full: every cell's text, the merge map (gridSpan
-    horizontal, vMerge vertical), and column widths. table_index is 0-based
-    among body-level tables in document order. For a table nested inside a
-    cell, pass nested={row, cell, index} addressing the host cell (index
-    picks among several, default 0). Write values with set_cells; reshape
-    with modify_table_structure (media-forms pack). Read-only; reads the
-    last-saved state of a document open in Word.
-    Row/column surgery, styling, and sort: media-forms pack.
+    """Read one table in full: every cell's text, the merge map, and
+    column widths. table_index is 0-based among body-level tables in
+    document order. has_merges=false returns rows of strings;
+    has_merges=true returns {text, grid_span, vmerge} cells. For a table
+    nested inside a cell, pass nested={row, cell, index} addressing the
+    host cell (index picks among several, default 0). Write with
+    set_cells; reshape with modify_table_structure (media-forms pack).
+    Read-only; reads the last-saved state of a document open in Word.
     """
     pkg = DocxPackage(file_path)
     if nested is None:
-        return _rd.get_table(pkg, table_index)
+        return _rd.compact_table(_rd.get_table(pkg, table_index))
     unknown = sorted(set(nested) - {"row", "cell", "index"})
     if unknown:
         raise WordMcpError(
@@ -2315,10 +2420,12 @@ def get_table(
     for key in ("row", "cell"):
         if key not in nested:
             raise WordMcpError(f"nested requires {key!r} (the host cell)")
-    return _tb.get_nested_table(
-        pkg, table_index,
-        row=nested["row"], cell=nested["cell"],
-        nested_index=nested.get("index", 0),
+    return _rd.compact_table(
+        _tb.get_nested_table(
+            pkg, table_index,
+            row=nested["row"], cell=nested["cell"],
+            nested_index=nested.get("index", 0),
+        )
     )
 
 
@@ -3820,24 +3927,66 @@ def insert_list(
     items: list,
     kind: str = "bullet",
     location: dict | None = None,
+    continue_from: int | None = None,
+    start_at: int | None = None,
+    levels: list | None = None,
     backup: bool = True,
 ) -> dict:
     """Insert a bulleted or numbered list with real bullet/number glyphs
-    (numbering.xml infrastructure created as needed). items: strings or
-    {text, level} dicts (level 0-8 nests); kind: bullet | number. Each call
-    is an independent list, so numbering restarts at 1. location picks the
-    insertion point (omit for document end). Auto-backup: prev/anchor slots
-    in .ks4w-backups (backup=False skips rotation only); atomic validated
-    save. Refuses documents open in Word.
+    (numbering.xml as needed). items: strings or {text, level}
+    dicts (level 0-8 nests); kind: bullet | number. A call makes its own
+    list, so numbering restarts at 1; continue_from (a num_id from
+    list_elements) carries on an existing one and start_at restarts the new
+    one at N. levels sets per-level formats: [{level, format, text, start,
+    suffix, align, indent_pt, hanging_pt, font}], format one of decimal |
+    lowerLetter | upperLetter | lowerRoman | upperRoman | bullet | none,
+    text a label like '%1.%2.'.
+    location picks the insertion point (omit for document end).
+    Auto-backup to .ks4w-backups; atomic validated save. Refuses documents
+    open in Word.
     """
 
     def _do(pkg: DocxPackage) -> dict:
         after_index, at_end = _loc_insert_args(pkg, location)
         return _ls.add_list(
-            pkg, items, kind=kind, after_index=after_index, at_end=at_end
+            pkg, items, kind=kind, after_index=after_index, at_end=at_end,
+            continue_from=continue_from, start_at=start_at, levels=levels,
         )
 
     return _edit(file_path, _do, backup=backup)
+
+
+@_tool("academic")
+def set_list_numbering(
+    file_path: str,
+    num_id: int,
+    restart_at: int | None = None,
+    level: int = 0,
+    continue_from: int | None = None,
+    levels: list | None = None,
+    force: bool = False,
+    backup: bool = True,
+) -> dict:
+    """Change how one existing list numbers itself (num_id from
+    list_elements(type='lists')). restart_at makes the list start at N by
+    writing a startOverride on that level of this instance only, leaving
+    every other list alone. continue_from folds this list into another
+    instance so the two count as one run, and refuses when the two look
+    different unless force. levels rewrites the per-level formats
+    (insert_list documents the shape), first cloning the definition when
+    other lists share it, so a per-list change stays per-list. Returns the
+    resulting definition. Auto-backup: prev/anchor slots in .ks4w-backups
+    (backup=False skips rotation only); atomic validated save. Refuses
+    documents open in Word.
+    """
+    return _edit(
+        file_path,
+        lambda pkg: _ls.set_numbering(
+            pkg, num_id, restart_at=restart_at, level=level,
+            continue_from=continue_from, levels=levels, force=force,
+        ),
+        backup=backup,
+    )
 
 
 @_tool("media-forms")
@@ -3989,13 +4138,25 @@ def insert_image(
     location: dict | None = None,
     width_pt: float | None = None,
     alignment: str = "center",
+    wrap: str | None = None,
+    position: dict | None = None,
+    z_order: int | None = None,
+    allow_overlap: bool = True,
+    distance_pt: dict | None = None,
+    wrap_text: str | None = None,
     backup: bool = True,
 ) -> dict:
-    """Insert an inline image (PNG/JPEG/GIF/BMP/TIFF) in its own paragraph at
-    the located position (omit location for document end); aspect ratio is
-    kept, width defaults to the native size capped at 6.5in. The returned
-    image is addressable afterwards via list_elements(type='images') ids
-    for set_image and delete_element. Auto-backup: prev/anchor slots in
+    """Insert an image (PNG/JPEG/GIF/BMP/TIFF) at the located position (omit
+    location for document end); aspect ratio kept, width defaults to the
+    native size capped at 6.5in. Without wrap the image is INLINE in its own
+    paragraph, aligned by alignment. With wrap it FLOATS, anchored to the
+    located paragraph and adding no paragraph of its own: wrap is square |
+    tight | through | top_and_bottom | behind | in_front; wrap_text is the
+    side text flows down (both_sides | left | right | largest); position is
+    {horizontal, vertical}, each taking relative_to (page | margin | column
+    | character | paragraph | line | *_margin) plus align or offset_pt;
+    z_order stacks; distance_pt is the gap per side. Addressable via
+    list_elements(type='images'). Auto-backup: prev/anchor slots in
     .ks4w-backups (backup=False skips rotation only); atomic validated
     save. Refuses documents open in Word.
     """
@@ -4004,7 +4165,9 @@ def insert_image(
         after_index, at_end = _loc_insert_args(pkg, location)
         return _md.add_image(
             pkg, image_path, after_index=after_index, at_end=at_end,
-            width_pt=width_pt, alignment=alignment,
+            width_pt=width_pt, alignment=alignment, wrap=wrap,
+            position=position, z_order=z_order, allow_overlap=allow_overlap,
+            distance_pt=distance_pt, wrap_text=wrap_text,
         )
 
     return _edit(file_path, _do, backup=backup)
@@ -4018,20 +4181,40 @@ def set_image(
     width_pt: float | None = None,
     alt_text: str | None = None,
     alt_title: str | None = None,
+    wrap: str | None = None,
+    position: dict | None = None,
+    z_order: int | None = None,
+    allow_overlap: bool | None = None,
+    distance_pt: dict | None = None,
+    wrap_text: str | None = None,
+    force: bool = False,
     backup: bool = True,
 ) -> dict:
     """Set properties on one image (image_id from
     list_elements(type='images')): source swaps the image file keeping
     placement and display size (same file type as the original); width_pt
-    resizes with aspect ratio kept; alt_text (plus optional alt_title) sets
-    accessibility alt text. Parameters are complementary; give any
-    combination in one call. Auto-backup: prev/anchor slots in
-    .ks4w-backups (backup=False skips rotation only); atomic validated
-    save. Refuses documents open in Word.
+    resizes with aspect ratio kept, inline or floating; alt_text (plus
+    optional alt_title) sets accessibility alt text. wrap moves the image
+    between the text flow and the page: 'inline' returns it to the flow,
+    square | tight | through | top_and_bottom | behind | in_front float it,
+    and position, z_order, wrap_text, allow_overlap, and distance_pt (see
+    insert_image) adjust a floating one. Anything not named is left as it
+    was. A hand-edited wrap outline refuses unless force. Parameters are
+    complementary. Auto-backup: prev/anchor slots in .ks4w-backups
+    (backup=False skips rotation only); atomic validated save. Refuses
+    documents open in Word.
     """
-    if source is None and width_pt is None and alt_text is None:
+    placement = any(
+        v is not None for v in
+        (wrap, position, z_order, allow_overlap, distance_pt, wrap_text)
+    )
+    if source is None and width_pt is None and alt_text is None and (
+        not placement
+    ):
         raise WordMcpError(
-            "give source, width_pt, and/or alt_text; nothing to set"
+            "give source, width_pt, alt_text, and/or a placement "
+            "(wrap, position, z_order, wrap_text, allow_overlap, "
+            "distance_pt); nothing to set"
         )
     if alt_title is not None and alt_text is None:
         raise WordMcpError("alt_title goes with alt_text")
@@ -4045,6 +4228,12 @@ def set_image(
         if alt_text is not None:
             changed.update(_sx.set_image_alt_text(
                 pkg, image_id, description=alt_text, title=alt_title
+            ))
+        if placement:
+            changed.update(_md.set_image_placement(
+                pkg, image_id, wrap=wrap, position=position,
+                z_order=z_order, allow_overlap=allow_overlap,
+                distance_pt=distance_pt, wrap_text=wrap_text, force=force,
             ))
         return changed
 
@@ -4808,11 +4997,11 @@ def com_save_document(
     """Save, close, or encrypt a document through Word. Default: tells the
     user's running Word to save the open document so file tools read the
     current state (Option C: live edits stay unsaved until requested here
-    or by the user). close=True also closes it, releasing the file lock
-    (save=False discards unsaved changes). password saves an
-    AES-encrypted copy via an invisible instance (output_path saves it
-    elsewhere). Serialized, alert-suppressed, retried with backoff; no
-    save dialog can block Word. Requires Word installed.
+    or by the user). close=True also closes it, releasing the lock
+    (save=False discards unsaved changes). password saves a
+    VERIFIED AES-encrypted copy via an invisible instance (output_path saves it
+    elsewhere). Serialized, alert-suppressed, retried; no save
+    dialog can block Word. Requires Word installed.
     """
     from .com import bridge
 
@@ -5055,12 +5244,8 @@ def main() -> None:
     disabled = _startup_disabled_names()
     if disabled:
         mcp.add_transform(_Visibility(False, names=disabled))
-    # Fire and forget: a daemon thread asks PyPI whether a newer release
-    # exists (at most every 14 days, off entirely under
-    # KS4W_NO_UPDATE_CHECK). Nothing waits on it, nothing it does can
-    # delay or break serving, and the answer only ever appears as one line
-    # in get_workflows.
-    _upd.start_background_check()
+    # No update check here. It runs ON DEMAND, inside get_server_info, and
+    # nowhere else: startup starts no thread and asks PyPI nothing.
     mcp.run()
 
 

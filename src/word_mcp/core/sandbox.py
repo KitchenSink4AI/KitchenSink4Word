@@ -75,6 +75,16 @@ def active() -> bool:
     return bool(_allowed_roots())
 
 
+def root_count() -> int:
+    """How many roots are allowed, without saying what they are.
+
+    get_server_info reports the sandbox as shape rather than content: the
+    roots themselves are absolute paths, and that call is meant to be
+    pasted into a bug report unedited.
+    """
+    return len(_allowed_roots())
+
+
 # --------------------------------------------------------- canonicalization
 
 
