@@ -288,15 +288,16 @@ footer a{color:var(--copper)}
 <div class="wrap masthead rev d1">
   <span data-i18n="m.left"><b>EST. 2026</b> · FINE INSTRUMENTS FOR DOCUMENT PLUMBING</span>
   <nav class="lang-toggle" id="langToggle" aria-label="Language"></nav>
-  <span><span data-i18n="m.catalog">CATALOG № 221</span> · <a href="#service" data-i18n="m.service">SERVICE</a> · <a href="https://github.com/KitchenSink4AI/KitchenSink4Word">GITHUB</a> · <a href="https://pypi.org/project/kitchensink4word/">PYPI</a> · <a href="llms.txt">LLMS.TXT</a></span>
+  <span><span data-i18n="m.catalog">CATALOG № 221</span> · <a href="https://kitchensink4.ai/products/" data-i18n="m.family">FAMILY</a> · <a href="#service" data-i18n="m.service">SERVICE</a> · <a href="https://github.com/KitchenSink4AI/KitchenSink4Word">GITHUB</a> · <a href="https://pypi.org/project/kitchensink4word/">PYPI</a> · <a href="llms.txt">LLMS.TXT</a></span>
 </div>
 
 <div class="switchbar">
   <span class="lbl">THE KITCHENSINK WORKS</span>
   <span class="here">🚰 KitchenSink4Word <span data-i18n="sw.here">(you are here)</span></span>
-  <a href="https://kitchensink4ai.github.io/KitchenSink4PPT/">🖌️ KitchenSink4PPT</a>
-  <a href="https://kitchensink4ai.github.io/KitchenSink4XL/">🔌 KitchenSink4XL</a>
-  <a href="https://kitchensink4ai.github.io/">🏪 <span data-i18n="sw.store">The storefront</span></a>
+  <a href="https://kitchensink4.ai/KitchenSink4PPT/">🖌️ KitchenSink4PPT</a>
+  <a href="https://kitchensink4.ai/KitchenSink4XL/">🔌 KitchenSink4XL</a>
+  <a href="https://kitchensink4.ai/KitchenSink4Web/">🪴 KitchenSink4Web</a>
+  <a href="https://kitchensink4.ai/products/">🏪 <span data-i18n="sw.store">The storefront</span></a>
 </div>
 
 <header class="hero wrap">
@@ -340,6 +341,11 @@ footer a{color:var(--copper)}
         <span class="hint" data-i18n="new.t">Five things this release changed</span>
       </summary>
     <div class="newin">
+      <p class="sub" data-i18n="new21.t">What 2.1.0 just added</p>
+      <ul>
+        <li data-i18n="new21a">Documents open about twice as fast, and table reads cost about a quarter of the tokens they did.</li>
+        <li data-i18n="new21b">The server can tell you when a newer release exists: it checks at most once a week, says so when it does, and never downloads anything on its own.</li>
+      </ul>
       <p class="sub" data-i18n="new.sub">The whole list, no release notes required.</p>
       <ul>
         <li data-i18n="new1"><b>Fewer tools, and your agent stops guessing.</b> v1.6 had 189 tools with a lot of overlapping names, and agents burned time and tokens picking between them. Version 2 rebuilds everything as 110 tools under one consistent grammar that covers more ground than before, not less. The agent picks right the first time and spends your session on the document instead.</li>
@@ -507,36 +513,40 @@ footer a{color:var(--copper)}
   <div class="wrap">
     <div class="sec-head"><span class="no" data-i18n="no7">DEPT. 07</span><h2 data-i18n="h2.fam">The family</h2></div>
     <div class="famrow">
-      <a class="counter" href="https://kitchensink4ai.github.io/KitchenSink4PPT/">
+      <a class="counter" href="https://kitchensink4.ai/KitchenSink4PPT/">
         <span class="icon">🖌️</span>
         <h3 data-i18n="fam1.t">KitchenSink4PPT</h3>
         <p data-i18n="fam1.p">Everything plus the kitchen sink for Microsoft PowerPoint. Move the node, the arrows follow: diagrams your hands can still move. Tables that behave, and the same never-corrupts promise, now for slides.</p>
         <span class="go" data-i18n="fam1.g">Visit the paint aisle →</span>
       </a>
-      <a class="counter" href="https://kitchensink4ai.github.io/KitchenSink4XL/">
+      <a class="counter" href="https://kitchensink4.ai/KitchenSink4XL/">
         <span class="icon">🔌</span>
         <h3 data-i18n="fam3.t">KitchenSink4XL</h3>
         <p data-i18n="fam3.p">Everything plus the kitchen sink for Excel (.xlsx): every value labeled calculated, cached, or missing, so the AI never repeats a stale number as a fresh one. Same never-corrupts promise, now for spreadsheets.</p>
         <span class="go" data-i18n="fam3.g">Visit the electrical aisle →</span>
       </a>
-      <a class="counter" href="https://kitchensink4ai.github.io/">
+      <a class="counter" href="https://kitchensink4.ai/KitchenSink4Web/">
+        <span class="icon">🪴</span>
+        <h3 data-i18n="fam4.t">KitchenSink4Web</h3>
+        <p data-i18n="fam4.p">Everything plus the kitchen sink for the web: budgeted page reads that name what went unread, structured extraction with named evidence, and a consent ladder that cannot be talked into payments. Read-only out of the box.</p>
+        <span class="go" data-i18n="fam4.g">Visit the garden aisle →</span>
+      </a>
+      <a class="counter" href="https://kitchensink4.ai/products/">
         <span class="icon">🏪</span>
         <h3 data-i18n="fam2.t">The storefront</h3>
         <p data-i18n="fam2.p">The whole hardware store on one page: every KitchenSink server, its fixture, and its counter, plus a shelf or two that are not empty by accident.</p>
         <span class="go" data-i18n="fam2.g">Browse the store →</span>
       </a>
-      <!-- KitchenSink4Web slots in here at launch: the same <a class="counter"> block
-           with its own fixture and fam4.t / fam4.p / fam4.g keys in all seven
-           dictionaries. Nothing else changes; the row starts scrolling on its own. -->
     </div>
   </div>
 </section>
 
 <footer>
   <div class="wrap row">
-    <span data-i18n="f.left">© 2026 · <b>AGPL-3.0</b>: free for individuals and personal use.<br>Companies building it into their own products need a commercial license; <a href="https://github.com/KitchenSink4AI/KitchenSink4Word/issues/new?template=commercial_license.yml">open an issue</a> and we will talk it through.</span>
+    <span data-i18n="f.left">© 2026 Alvut Consulting, LLC · <b>AGPL-3.0</b>: free for individuals and personal use.<br>Companies building it into their own products need a commercial license; <a href="https://github.com/KitchenSink4AI/KitchenSink4Word/issues/new?template=commercial_license.yml">open an issue</a> and we will talk it through.</span>
     <span style="text-align:right" data-i18n="f.right"><a href="https://github.com/KitchenSink4AI/KitchenSink4Word">github.com/KitchenSink4AI/KitchenSink4Word</a> · <a href="https://github.com/KitchenSink4AI/KitchenSink4Word/issues/new/choose">report a glitch</a><br>Prototyped with Claude Code in a day, hardened through thousands of adversarial test calls, and flow-tested on real manuscripts exceeding 65,000 words and 250 pages. That's a lotta pipe! 🚰</span>
   </div>
+  <div class="wrap" style="text-align:center;padding:6px 0;font-size:11px"><a href="https://kitchensink4.ai/" data-i18n="f.corp">The office upstairs: KitchenSink4AI →</a></div>
   <div class="wrap" style="text-align:center;padding:6px 0;opacity:.5;font-size:11px">Not affiliated with or endorsed by Microsoft Corporation. Microsoft and Word are trademarks of Microsoft Corporation.</div>
   <div class="wrap" style="text-align:center;padding:8px 0 2px;opacity:.4;font-size:11px">
     <img src="https://visitor-badge.laobi.icu/badge?page_id=nometalalchemist.KitchenSink4Word&left_color=%231e3550&right_color=%233f5878&left_text=views" alt="views" height="18" style="vertical-align:middle">
@@ -556,6 +566,9 @@ en: {
 "new.label": "JUST IN",
 "new.t": "Five things this release changed",
 "new.sub": "The whole list, no release notes required.",
+"new21.t": "What 2.1.0 just added",
+"new21a": "Documents open about twice as fast, and table reads cost about a quarter of the tokens they did.",
+"new21b": "The server can tell you when a newer release exists: it checks at most once a week, says so when it does, and never downloads anything on its own.",
 "new1": "<b>Fewer tools, and your agent stops guessing.</b> v1.6 had 189 tools with a lot of overlapping names, and agents burned time and tokens picking between them. Version 2 rebuilds everything as 110 tools under one consistent grammar that covers more ground than before, not less. The agent picks right the first time and spends your session on the document instead.",
 "new2": "<b>Starts light, stays light.</b> A fresh session loads a small core instead of the whole toolbox, and reaches for the specialty shelves only when your task actually needs them. Your assistant keeps more of its attention on your document, and none of the old capabilities went anywhere.",
 "new3": "<b>Live editing you can leave running.</b> Several agents can now work an open document without colliding, and a Word dialog waiting on a human gets noticed and reported, instead of leaving your agent hanging.",
@@ -578,6 +591,7 @@ en: {
 "m.left": "<b>EST. 2026</b> · FINE INSTRUMENTS FOR DOCUMENT PLUMBING",
 "m.catalog": "CATALOG № 221",
 "m.service": "SERVICE",
+"m.family": "FAMILY",
 "hero.stamp": "DOES<br>EVERYTHING",
 "hero.catno": "Model Context Protocol · Server for Microsoft Word",
 "hero.tagline": "Everything <em>plus</em> the kitchen sink for Microsoft&nbsp;Word: the most complete .docx&nbsp;MCP&nbsp;server ever plumbed.",
@@ -612,6 +626,9 @@ en: {
 "fam3.t": "KitchenSink4XL",
 "fam3.p": "Everything plus the kitchen sink for Excel (.xlsx): every value labeled calculated, cached, or missing, so the AI never repeats a stale number as a fresh one. Same never-corrupts promise, now for spreadsheets.",
 "fam3.g": "Visit the electrical aisle →",
+"fam4.t": "KitchenSink4Web",
+"fam4.p": "Everything plus the kitchen sink for the web: budgeted page reads that name what went unread, structured extraction with named evidence, and a consent ladder that cannot be talked into payments. Read-only out of the box.",
+"fam4.g": "Visit the garden aisle →",
 "inv.lead": "The stock is arranged in capability packs, the way a good hardware store is arranged in aisles. Browse the shelves below; your agent only carries an aisle when the job calls for it.",
 "cmp.lead": "Tool counts flatter everybody. What matters is what happens when you actually ask:",
 "hero.invite": "↓ or start with what it protects you from: the morning Word offers to repair your manuscript",
@@ -680,7 +697,8 @@ en: {
 "g.t": "Engineered Not to Corrupt",
 "g.p1": "You know the morning: the manuscript is due, Word opens, and there is a dialog offering to \"repair\" your file. That morning is what this whole server is built to prevent. Before any change, a backup is made automatically. Every save is checked before it replaces your file, so a bad write cannot take the original with it. And everything the edit doesn't touch, from equations to textboxes, passes through exactly as it was, byte for byte. Two full stress campaigns and a shelf of long, heavily formatted real manuscripts, and Word has never once offered to repair anything this server saved.",
 "g.p2": "Provided as-is, without warranty of any kind, per the license; the engineering above is simply how seriously your documents are taken. Keep backups. (It makes them for you.)",
-"f.left": "&copy; 2026 &middot; <b>AGPL-3.0</b>: free for individuals and personal use.<br>Companies building it into their own products need a commercial license; <a href='https://github.com/KitchenSink4AI/KitchenSink4Word/issues/new?template=commercial_license.yml'>open an issue</a> and we will talk it through.",
+"f.left": "&copy; 2026 Alvut Consulting, LLC &middot; <b>AGPL-3.0</b>: free for individuals and personal use.<br>Companies building it into their own products need a commercial license; <a href='https://github.com/KitchenSink4AI/KitchenSink4Word/issues/new?template=commercial_license.yml'>open an issue</a> and we will talk it through.",
+"f.corp": "The office upstairs: KitchenSink4AI →",
 "f.right": "<a href='https://github.com/KitchenSink4AI/KitchenSink4Word'>github.com/KitchenSink4AI/KitchenSink4Word</a> · <a href='https://github.com/KitchenSink4AI/KitchenSink4Word/issues/new/choose'>report a glitch</a><br>Prototyped with Claude Code in a day, hardened through thousands of adversarial test calls, and flow-tested on real manuscripts exceeding 65,000 words and 250 pages. That's a lotta pipe! 🚰"
 },
 ko: {
@@ -691,6 +709,9 @@ ko: {
 "new.label": "신규 입고",
 "new.t": "이번 릴리스가 바꾼 다섯 가지",
 "new.sub": "릴리스 노트를 읽을 필요 없이, 이게 전부입니다.",
+"new21.t": "2.1.0이 방금 더한 것들",
+"new21a": "문서가 대략 두 배 빠르게 열리고, 표를 읽는 데 드는 토큰이 예전의 약 4분의 1로 줄었습니다.",
+"new21b": "새 릴리스가 나오면 서버가 알려 줄 수 있습니다. 확인은 일주일에 한 번을 넘지 않고, 확인할 때는 그 사실을 밝히며, 무엇이든 스스로 내려받는 일은 없습니다.",
 "new1": "<b>도구가 줄어드니 에이전트가 더 이상 헤매지 않습니다.</b> v1.6에는 이름이 겹치는 도구가 189종 있었고, 에이전트는 그중에서 고르느라 시간과 토큰을 태웠습니다. 버전 2는 전부를 110종의 도구로 다시 지었습니다. 하나의 일관된 문법을 따르면서도 다루는 범위는 예전보다 줄지 않고 오히려 넓어졌습니다. 에이전트는 첫 번에 제대로 고르고, 남은 세션은 문서에 씁니다.",
 "new2": "<b>가볍게 시작해서 계속 가볍습니다.</b> 새 세션은 공구함 전체가 아니라 작은 코어만 불러오고, 전문 선반은 작업에 정말 필요할 때만 꺼냅니다. 어시스턴트는 문서에 더 많은 주의를 남겨 두게 되고, 기존 기능은 어디로도 사라지지 않았습니다.",
 "new3": "<b>켜 둔 채 맡길 수 있는 라이브 편집.</b> 이제 여러 에이전트가 열려 있는 문서를 함께 다뤄도 충돌하지 않고, 사람의 응답을 기다리는 Word 대화 상자는 감지되어 보고되므로 에이전트가 마냥 기다리는 일이 없습니다.",
@@ -713,6 +734,7 @@ ko: {
 "m.left": "<b>EST. 2026</b> · 문서 배관을 위한 정밀 기구점",
 "m.catalog": "카탈로그 № 221",
 "m.service": "서비스",
+"m.family": "제품군",
 "hero.stamp": "안 되는 게<br>없음",
 "hero.catno": "Model Context Protocol · Microsoft Word용 서버",
 "hero.tagline": "Microsoft&nbsp;Word 도구라면 정말 <em>없는 게 없습니다</em>. 역대 가장 완전한 .docx&nbsp;MCP&nbsp;서버. “Everything <em>plus</em> the kitchen sink.”",
@@ -747,6 +769,9 @@ ko: {
 "fam3.t": "KitchenSink4XL",
 "fam3.p": "Excel(.xlsx)을 위한 것도 없는 게 없습니다. 돌려주는 모든 값에 계산됨, 캐시됨, 없음 중 하나가 라벨로 붙기 때문에, AI가 오래된 숫자를 새 숫자처럼 되풀이하는 일이 없습니다. 손상시키지 않겠다는 똑같은 약속을, 이제 스프레드시트에서.",
 "fam3.g": "전기 코너 방문하기 →",
+"fam4.t": "KitchenSink4Web",
+"fam4.p": "웹을 위한 것도 없는 게 없습니다. 예산이 정해진 페이지 읽기는 읽지 않고 넘어간 부분을 이름으로 알려 주고, 구조화된 추출은 근거를 이름으로 짚어 주며, 동의 사다리는 결제까지 말로 구슬릴 수 없습니다. 기본 상태는 읽기 전용입니다.",
+"fam4.g": "원예 코너 방문하기 →",
 "inv.lead": "재고는 기능 팩으로 정리되어 있습니다. 좋은 철물점이 통로별로 정리되어 있는 것과 같습니다. 아래 선반을 둘러보세요. 에이전트는 일이 부를 때만 그 통로를 챙겨 갑니다.",
 "cmp.lead": "도구 개수는 누구에게나 후한 숫자입니다. 중요한 것은 실제로 시켰을 때 무슨 일이 벌어지는가입니다.",
 "hero.invite": "↓ 아니면 이것이 무엇을 막아 주는지부터: Word가 원고를 복구하겠다고 나서는 그 아침",
@@ -815,7 +840,8 @@ ko: {
 "g.t": "손상시키지 않도록 설계",
 "g.p1": "그 아침을 아실 겁니다. 원고 마감일인데 Word를 열자 파일을 “복구”하겠다는 대화 상자가 떠 있습니다. 이 서버 전체가 막으려고 만들어진 것이 바로 그 아침입니다. 어떤 변경이든 그 앞에 백업이 자동으로 만들어집니다. 모든 저장은 파일을 대체하기 전에 검사를 거치므로, 잘못된 쓰기가 원본까지 데려가지 못합니다. 그리고 편집이 건드리지 않은 것은 수식이든 텍스트 상자든 있던 그대로, 바이트 단위로 통과합니다. 두 차례의 전면 스트레스 캠페인과 길고 서식이 복잡한 실제 원고 한 무더기를 거치는 동안, Word가 이 서버가 저장한 파일을 복구하겠다고 나선 적은 단 한 번도 없습니다.",
 "g.p2": "라이선스에 따라 어떤 종류의 보증도 없이 있는 그대로 제공됩니다. 위의 공학적 장치들은 여러분의 문서를 얼마나 진지하게 다루는지를 보여줄 뿐입니다. 백업을 유지하세요. (백업은 이 서버가 대신 만들어 줍니다.)",
-"f.left": "&copy; 2026 &middot; <b>AGPL-3.0</b>: 개인과 개인적 용도에는 무료.<br>자사 제품에 넣어 만드는 회사에는 상업용 라이선스가 필요합니다. <a href='https://github.com/KitchenSink4AI/KitchenSink4Word/issues/new?template=commercial_license.yml'>이슈를 열어</a> 주시면 함께 이야기하겠습니다.",
+"f.left": "&copy; 2026 Alvut Consulting, LLC &middot; <b>AGPL-3.0</b>: 개인과 개인적 용도에는 무료.<br>자사 제품에 넣어 만드는 회사에는 상업용 라이선스가 필요합니다. <a href='https://github.com/KitchenSink4AI/KitchenSink4Word/issues/new?template=commercial_license.yml'>이슈를 열어</a> 주시면 함께 이야기하겠습니다.",
+"f.corp": "위층 사무실: KitchenSink4AI →",
 "f.right": "<a href='https://github.com/KitchenSink4AI/KitchenSink4Word'>github.com/KitchenSink4AI/KitchenSink4Word</a> · <a href='https://github.com/KitchenSink4AI/KitchenSink4Word/issues/new/choose'>오작동 신고</a><br>Claude Code로 하루 만에 프로토타입을 만들고, 수천 건의 적대적 테스트로 다듬은 뒤, 65,000단어 250페이지 이상의 실제 원고에서 실전 테스트를 완료했습니다. 없는 게 없습니다! 🚰"
 },
 ja: {
@@ -826,6 +852,9 @@ ja: {
 "new.label": "新入荷",
 "new.t": "このリリースで変わった5つのこと",
 "new.sub": "リリースノートを読まなくても、これで全部です。",
+"new21.t": "2.1.0 で新しく加わったもの",
+"new21a": "文書が約2倍の速さで開き、表の読み取りにかかるトークンは以前の約4分の1になりました。",
+"new21b": "新しいリリースが出たとき、サーバーがそれを知らせることができます。確認は多くても週に一度、確認したときはその旨を伝え、自分から何かをダウンロードすることはありません。",
 "new1": "<b>ツールが減れば、エージェントは迷わなくなります。</b> v1.6 には名前の重なるツールが189種あり、エージェントはその中から選ぶだけで時間とトークンを使っていました。バージョン2はすべてを110種のツールとして作り直しました。ひとつの一貫した文法にまとめながら、扱える範囲は以前より狭まるどころか広がっています。エージェントは一度目で正しく選び、残りのセッションを文書そのものに使います。",
 "new2": "<b>軽く始まり、軽いままです。</b> 新しいセッションは道具箱ごとではなく小さなコアだけを読み込み、専門の棚に手を伸ばすのは作業が本当に必要としたときだけです。アシスタントは文書のほうに多くの注意を残せますし、これまでの機能はどこにも消えていません。",
 "new3": "<b>動かしっぱなしにできるライブ編集。</b> 複数のエージェントが開いた文書を同時に扱っても衝突せず、人の操作を待つ Word のダイアログは検出して知らせるので、エージェントが待たされたままになることはありません。",
@@ -848,6 +877,7 @@ ja: {
 "m.left": "<b>EST. 2026</b> · 文書配管のための精密器具",
 "m.catalog": "カタログ № 221",
 "m.service": "サービス",
+"m.family": "ファミリー",
 "hero.stamp": "全部<br>入り",
 "hero.catno": "Model Context Protocol · Microsoft Word 用サーバー",
 "hero.tagline": "Microsoft&nbsp;Word のためなら<em>何でも揃う</em>、まさに至れり尽くせり。史上もっとも完全に配管された .docx&nbsp;MCP&nbsp;サーバー。“Everything <em>plus</em> the kitchen sink.”",
@@ -882,6 +912,9 @@ ja: {
 "fam3.t": "KitchenSink4XL",
 "fam3.p": "Excel (.xlsx) のためなら何でも揃う。値はすべて「計算済み」「キャッシュ」「なし」のいずれかとして返るので、AI が古い数字を新しい数字として繰り返すことはありません。壊さないという同じ約束を、こんどは表計算に。",
 "fam3.g": "電気コーナーへ →",
+"fam4.t": "KitchenSink4Web",
+"fam4.p": "ウェブのためなら何でも揃う。予算のついたページ読み取りは読み残した箇所を名前で挙げ、構造化された抽出は根拠を名指しし、同意の段階は言葉巧みに支払いへ進ませることができません。出荷時は読み取り専用です。",
+"fam4.g": "園芸コーナーへ →",
 "inv.lead": "在庫は機能パックごとに並べてあります。いい金物屋が売り場の通路ごとに整えてあるのと同じです。下の棚をご覧ください。エージェントがその通路を担いでいくのは、仕事が呼んだときだけです。",
 "cmp.lead": "ツールの数は、どこの数字も良く見えます。大事なのは、実際に頼んだときに何が起きるかです。",
 "hero.invite": "↓ あるいは、何から守るのかから:Word が原稿の修復を申し出てくるあの朝",
@@ -950,7 +983,8 @@ ja: {
 "g.t": "壊さないための設計",
 "g.p1": "あの朝をご存じでしょう。原稿の締切日に Word を開くと、ファイルを「修復」しますかというダイアログが出ている。このサーバー全体は、その朝を起こさないために作られています。どんな変更の前にも、バックアップが自動で作られます。保存はすべて、ファイルを置き換える前に検査されるので、まずい書き込みが元のファイルを道連れにすることはありません。そして編集が触れないものは、数式であれテキストボックスであれ、あったままの姿でバイト単位に通り抜けます。2回にわたる本格的な負荷キャンペーンと、長く書式の重い実際の原稿を棚一杯ぶん通してなお、このサーバーが保存したファイルについて Word が修復を申し出たことは一度もありません。",
 "g.p2": "ライセンスのとおり、現状有姿・無保証で提供されます。上記の工学は、あなたの文書をどれだけ真剣に扱っているかを示すものにすぎません。バックアップは取っておいてください。(バックアップはこのサーバーが作ってくれます。)",
-"f.left": "&copy; 2026 &middot; <b>AGPL-3.0</b>:個人利用と私的な用途は無料。<br>自社製品に組み込む企業には商用ライセンスが必要です。<a href='https://github.com/KitchenSink4AI/KitchenSink4Word/issues/new?template=commercial_license.yml'>Issue を開いて</a>いただければ、そこから話を進めます。",
+"f.left": "&copy; 2026 Alvut Consulting, LLC &middot; <b>AGPL-3.0</b>:個人利用と私的な用途は無料。<br>自社製品に組み込む企業には商用ライセンスが必要です。<a href='https://github.com/KitchenSink4AI/KitchenSink4Word/issues/new?template=commercial_license.yml'>Issue を開いて</a>いただければ、そこから話を進めます。",
+"f.corp": "上の階の事務所：KitchenSink4AI →",
 "f.right": "<a href='https://github.com/KitchenSink4AI/KitchenSink4Word'>github.com/KitchenSink4AI/KitchenSink4Word</a> · <a href='https://github.com/KitchenSink4AI/KitchenSink4Word/issues/new/choose'>不具合を報告</a><br>Claude Code で一日でプロトタイプを作り、数千件の敵対的テストで鍛え上げ、65,000語・250ページ超の実際の原稿で実地テスト済み。何でも揃います！🚰"
 },
 zh: {
@@ -961,6 +995,9 @@ zh: {
 "new.label": "新到货",
 "new.t": "这一版改变的五件事",
 "new.sub": "不用翻发布说明,就这些。",
+"new21.t": "2.1.0 刚刚添了什么",
+"new21a": "文档打开速度大约快了一倍，读取表格所花的令牌约为原来的四分之一。",
+"new21b": "有新版本时服务器可以告诉你：它最多一周查一次，查的时候会说明，而且绝不会自行下载任何东西。",
 "new1": "<b>工具少了,智能体就不再瞎猜。</b> v1.6 有 189 件工具,名字大量重叠,智能体光是在里面挑就烧掉了时间和 token。版本 2 把一切重建为 110 件工具,统一在一套语法之下,覆盖的范围比从前更大,而不是更小。智能体第一次就选对,把这一场会话花在文档上。",
 "new2": "<b>轻装启动,一路都轻。</b> 新会话只载入一个小内核,而不是整箱工具,只有任务真正需要时才去够专门的货架。你的助手能把更多注意力留给文档,而原有的能力一样都没少。",
 "new3": "<b>可以一直开着的实时编辑。</b> 现在多个智能体可以同时处理一份打开的文档而不相撞,等待人操作的 Word 对话框会被发现并报告,不会让你的智能体一直干等。",
@@ -983,6 +1020,7 @@ zh: {
 "m.left": "<b>EST. 2026</b> · 文档管道精密器具行",
 "m.catalog": "目录 № 221",
 "m.service": "服务",
+"m.family": "家族",
 "hero.stamp": "无所<br>不能",
 "hero.catno": "Model Context Protocol · Microsoft Word 专用服务器",
 "hero.tagline": "为 Microsoft&nbsp;Word 而备，<em>应有尽有</em>。迄今管道铺设最完整的 .docx&nbsp;MCP&nbsp;服务器。“Everything <em>plus</em> the kitchen sink.”",
@@ -1017,6 +1055,9 @@ zh: {
 "fam3.t": "KitchenSink4XL",
 "fam3.p": "为 Excel（.xlsx）而备，应有尽有。每个值都标注为已计算、缓存或缺失，所以 AI 不会把过期的数字当成新数字再说一遍。以及同样“绝不损坏”的承诺，如今用在电子表格上。",
 "fam3.g": "去电工货架逛逛 →",
+"fam4.t": "KitchenSink4Web",
+"fam4.p": "为网页而备，应有尽有。有预算的页面读取会点名说出哪些没读到，结构化提取会点名给出证据，而同意阶梯不会被话术哄着去付款。出厂状态是只读。",
+"fam4.g": "去园艺货架逛逛 →",
 "inv.lead": "货品按能力包摆放,就像像样的五金店按通道分区。下面的货架请随意翻看;只有活儿开口要,你的智能体才会把某条通道带上。",
 "cmp.lead": "工具数量对谁都好看。真正要紧的是你真开口时会发生什么:",
 "hero.invite": "↓ 或者先看它替你挡下什么:Word 提出要修复你稿子的那个早晨",
@@ -1085,7 +1126,8 @@ zh: {
 "g.t": "为“不损坏”而设计",
 "g.p1": "那个早晨你一定见过:稿子今天要交,打开 Word,却弹出一个要“修复”你文件的对话框。整台服务器要防的,就是那个早晨。任何改动之前,备份都会自动生成。每一次保存都会在替换你的文件之前先做检查,坏的写入带不走原件。而编辑没有碰到的东西,从公式到文本框,都会原样逐字节通过。两轮完整的压力测试,加上一整架又长又重格式的真实稿件,Word 从未有一次提出要修复这台服务器保存过的东西。",
 "g.p2": "依许可证按现状提供，不附带任何形式的担保。上述工程设计，只是说明你的文档被多么认真地对待。请保留备份。(它会替你做备份。)",
-"f.left": "&copy; 2026 &middot; <b>AGPL-3.0</b>:个人和个人用途免费。<br>把它做进自家产品的公司需要商业许可,<a href='https://github.com/KitchenSink4AI/KitchenSink4Word/issues/new?template=commercial_license.yml'>开一个 issue</a>,我们细谈。",
+"f.left": "&copy; 2026 Alvut Consulting, LLC &middot; <b>AGPL-3.0</b>:个人和个人用途免费。<br>把它做进自家产品的公司需要商业许可,<a href='https://github.com/KitchenSink4AI/KitchenSink4Word/issues/new?template=commercial_license.yml'>开一个 issue</a>,我们细谈。",
+"f.corp": "楼上的办公室：KitchenSink4AI →",
 "f.right": "<a href='https://github.com/KitchenSink4AI/KitchenSink4Word'>github.com/KitchenSink4AI/KitchenSink4Word</a> · <a href='https://github.com/KitchenSink4AI/KitchenSink4Word/issues/new/choose'>报告故障</a><br>与 Claude Code 一天完成原型，经数千次对抗性测试反复锤炼，并在超过65,000字、250页的真实稿件上实测通过。应有尽有！🚰"
 },
 de: {
@@ -1096,6 +1138,9 @@ de: {
 "new.label": "NEU EINGETROFFEN",
 "new.t": "Fünf Dinge, die dieses Release geändert hat",
 "new.sub": "Die ganze Liste, ganz ohne Release Notes.",
+"new21.t": "Was 2.1.0 gerade dazugelegt hat",
+"new21a": "Dokumente öffnen sich etwa doppelt so schnell, und das Lesen von Tabellen kostet noch etwa ein Viertel der Tokens von früher.",
+"new21b": "Der Server kann Ihnen sagen, wenn es eine neuere Version gibt: Er prüft höchstens einmal pro Woche, sagt es, wenn er es tut, und lädt von sich aus nie etwas herunter.",
 "new1": "<b>Weniger Werkzeuge, und Ihr Agent hört auf zu raten.</b> v1.6 hatte 189 Werkzeuge mit vielen überlappenden Namen, und Agenten verbrannten Zeit und Token damit, zwischen ihnen zu wählen. Version 2 baut alles als 110 Werkzeuge unter einer einheitlichen Grammatik neu auf, die mehr abdeckt als zuvor, nicht weniger. Der Agent greift beim ersten Mal richtig zu und verbringt Ihre Sitzung stattdessen mit dem Dokument.",
 "new2": "<b>Startet leicht, bleibt leicht.</b> Eine frische Sitzung lädt einen kleinen Kern statt des ganzen Werkzeugkastens und greift erst dann zu den Spezialregalen, wenn Ihre Aufgabe sie wirklich braucht. Ihr Assistent behält mehr Aufmerksamkeit für Ihr Dokument, und keine der alten Fähigkeiten ist verschwunden.",
 "new3": "<b>Live-Bearbeitung, die laufen bleiben darf.</b> Mehrere Agenten können jetzt an einem offenen Dokument arbeiten, ohne sich in die Quere zu kommen, und ein Word-Dialog, der auf einen Menschen wartet, wird bemerkt und gemeldet, statt Ihren Agenten hängen zu lassen.",
@@ -1118,6 +1163,7 @@ de: {
 "m.left": "<b>GEGR. 2026</b> · FEINE INSTRUMENTE FÜR DOKUMENTEN-KLEMPNEREI",
 "m.catalog": "KATALOG № 221",
 "m.service": "SERVICE",
+"m.family": "FAMILIE",
 "hero.stamp": "KANN<br>ALLES",
 "hero.catno": "Model Context Protocol · Server für Microsoft Word",
 "hero.tagline": "Für Microsoft&nbsp;Word, <em>mit allem Drum und Dran</em>: der vollständigste .docx-MCP-Server, der je verrohrt wurde. “Everything <em>plus</em> the kitchen sink.”",
@@ -1152,6 +1198,9 @@ de: {
 "fam3.t": "KitchenSink4XL",
 "fam3.p": "Für Excel (.xlsx) mit allem Drum und Dran. Jeder Wert ist als berechnet, zwischengespeichert oder fehlend ausgewiesen, damit die KI eine veraltete Zahl nie als frische wiederholt. Dasselbe Versprechen, nichts zu beschädigen, jetzt für Tabellen.",
 "fam3.g": "Zum Elektrogang →",
+"fam4.t": "KitchenSink4Web",
+"fam4.p": "Für das Web mit allem Drum und Dran. Budgetierte Seitenlesungen benennen, was ungelesen blieb, strukturierte Extraktion benennt ihre Belege, und eine Zustimmungsleiter lässt sich nicht zu Zahlungen überreden. Ab Werk nur lesend.",
+"fam4.g": "Zum Gartengang →",
 "inv.lead": "Die Ware ist in Fähigkeitspaketen sortiert, so wie ein guter Baumarkt in Gänge sortiert ist. Stöbern Sie in den Regalen unten; Ihr Agent trägt einen Gang nur dann mit, wenn der Auftrag danach verlangt.",
 "cmp.lead": "Werkzeugzahlen schmeicheln jedem. Worauf es ankommt, ist, was passiert, wenn Sie tatsächlich fragen:",
 "hero.invite": "↓ oder fangen Sie damit an, wovor es Sie schützt: dem Morgen, an dem Word anbietet, Ihr Manuskript zu reparieren",
@@ -1220,7 +1269,8 @@ de: {
 "g.t": "Konstruiert mit dem Ziel, nichts zu beschädigen",
 "g.p1": "Sie kennen den Morgen: Das Manuskript ist fällig, Word öffnet sich, und da steht ein Dialog, der anbietet, Ihre Datei zu „reparieren“. Genau diesen Morgen soll dieser ganze Server verhindern. Vor jeder Änderung entsteht automatisch ein Backup. Jedes Speichern wird geprüft, bevor es Ihre Datei ersetzt, damit ein schlechter Schreibvorgang nicht das Original mitnimmt. Und alles, was die Bearbeitung nicht anfasst, von Formeln bis zu Textfeldern, geht genau so hindurch, wie es war, Byte für Byte. Zwei vollständige Stresskampagnen und ein Regal voll langer, stark formatierter echter Manuskripte, und Word hat kein einziges Mal angeboten, etwas zu reparieren, das dieser Server gespeichert hat.",
 "g.p2": "Bereitgestellt wie besehen, ohne Gewährleistung jeglicher Art, gemäß Lizenz; die obige Ingenieursarbeit zeigt lediglich, wie ernst Ihre Dokumente genommen werden. Behalten Sie Backups. (Es legt sie für Sie an.)",
-"f.left": "&copy; 2026 &middot; <b>AGPL-3.0</b>: kostenlos für Privatpersonen und private Nutzung.<br>Unternehmen, die es in eigene Produkte einbauen, brauchen eine kommerzielle Lizenz; <a href='https://github.com/KitchenSink4AI/KitchenSink4Word/issues/new?template=commercial_license.yml'>ein Issue öffnen</a>, dann klären wir das.",
+"f.left": "&copy; 2026 Alvut Consulting, LLC &middot; <b>AGPL-3.0</b>: kostenlos für Privatpersonen und private Nutzung.<br>Unternehmen, die es in eigene Produkte einbauen, brauchen eine kommerzielle Lizenz; <a href='https://github.com/KitchenSink4AI/KitchenSink4Word/issues/new?template=commercial_license.yml'>ein Issue öffnen</a>, dann klären wir das.",
+"f.corp": "Das Büro über dem Laden: KitchenSink4AI →",
 "f.right": "<a href='https://github.com/KitchenSink4AI/KitchenSink4Word'>github.com/KitchenSink4AI/KitchenSink4Word</a> · <a href='https://github.com/KitchenSink4AI/KitchenSink4Word/issues/new/choose'>Störung melden</a><br>Mit Claude Code an einem Tag prototypisiert, gehärtet durch Tausende adversarialer Testaufrufe und an echten Manuskripten mit über 65.000 Wörtern und 250 Seiten getestet. So viel Rohrleitung! 🚰"
 },
 fr: {
@@ -1231,6 +1281,9 @@ fr: {
 "new.label": "ARRIVAGE",
 "new.t": "Cinq choses que cette version change",
 "new.sub": "La liste complète, sans passer par les notes de version.",
+"new21.t": "Ce que la version 2.1.0 vient d'ajouter",
+"new21a": "Les documents s'ouvrent environ deux fois plus vite, et la lecture des tableaux coûte à peu près le quart des jetons qu'elle coûtait.",
+"new21b": "Le serveur peut vous signaler l'existence d'une version plus récente : il vérifie au plus une fois par semaine, le dit quand il le fait, et ne télécharge jamais rien de lui-même.",
 "new1": "<b>Moins d'outils, et votre agent cesse de deviner.</b> La v1.6 comptait 189 outils aux noms largement redondants, et les agents brûlaient du temps et des tokens à choisir entre eux. La version 2 reconstruit le tout en 110 outils sous une seule grammaire cohérente, qui couvre plus de terrain qu'avant, pas moins. L'agent choisit juste du premier coup et passe votre session sur le document.",
 "new2": "<b>Démarre léger, reste léger.</b> Une session neuve charge un petit noyau plutôt que toute la caisse à outils, et ne va chercher les étagères spécialisées que lorsque votre tâche en a réellement besoin. Votre assistant garde davantage d'attention pour votre document, et aucune des anciennes capacités n'a disparu.",
 "new3": "<b>Une édition en direct qu'on peut laisser tourner.</b> Plusieurs agents peuvent maintenant travailler sur un document ouvert sans se gêner, et une boîte de dialogue Word qui attend un humain est repérée et signalée, au lieu de laisser votre agent en plan.",
@@ -1253,6 +1306,7 @@ fr: {
 "m.left": "<b>FONDÉ EN 2026</b> · INSTRUMENTS DE PRÉCISION POUR PLOMBERIE DOCUMENTAIRE",
 "m.catalog": "CATALOGUE № 221",
 "m.service": "SERVICE",
+"m.family": "FAMILLE",
 "hero.stamp": "FAIT<br>TOUT",
 "hero.catno": "Model Context Protocol · Serveur pour Microsoft Word",
 "hero.tagline": "Pour Microsoft&nbsp;Word : <em>absolument tout, jusqu'au moindre détail</em>. Le serveur MCP .docx le plus complet jamais raccordé. “Everything <em>plus</em> the kitchen sink.”",
@@ -1287,6 +1341,9 @@ fr: {
 "fam3.t": "KitchenSink4XL",
 "fam3.p": "Absolument tout pour Excel (.xlsx), jusqu'au moindre détail. Chaque valeur est étiquetée calculée, mise en cache ou absente, si bien que l'IA ne répète jamais un chiffre périmé comme s'il était frais. La même promesse de ne rien corrompre, désormais pour les tableurs.",
 "fam3.g": "Visiter le rayon électricité →",
+"fam4.t": "KitchenSink4Web",
+"fam4.p": "Absolument tout pour le web, jusqu'au moindre détail. Des lectures de page avec budget qui nomment ce qui n'a pas été lu, une extraction structurée aux preuves nommées, et une échelle de consentement qu'on ne peut pas convaincre de payer. En lecture seule à la sortie de la boîte.",
+"fam4.g": "Visiter le rayon jardin →",
 "inv.lead": "Le stock est rangé en packs de capacités, comme une bonne quincaillerie est rangée en rayons. Parcourez les étagères ci-dessous ; votre agent n'emporte un rayon que lorsque le travail le réclame.",
 "cmp.lead": "Le nombre d'outils flatte tout le monde. Ce qui compte, c'est ce qui se passe quand vous demandez vraiment :",
 "hero.invite": "↓ ou commencez par ce dont il vous protège : le matin où Word propose de réparer votre manuscrit",
@@ -1355,7 +1412,8 @@ fr: {
 "g.t": "Conçu pour ne pas corrompre",
 "g.p1": "Vous connaissez ce matin-là : le manuscrit est à rendre, Word s'ouvre, et une boîte de dialogue propose de « réparer » votre fichier. C'est ce matin-là que tout ce serveur est fait pour empêcher. Avant la moindre modification, une sauvegarde est créée automatiquement. Chaque enregistrement est vérifié avant de remplacer votre fichier, si bien qu'une mauvaise écriture ne peut pas emporter l'original avec elle. Et tout ce que la modification ne touche pas, des équations aux zones de texte, passe exactement tel quel, octet pour octet. Deux campagnes d'endurance complètes et toute une étagère de vrais manuscrits longs et lourdement mis en forme, et Word n'a pas une seule fois proposé de réparer quoi que ce soit enregistré par ce serveur.",
 "g.p2": "Fourni tel quel, sans garantie d'aucune sorte, conformément à la licence ; l'ingénierie ci-dessus dit simplement avec quel sérieux vos documents sont traités. Gardez des sauvegardes. (Il les fait pour vous.)",
-"f.left": "&copy; 2026 &middot; <b>AGPL-3.0</b> : gratuit pour les particuliers et l'usage personnel.<br>Les entreprises qui l'intègrent dans leurs propres produits ont besoin d'une licence commerciale ; <a href='https://github.com/KitchenSink4AI/KitchenSink4Word/issues/new?template=commercial_license.yml'>ouvrez un ticket</a> et nous en parlerons.",
+"f.left": "&copy; 2026 Alvut Consulting, LLC &middot; <b>AGPL-3.0</b> : gratuit pour les particuliers et l'usage personnel.<br>Les entreprises qui l'intègrent dans leurs propres produits ont besoin d'une licence commerciale ; <a href='https://github.com/KitchenSink4AI/KitchenSink4Word/issues/new?template=commercial_license.yml'>ouvrez un ticket</a> et nous en parlerons.",
+"f.corp": "Le bureau à l'étage : KitchenSink4AI →",
 "f.right": "<a href='https://github.com/KitchenSink4AI/KitchenSink4Word'>github.com/KitchenSink4AI/KitchenSink4Word</a> · <a href='https://github.com/KitchenSink4AI/KitchenSink4Word/issues/new/choose'>signaler un pépin</a><br>Prototypé avec Claude Code en une journée, endurci par des milliers de tests adversariaux et testé sur de vrais manuscrits de plus de 65 000 mots et 250 pages. C'est de la belle tuyauterie&nbsp;! 🚰"
 },
 es: {
@@ -1366,6 +1424,9 @@ es: {
 "new.label": "RECIÉN LLEGADO",
 "new.t": "Cinco cosas que cambia esta versión",
 "new.sub": "La lista entera, sin tener que leer las notas de la versión.",
+"new21.t": "Lo que acaba de añadir la versión 2.1.0",
+"new21a": "Los documentos se abren aproximadamente el doble de rápido y leer tablas cuesta más o menos la cuarta parte de los tokens que costaba.",
+"new21b": "El servidor puede avisarle cuando existe una versión más nueva: comprueba como mucho una vez por semana, lo dice cuando lo hace y nunca descarga nada por su cuenta.",
 "new1": "<b>Menos herramientas, y su agente deja de adivinar.</b> La v1.6 tenía 189 herramientas con muchos nombres solapados, y los agentes quemaban tiempo y tokens eligiendo entre ellas. La versión 2 lo reconstruye todo como 110 herramientas bajo una sola gramática coherente, que abarca más terreno que antes, no menos. El agente acierta a la primera y dedica su sesión al documento.",
 "new2": "<b>Arranca ligero y sigue ligero.</b> Una sesión nueva carga un núcleo pequeño en vez de toda la caja de herramientas, y solo echa mano de los estantes especializados cuando su tarea de verdad los necesita. Su asistente reserva más atención para el documento, y ninguna de las capacidades de antes se ha ido a ninguna parte.",
 "new3": "<b>Edición en vivo que puede dejar funcionando.</b> Ahora varios agentes pueden trabajar sobre un documento abierto sin chocar, y un cuadro de diálogo de Word que espera a una persona se detecta y se informa, en lugar de dejar a su agente colgado.",
@@ -1388,6 +1449,7 @@ es: {
 "m.left": "<b>EST. 2026</b> · INSTRUMENTOS FINOS PARA FONTANERÍA DOCUMENTAL",
 "m.catalog": "CATÁLOGO № 221",
 "m.service": "SERVICIO",
+"m.family": "FAMILIA",
 "hero.stamp": "LO HACE<br>TODO",
 "hero.catno": "Model Context Protocol · Servidor para Microsoft Word",
 "hero.tagline": "Para Microsoft&nbsp;Word: <em>de todo, hasta lo que no imaginas</em>. El servidor MCP .docx más completo jamás entubado. “Everything <em>plus</em> the kitchen sink.”",
@@ -1422,6 +1484,9 @@ es: {
 "fam3.t": "KitchenSink4XL",
 "fam3.p": "De todo para Excel (.xlsx), hasta lo que no imaginas. Cada valor va etiquetado como calculado, en caché o ausente, así que la IA nunca repite un número caducado como si fuera nuevo. La misma promesa de no corromper nada, ahora para las hojas de cálculo.",
 "fam3.g": "Visite el pasillo de electricidad →",
+"fam4.t": "KitchenSink4Web",
+"fam4.p": "De todo para la web, hasta lo que no imaginas. Lecturas de página con presupuesto que nombran lo que quedó sin leer, extracción estructurada con pruebas nombradas y una escalera de consentimiento a la que no se la puede convencer de pagar. Solo lectura de fábrica.",
+"fam4.g": "Visite el pasillo de jardín →",
 "inv.lead": "La mercancía está ordenada en paquetes de capacidades, igual que una buena ferretería está ordenada en pasillos. Recorra los estantes de abajo; su agente solo se lleva un pasillo cuando el trabajo lo pide.",
 "cmp.lead": "El número de herramientas favorece a todos. Lo que importa es qué ocurre cuando de verdad lo pide:",
 "hero.invite": "↓ o empiece por aquello de lo que le protege: la mañana en que Word se ofrece a reparar su manuscrito",
@@ -1490,7 +1555,8 @@ es: {
 "g.t": "Diseñado para no corromper",
 "g.p1": "Conoce esa mañana: el manuscrito hay que entregarlo, Word se abre y aparece un cuadro de diálogo que se ofrece a «reparar» su archivo. Esa mañana es justo lo que todo este servidor está hecho para evitar. Antes de cualquier cambio se crea una copia de seguridad automáticamente. Cada guardado se comprueba antes de sustituir su archivo, de modo que una escritura mala no puede llevarse el original por delante. Y todo lo que la edición no toca, de las ecuaciones a los cuadros de texto, pasa exactamente como estaba, byte a byte. Dos campañas de estrés completas y todo un estante de manuscritos reales largos y muy formateados, y Word no se ha ofrecido ni una sola vez a reparar nada que haya guardado este servidor.",
 "g.p2": "Se ofrece tal cual, sin garantía de ningún tipo, según la licencia: la ingeniería anterior solo muestra con cuánta seriedad se tratan sus documentos. Conserve copias de seguridad. (Él las hace por usted.)",
-"f.left": "&copy; 2026 &middot; <b>AGPL-3.0</b>: gratis para particulares y uso personal.<br>Las empresas que lo integren en productos propios necesitan una licencia comercial; <a href='https://github.com/KitchenSink4AI/KitchenSink4Word/issues/new?template=commercial_license.yml'>abra un issue</a> y lo hablamos.",
+"f.left": "&copy; 2026 Alvut Consulting, LLC &middot; <b>AGPL-3.0</b>: gratis para particulares y uso personal.<br>Las empresas que lo integren en productos propios necesitan una licencia comercial; <a href='https://github.com/KitchenSink4AI/KitchenSink4Word/issues/new?template=commercial_license.yml'>abra un issue</a> y lo hablamos.",
+"f.corp": "La oficina de arriba: KitchenSink4AI →",
 "f.right": "<a href='https://github.com/KitchenSink4AI/KitchenSink4Word'>github.com/KitchenSink4AI/KitchenSink4Word</a> · <a href='https://github.com/KitchenSink4AI/KitchenSink4Word/issues/new/choose'>informar de un fallo</a><br>Prototipado con Claude Code en un día, endurecido con miles de pruebas adversariales y probado en manuscritos reales de más de 65.000 palabras y 250 páginas. ¡Eso sí que es fontanería! 🚰"
 }
 };
