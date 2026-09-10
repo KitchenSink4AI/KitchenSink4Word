@@ -70,3 +70,22 @@ request (or in a comment on it):
 That statement, together with your submission, constitutes your
 acceptance of this Agreement for that and all future Contributions to
 the Project.
+
+## AI-Assisted Contributions
+
+Contributions to the Project may be produced with the help of AI tools,
+and many of the Project's own commits carry trailers crediting the tools
+that helped (for example "Co-Authored-By: Claude"). Three rules keep the
+legal picture simple:
+
+1. **The human submits, the human answers for it.** Whoever submits a
+   Contribution is its contributor under this Agreement, whatever tools
+   helped produce it, and grants the rights above for the whole of it.
+   By submitting, you confirm you are entitled to make that grant for
+   every part of the Contribution, including any AI-assisted part.
+2. **Tool trailers are credit, not authorship.** A commit trailer naming
+   an AI tool is attribution of tooling. It is not a claim that the tool
+   is an author, a contributor, or a rights holder under this Agreement
+   or under copyright.
+3. **No orphaned rights.** No AI tool used on this Project retains or is
+   granted any right in the Contributions or the Project.
