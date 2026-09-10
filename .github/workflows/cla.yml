@@ -27,4 +27,4 @@ jobs:
           custom-notsigned-comment: 'Thanks for the contribution. Before this can merge, please read [CLA.md](../blob/main/CLA.md) and sign by replying with the sentence below.'
           custom-pr-sign-comment: 'I have read the CLA.md of this repository and agree to its terms.'
           custom-allsigned-comment: 'All contributors have signed the CLA.'
-          allowlist: 'nometalalchemist,bot*,dependabot[bot],Claude*'
+          allowlist: 'nometalalchemist,bot*,dependabot[bot],Claude*,Codex*'
