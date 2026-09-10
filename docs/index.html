@@ -171,9 +171,9 @@ a{color:var(--copper)}
 
 /* ---------- sections ---------- */
 section{padding:64px 0;border-top:1px solid var(--rule)}
-.sec-head{display:flex;align-items:baseline;gap:16px;margin-bottom:34px}
-.sec-head h2{font-size:clamp(26px,4vw,40px);font-weight:800}
-.sec-head .no{font-size:12px;letter-spacing:.25em;color:var(--copper);white-space:nowrap}
+.sec-head{display:flex;flex-wrap:wrap;align-items:baseline;gap:10px 16px;margin-bottom:34px}
+.sec-head h2{min-width:0;overflow-wrap:anywhere;font-size:clamp(26px,4vw,40px);font-weight:800}
+.sec-head .no{font-size:12px;letter-spacing:.25em;color:var(--copper);white-space:normal;max-width:100%;overflow-wrap:anywhere}
 .sec-head:after{content:"";flex:1;border-bottom:2px dotted var(--rule);transform:translateY(-6px)}
 
 /* origin */
@@ -344,6 +344,8 @@ footer a{color:var(--copper)}
 .demo-invite{display:inline-block;margin-top:22px;font-size:12px;letter-spacing:.06em;
   color:var(--copper);text-decoration:none;border-bottom:1.5px dashed var(--copper);padding-bottom:2px}
 .demo-invite:hover{color:var(--ink);border-bottom-style:solid}
+/* Long repository URLs must fit narrow footer columns. */
+footer a{overflow-wrap:anywhere}
 </style>
 </head>
 <body>
@@ -401,15 +403,15 @@ footer a{color:var(--copper)}
       <summary>
         <span class="tag" data-i18n="new.label">JUST IN</span>
         <span class="ttl" data-i18n="h2.new">New in this version</span>
-        <span class="hint" data-i18n="new.t">Five things this release changed</span>
+        <span class="hint">v2.1.0 &middot; <time datetime="2026-09-09">2026-09-09</time></span>
       </summary>
     <div class="newin">
-      <p class="sub" data-i18n="new21.t">What 2.1.0 just added</p>
+      <p class="sub">v2.1.0 &middot; <time datetime="2026-09-09">2026-09-09</time></p>
       <ul>
         <li data-i18n="new21a">Documents open about twice as fast, and table reads cost about a quarter of the tokens they did.</li>
         <li data-i18n="new21b">The server can tell you when a newer release exists: it checks at most once a week, says so when it does, and never downloads anything on its own.</li>
       </ul>
-      <p class="sub" data-i18n="new.sub">The whole list, no release notes required.</p>
+      <p class="sub">v2.0.0 &middot; <time datetime="2026-09-04">2026-09-04</time></p>
       <ul>
         <li data-i18n="new1"><b>Fewer tools, and your agent stops guessing.</b> v1.6 had 189 tools with a lot of overlapping names, and agents burned time and tokens picking between them. Version 2 rebuilds everything as 110 tools under one consistent grammar that covers more ground than before, not less. The agent picks right the first time and spends your session on the document instead.</li>
         <li data-i18n="new2"><b>Starts light, stays light.</b> A fresh session loads a small core instead of the whole toolbox, and reaches for the specialty shelves only when your task actually needs them. Your assistant keeps more of its attention on your document, and none of the old capabilities went anywhere.</li>
@@ -550,7 +552,7 @@ footer a{color:var(--copper)}
         <p data-i18n="svc2.p">A Word capability the sink should also have. Describe the real task behind it and it goes on the workbench.</p>
         <span class="go" data-i18n="svc2.g">Request a feature →</span>
       </a>
-      <a class="counter" href="https://github.com/KitchenSink4AI/KitchenSink4Word/issues/new?template=commercial_license.yml">
+      <a class="counter" href="https://kitchensink4.ai/contact/?category=licensing#cat-licensing">
         <span class="icon">💼</span>
         <h3 data-i18n="svc3.t">Commercial fitting?</h3>
         <p data-i18n="svc3.p">Free for any use that meets the AGPL's terms, including its source-sharing obligations. If your company wants to build it into a product of its own, that needs a commercial license, with terms worked out case by case. This counter is where you start that conversation.</p>
@@ -627,7 +629,6 @@ en: {
 "sw.store": "The storefront",
 "h2.new": "New in this version",
 "new.label": "JUST IN",
-"new.t": "Five things this release changed",
 "new.sub": "The whole list, no release notes required.",
 "new21.t": "What 2.1.0 just added",
 "new21a": "Documents open about twice as fast, and table reads cost about a quarter of the tokens they did.",
@@ -770,7 +771,6 @@ ko: {
 "sw.store": "스토어",
 "h2.new": "이번 버전의 새 기능",
 "new.label": "신규 입고",
-"new.t": "이번 릴리스가 바꾼 다섯 가지",
 "new.sub": "릴리스 노트를 읽을 필요 없이, 이게 전부입니다.",
 "new21.t": "2.1.0이 방금 더한 것들",
 "new21a": "문서가 대략 두 배 빠르게 열리고, 표를 읽는 데 드는 토큰이 예전의 약 4분의 1로 줄었습니다.",
@@ -913,7 +913,6 @@ ja: {
 "sw.store": "ストアトップ",
 "h2.new": "このバージョンの新機能",
 "new.label": "新入荷",
-"new.t": "このリリースで変わった5つのこと",
 "new.sub": "リリースノートを読まなくても、これで全部です。",
 "new21.t": "2.1.0 で新しく加わったもの",
 "new21a": "文書が約2倍の速さで開き、表の読み取りにかかるトークンは以前の約4分の1になりました。",
@@ -1056,7 +1055,6 @@ zh: {
 "sw.store": "商店首页",
 "h2.new": "本版本新增",
 "new.label": "新到货",
-"new.t": "这一版改变的五件事",
 "new.sub": "不用翻发布说明,就这些。",
 "new21.t": "2.1.0 刚刚添了什么",
 "new21a": "文档打开速度大约快了一倍，读取表格所花的令牌约为原来的四分之一。",
@@ -1199,7 +1197,6 @@ de: {
 "sw.store": "Zum Laden",
 "h2.new": "Neu in dieser Version",
 "new.label": "NEU EINGETROFFEN",
-"new.t": "Fünf Dinge, die dieses Release geändert hat",
 "new.sub": "Die ganze Liste, ganz ohne Release Notes.",
 "new21.t": "Was 2.1.0 gerade dazugelegt hat",
 "new21a": "Dokumente öffnen sich etwa doppelt so schnell, und das Lesen von Tabellen kostet noch etwa ein Viertel der Tokens von früher.",
@@ -1342,7 +1339,6 @@ fr: {
 "sw.store": "La boutique",
 "h2.new": "Nouveautés de cette version",
 "new.label": "ARRIVAGE",
-"new.t": "Cinq choses que cette version change",
 "new.sub": "La liste complète, sans passer par les notes de version.",
 "new21.t": "Ce que la version 2.1.0 vient d'ajouter",
 "new21a": "Les documents s'ouvrent environ deux fois plus vite, et la lecture des tableaux coûte à peu près le quart des jetons qu'elle coûtait.",
@@ -1485,7 +1481,6 @@ es: {
 "sw.store": "La tienda",
 "h2.new": "Novedades de esta versión",
 "new.label": "RECIÉN LLEGADO",
-"new.t": "Cinco cosas que cambia esta versión",
 "new.sub": "La lista entera, sin tener que leer las notas de la versión.",
 "new21.t": "Lo que acaba de añadir la versión 2.1.0",
 "new21a": "Los documentos se abren aproximadamente el doble de rápido y leer tablas cuesta más o menos la cuarta parte de los tokens que costaba.",
