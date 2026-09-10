@@ -47,6 +47,24 @@ def test_reports_the_running_build(info):
     assert info["version"] == __version__
 
 
+def test_names_the_product_the_agent_is_talking_to(info):
+    """A connected agent could read this payload and still not know which
+    product answered: the name field is a lowercase package id and nothing
+    said the brand. 2.1.1 added the identity block."""
+    assert info["product"] == "KitchenSink4Word"
+    assert info["package"] == "kitchensink4word"
+    assert info["homepage"] == "https://kitchensink4.ai/KitchenSink4Word/"
+
+
+def test_names_the_rest_of_the_family(info):
+    """The suite was invisible from inside the server. Every sibling's PyPI
+    name is here, and this one is not in its own family list."""
+    assert info["family"] == [
+        "kitchensink4xl", "kitchensink4ppt", "kitchensink4web"
+    ]
+    assert "kitchensink4word" not in info["family"]
+
+
 def test_reports_the_surface_the_registry_holds(info):
     surface = info["surface"]
     assert surface == packs.surface_report()
@@ -224,7 +242,16 @@ _PATH = re.compile(r"[A-Za-z]:[\\/]|(?<![\w.])/[\w.-]+/[\w.-]+")
 
 
 def test_no_value_looks_like_a_path(info):
-    offenders = [v for v in _values(info) if _PATH.search(v)]
+    """A published https:// address is not a machine path and never was;
+    the drive-letter half of _PATH matches its scheme (``s:/``), so URLs are
+    scanned for the POSIX shape only. Anything else is checked whole."""
+    offenders = []
+    for value in _values(info):
+        if value.startswith("https://"):
+            assert _PATH.search(value[len("https://"):]) is None, value
+            continue
+        if _PATH.search(value):
+            offenders.append(value)
     assert not offenders, f"path-shaped values in get_server_info: {offenders}"
 
 
@@ -273,3 +300,51 @@ def test_reachable_over_the_wire_at_startup():
     payload = asyncio.run(run())
     assert payload["name"] == "kitchensink4word"
     assert payload["ok"] is True
+
+
+# ------------------------------------------------------- the handshake
+
+# get_server_info always reported the package version correctly. The
+# initialize handshake did not: FastMCP was constructed with no version=,
+# so it answered with its own (3.4.7 at the time), and every client log and
+# registry scrape that reads serverInfo.version recorded fastmcp's number as
+# this product's. The siblings all passed it; this one was missed until
+# 2.1.1. Asserted against __version__ rather than a literal so a release
+# bump cannot make it stale, and asserted != the fastmcp version so a future
+# refactor that drops the argument turns this red instead of passing by
+# coincidence.
+
+
+def _handshake():
+    async def run():
+        async with Client(server.mcp) as client:
+            return client.initialize_result
+
+    return asyncio.run(run())
+
+
+def test_the_handshake_reports_this_package_not_fastmcps():
+    import fastmcp
+
+    result = _handshake()
+    assert result.serverInfo.name == "kitchensink4word"
+    assert result.serverInfo.version == __version__
+    assert result.serverInfo.version != fastmcp.__version__, (
+        "serverInfo is reporting the framework version again; server.py "
+        "needs version=__version__ on the FastMCP constructor"
+    )
+
+
+def test_the_instructions_name_the_product_and_the_suite():
+    """The instructions string is the text injected into a connected
+    agent's context. Before 2.1.1 it opened on a generic description, so an
+    agent had no way to say which product it was talking to."""
+    text = _handshake().instructions or ""
+    assert text.startswith(
+        "KitchenSink4Word (kitchensink4word on PyPI), part of the "
+        "KitchenSink4AI suite. "
+    ), f"instructions do not lead with the self-identification: {text[:120]!r}"
+    assert "Full-featured Word (.docx) editor" in text, (
+        "the self-identification replaced the instructions instead of "
+        "leading them"
+    )

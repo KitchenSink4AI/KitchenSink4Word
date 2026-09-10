@@ -110,7 +110,14 @@ from .ops import (
 
 mcp = FastMCP(
     "kitchensink4word",
+    # Without version=, FastMCP answers the initialize handshake with its own
+    # version, so every client log and every registry scrape that reads
+    # serverInfo.version records fastmcp's number as this product's. The
+    # siblings pass it; this one was missed until 2.1.1.
+    version=__version__,
     instructions=(
+        "KitchenSink4Word (kitchensink4word on PyPI), part of the "
+        "KitchenSink4AI suite. "
         "Full-featured Word (.docx) editor, consolidated v2 surface: text, "
         "tables, footnotes/endnotes, TOC and generated lists, "
         "headers/footers, images, charts, equations, citations, comments, "
@@ -1577,6 +1584,10 @@ def get_server_info() -> dict:
     """
     out = {
         "name": "kitchensink4word",
+        "product": "KitchenSink4Word",
+        "package": "kitchensink4word",
+        "homepage": "https://kitchensink4.ai/KitchenSink4Word/",
+        "family": ["kitchensink4xl", "kitchensink4ppt", "kitchensink4web"],
         "version": __version__,
         "surface": _packs.surface_report(),
         "packs_available": _packs.pack_names(),

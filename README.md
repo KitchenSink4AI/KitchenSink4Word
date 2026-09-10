@@ -7,14 +7,22 @@
 [![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue)](LICENSE)
 [![Listed on mcpservers.org](https://mcpservers.org/badge.svg)](https://mcpservers.org/servers/nometalalchemist/kitchensink4word)
 
-[Landing page](https://kitchensink4ai.github.io/KitchenSink4Word/) · [llms.txt](https://kitchensink4ai.github.io/KitchenSink4Word/llms.txt) (machine-readable capability manifest for agents and LLM crawlers)
+[Landing page](https://kitchensink4.ai/KitchenSink4Word/) · [llms.txt](https://kitchensink4.ai/KitchenSink4Word/llms.txt) (machine-readable capability manifest for agents and LLM crawlers)
 
-**Everything plus the kitchen sink for Microsoft Word.** The most complete
-Word (.docx) MCP server available: **221 document operations** across **110
-tools**, one consistent grammar, engineered not to corrupt and stress-tested
-against long, heavily formatted real-world documents. Live editing included:
-documents open in Word are edited in place, visibly, with each tool call
-landing as a single Ctrl+Z step.
+The most complete Word (.docx) MCP server available: 221 document operations
+across 110 tools. Live editing of open documents, tracked changes, citations
+and bibliography with Zotero, equations, document assembly, mail merge,
+tables, footnotes, TOC, redaction, accessibility audits, charts, document
+compare and merge, and PDF import and export. Works with Claude Code, Claude
+Desktop, Cursor, and any MCP client. Part of the KitchenSink4AI suite with
+kitchensink4xl (Excel), kitchensink4ppt (PowerPoint), and kitchensink4web
+(browser).
+
+**Everything plus the kitchen sink for Microsoft Word.** One consistent
+grammar, engineered not to corrupt and stress-tested against long, heavily
+formatted real-world documents. Live editing included: documents open in
+Word are edited in place, visibly, with each tool call landing as a single
+Ctrl+Z step.
 
 > ### ⚠️ v2.0 is a breaking change
 > Every v1.x tool name changed. The 189-tool v1.6 surface was rebuilt as a
@@ -291,7 +299,7 @@ runs against untrusted or semi-trusted agent traffic.
 
 ## Testing
 
-1,842 tests (1,772 run everywhere; 70 live-marked tests drive a real Word
+1,846 tests (1,776 run everywhere; 70 live-marked tests drive a real Word
 instance on Windows): the suite was developed against a private corpus of
 real-world documents (book-length chapters, a document with 171 footnotes, a
 manuscript with 126 tracked changes and reviewer comments), and CI
