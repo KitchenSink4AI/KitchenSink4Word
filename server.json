@@ -3,7 +3,7 @@
   "name": "io.github.nometalalchemist/kitchensink4word",
   "title": "KitchenSink4Word",
   "description": "Word (.docx) MCP server: 221 operations, live editing, tracked changes, citations, document assembly, mail merge. The kitchen sink.",
-  "version": "2.1.1",
+  "version": "2.1.2",
   "websiteUrl": "https://kitchensink4.ai/KitchenSink4Word/",
   "repository": {
     "url": "https://github.com/KitchenSink4AI/KitchenSink4Word",
@@ -13,7 +13,7 @@
     {
       "registryType": "pypi",
       "identifier": "kitchensink4word",
-      "version": "2.1.1",
+      "version": "2.1.2",
       "transport": {
         "type": "stdio"
       }
