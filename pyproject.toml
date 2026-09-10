@@ -1,11 +1,11 @@
 [project]
 name = "kitchensink4word"
-version = "2.1.1"
+version = "2.1.2"
 description = "Word (.docx) MCP server: 221 operations, live editing, tracked changes, citations, document assembly, mail merge. The kitchen sink."
 readme = "README.md"
 license = "AGPL-3.0-only"
 license-files = ["LICENSE", "NOTICE.md"]
-authors = [{ name = "nometalalchemist" }]
+authors = [{ name = "Alvut Consulting, LLC (KitchenSink4AI)" }]
 keywords = [
     "mcp", "word", "docx", "ooxml", "claude", "model-context-protocol",
     "live-editing", "citations", "bibliography", "footnotes",

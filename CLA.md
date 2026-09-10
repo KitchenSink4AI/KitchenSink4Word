@@ -1,7 +1,7 @@
 # Contributor License Agreement
 
 Thank you for your interest in contributing to this project (the
-"Project"), maintained by nometalalchemist (the "Maintainer").
+"Project"), maintained by Alvut Consulting, LLC (the "Maintainer").
 
 This Contributor License Agreement ("Agreement") clarifies the terms
 under which you contribute. It is adapted from the Apache Software

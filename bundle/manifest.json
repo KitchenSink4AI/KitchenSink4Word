@@ -2,7 +2,7 @@
   "manifest_version": "0.3",
   "name": "kitchensink4word",
   "display_name": "KitchenSink4Word",
-  "version": "2.1.1",
+  "version": "2.1.2",
   "description": "Lets Claude write and edit Word documents for you: text, tables, footnotes, citations, tracked changes, comments, and live edits to the document you have open in Word.",
   "long_description": "KitchenSink4Word connects Claude to your Word documents. Ask it to draft sections, fix citations, apply tracked changes, build tables, or edit the document you have open in Word while you watch. Every change lands after an automatic backup, the work is checked when it saves, and nothing about your documents leaves your machine. Part of the KitchenSink4 family (Word, PowerPoint, Excel, Web) from KitchenSink4AI (kitchensink4.ai).",
   "author": {
@@ -30,7 +30,7 @@
     "mcp_config": {
       "command": "uvx",
       "args": [
-        "kitchensink4word==2.1.1"
+        "kitchensink4word==2.1.2"
       ],
       "env": {
         "KS4W_ALL_TOOLS": "${user_config.all_tools}",

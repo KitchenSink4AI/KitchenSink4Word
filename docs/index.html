@@ -7,10 +7,73 @@
 <meta name="description" content="Everything plus the kitchen sink for Microsoft Word: the most complete Word (.docx) MCP server. 221 document operations across 110 tools, one grammar. Tiered context loading starts at about 8.0k tokens. Live editing, citations, tables, footnotes, tracked changes. Engineered not to corrupt.">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚰</text></svg>">
 <link rel="llms" href="llms.txt" type="text/plain">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght,SOFT@9..144,300..900,50&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
+/* Self-hosted: the page loads no third-party font CDN. */
+@font-face {
+  font-family: 'Fraunces';
+  font-style: normal;
+  font-weight: 300 900;
+  font-display: swap;
+  src: url('fonts/fraunces-var-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: 'Fraunces';
+  font-style: normal;
+  font-weight: 300 900;
+  font-display: swap;
+  src: url('fonts/fraunces-var-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('fonts/plexmono-400-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('fonts/plexmono-400-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('fonts/plexmono-500-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('fonts/plexmono-500-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('fonts/plexmono-600-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('fonts/plexmono-600-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
 :root{
   --paper:#f5efe0; --paper-deep:#ede4cd; --ink:#1e3550; --ink-soft:#3f5878;
   --copper:#b0622a; --copper-bright:#cf7434; --stamp:#a3352b; --rule:#c9bda0;
@@ -516,7 +579,7 @@ footer a{color:var(--copper)}
       <a class="counter" href="https://kitchensink4.ai/KitchenSink4PPT/">
         <span class="icon">🖌️</span>
         <h3 data-i18n="fam1.t">KitchenSink4PPT</h3>
-        <p data-i18n="fam1.p">Everything plus the kitchen sink for Microsoft PowerPoint. Move the node, the arrows follow: diagrams your hands can still move. Tables that behave, and the same never-corrupts promise, now for slides.</p>
+        <p data-i18n="fam1.p">Everything plus the kitchen sink for Microsoft PowerPoint. Move the node, the arrows follow: diagrams your hands can still move. Tables that behave, and the same corruption-safe design, now for slides.</p>
         <span class="go" data-i18n="fam1.g">Visit the paint aisle →</span>
       </a>
       <a class="counter" href="https://kitchensink4.ai/KitchenSink4XL/">
@@ -543,7 +606,7 @@ footer a{color:var(--copper)}
 
 <footer>
   <div class="wrap row">
-    <span data-i18n="f.left">© 2026 Alvut Consulting, LLC · <b>AGPL-3.0</b>: free for individuals and personal use.<br>Companies building it into their own products need a commercial license; <a href="https://github.com/KitchenSink4AI/KitchenSink4Word/issues/new?template=commercial_license.yml">open an issue</a> and we will talk it through.</span>
+    <span data-i18n="f.left">© 2026 Alvut Consulting, LLC · Licensed AGPL-3.0: free for any use that meets the AGPL’s terms, including its source-sharing obligations.<br>Commercial licenses for organizations that need to ship these in closed products (<a href="mailto:licensing@kitchensink4.ai">licensing@kitchensink4.ai</a>).</span>
     <span style="text-align:right" data-i18n="f.right"><a href="https://github.com/KitchenSink4AI/KitchenSink4Word">github.com/KitchenSink4AI/KitchenSink4Word</a> · <a href="https://github.com/KitchenSink4AI/KitchenSink4Word/issues/new/choose">report a glitch</a><br>Prototyped with Claude Code in a day, hardened through thousands of adversarial test calls, and flow-tested on real manuscripts exceeding 65,000 words and 250 pages. That's a lotta pipe! 🚰</span>
   </div>
   <div class="wrap" style="text-align:center;padding:6px 0;font-size:11px"><a href="https://kitchensink4.ai/" data-i18n="f.corp">The office upstairs: KitchenSink4AI →</a></div>
@@ -618,7 +681,7 @@ en: {
 "no7": "DEPT. 07",
 "h2.fam": "The family",
 "fam1.t": "KitchenSink4PPT",
-"fam1.p": "Everything plus the kitchen sink for Microsoft PowerPoint. Move the node, the arrows follow: diagrams your hands can still move. Tables that behave, and the same never-corrupts promise, now for slides.",
+"fam1.p": "Everything plus the kitchen sink for Microsoft PowerPoint. Move the node, the arrows follow: diagrams your hands can still move. Tables that behave, and the same corruption-safe design, now for slides.",
 "fam1.g": "Visit the paint aisle →",
 "fam2.t": "The storefront",
 "fam2.p": "The whole hardware store on one page: every KitchenSink server, its fixture, and its counter, plus a shelf or two that are not empty by accident.",
@@ -697,7 +760,7 @@ en: {
 "g.t": "Engineered Not to Corrupt",
 "g.p1": "You know the morning: the manuscript is due, Word opens, and there is a dialog offering to \"repair\" your file. That morning is what this whole server is built to prevent. Before any change, a backup is made automatically. Every save is checked before it replaces your file, so a bad write cannot take the original with it. And everything the edit doesn't touch, from equations to textboxes, passes through exactly as it was, byte for byte. Two full stress campaigns and a shelf of long, heavily formatted real manuscripts, and Word has never once offered to repair anything this server saved.",
 "g.p2": "Provided as-is, without warranty of any kind, per the license; the engineering above is simply how seriously your documents are taken. Keep backups. (It makes them for you.)",
-"f.left": "&copy; 2026 Alvut Consulting, LLC &middot; <b>AGPL-3.0</b>: free for individuals and personal use.<br>Companies building it into their own products need a commercial license; <a href='https://github.com/KitchenSink4AI/KitchenSink4Word/issues/new?template=commercial_license.yml'>open an issue</a> and we will talk it through.",
+"f.left": "&copy; 2026 Alvut Consulting, LLC &middot; Licensed AGPL-3.0: free for any use that meets the AGPL’s terms, including its source-sharing obligations.<br>Commercial licenses for organizations that need to ship these in closed products (<a href='mailto:licensing@kitchensink4.ai'>licensing@kitchensink4.ai</a>).",
 "f.corp": "The office upstairs: KitchenSink4AI →",
 "f.right": "<a href='https://github.com/KitchenSink4AI/KitchenSink4Word'>github.com/KitchenSink4AI/KitchenSink4Word</a> · <a href='https://github.com/KitchenSink4AI/KitchenSink4Word/issues/new/choose'>report a glitch</a><br>Prototyped with Claude Code in a day, hardened through thousands of adversarial test calls, and flow-tested on real manuscripts exceeding 65,000 words and 250 pages. That's a lotta pipe! 🚰"
 },

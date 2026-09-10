@@ -385,12 +385,22 @@ The remaining 63 writers and 14 readers are file-only: they refuse while the doc
 
 ## License
 
-**AGPL-3.0.** Free for individuals and personal use, and it stays that way.
+KitchenSink4Word is dual-licensed:
 
-If your company wants to build this into a product of its own, that needs a
-commercial license, and terms are worked out case by case.
-[Open an issue](https://github.com/KitchenSink4AI/KitchenSink4Word/issues/new?template=commercial_license.yml)
-on the repo and we will talk it through.
+**AGPL-3.0 (open source).** Free for anyone (individuals, academics, and
+businesses) for any use that complies with the AGPL's terms. Those terms
+include sharing source, including your modifications, when you distribute the
+software or make it available over a network.
+
+**Commercial license.** For organizations that want to build KitchenSink4Word
+into their own products or services without the AGPL's source-sharing
+obligations. Contact licensing@kitchensink4.ai.
+
+Copyright (c) 2026 Alvut Consulting, LLC. KitchenSink4AI is a product line of
+Alvut Consulting, LLC.
+
+Not affiliated with, endorsed by, or sponsored by Microsoft Corporation.
+Microsoft and Word are trademarks of the Microsoft group of companies.
 
 ---
 
