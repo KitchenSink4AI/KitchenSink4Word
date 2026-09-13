@@ -380,8 +380,24 @@ footer .row>span{min-width:0;overflow-wrap:anywhere}
 
 .footer-links{text-align:center;padding:10px 20px;font-size:12px}.footer-links a{white-space:nowrap}.release-date{font-size:12px;color:var(--ink-soft);white-space:nowrap;margin-left:auto}
 
-/* Local MCP client compatibility and optional setup commands. */
-.mcp-compat{margin:0 0 24px;min-width:0;max-width:100%;line-height:1.6}.mcp-compat p{margin:10px 0;overflow-wrap:anywhere}.mcp-compat summary{cursor:pointer;font-weight:700}.mcp-compat pre{max-width:100%;overflow-x:auto;padding:12px;border:1px solid currentColor;font-size:13px;line-height:1.65}.mcp-compat code{font-family:monospace}
+
+ /* Installation guidance uses the existing lead, note, card and terminal typography. */
+ .mcp-compat{margin:0 0 24px;max-width:840px}
+ .mcp-compat p{overflow-wrap:anywhere}
+ .mcp-compat [data-i18n="compat.lead"]{font-family:'Fraunces',Georgia,serif;font-size:clamp(16px,2.1vw,20px);line-height:1.65;margin:0 0 12px}
+ .mcp-compat [data-i18n="compat.chatgpt"]{font-size:13px;line-height:1.6;color:var(--ink-soft);margin:0}
+ .setup-note{margin:0 0 30px;padding:18px 22px;border-left:3px solid var(--ink);background:var(--paper-deep);max-width:900px;min-width:0}
+ .setup-note h3{font-size:15px;line-height:1.5;margin:0 0 10px}
+ .setup-note p,.install-grid p,.route p[data-i18n^="setup."]{font-size:13px;line-height:1.6;color:var(--ink-soft);margin:0 0 12px;overflow-wrap:anywhere}
+ .setup-note .term,.setup-note .cmd{margin:12px 0;max-width:100%}
+ .install-grid .client-label,.route .client-label{font-size:11px;font-weight:700;letter-spacing:.08em;margin:16px 0 6px;color:var(--ink)}
+ .route h3[data-i18n^="setup."]{font-size:15px;line-height:1.5;margin:0 0 12px}
+ .install-grid h3{line-height:1.5}
+
+
+.setup-note .term,.install-grid .term{font-size:13px}
+.setup-note .term div,.install-grid .term div{white-space:pre-wrap;overflow-wrap:anywhere}
+.route .cmd{white-space:pre-wrap;overflow-wrap:anywhere}
 </style>
 </head>
 <body>
@@ -540,34 +556,20 @@ footer .row>span{min-width:0;overflow-wrap:anywhere}
     <div class="mcp-compat">
 <p data-i18n="compat.lead">Works with Claude Desktop, Claude Code, Codex, and other AI apps that support local MCP servers, including open-source clients.</p>
 <p data-i18n="compat.chatgpt">ChatGPT: use a desktop app with local MCP support. ChatGPT on the web needs a separate remote connection; these downloads do not set that up.</p>
-<details><summary data-i18n="compat.codex">Codex setup</summary>
-<p data-i18n="compat.pre">Install uv first, then run:</p>
-<pre><code>codex mcp add word -- uvx kitchensink4word</code></pre>
-<p data-i18n="compat.other">Other clients: use uvx as the command and the package name as its argument. Follow your app's MCP setup instructions.</p>
-</details>
-</div>
 
-    <p class="for-lead" data-i18n="inst.lead">Pick the line that describes you. Most people are the first one.</p>
+</div>
+<div class="setup-note"><h3 data-i18n="setup.title">First time? Start here.</h3><p data-i18n="setup.intro">These tools need a small launcher called uv. Set it up once for all four products. Already have it? Skip to your app below.</p><p data-i18n="setup.windows">On Windows, open the Start menu, type PowerShell, and open Windows PowerShell. Paste this line into that window and press Enter:</p><div class="term"><div>winget install --id=astral-sh.uv -e</div></div><p data-i18n="setup.restart">When installation finishes, close and reopen your AI app and any command windows.</p><p data-i18n="setup.help">Using a Mac, or need help? Follow the <a href="https://docs.astral.sh/uv/getting-started/installation/">uv installation guide</a>. On a work computer, your IT team may need to install it for you.</p></div>
     <div class="install-grid">
       <div class="step">
         <span class="badge" data-i18n="inst.b1">Easiest</span>
-        <h3 data-i18n="inst.s1">Using Claude Desktop? One double-click.</h3>
-        <p data-i18n="inst.p1">Download the installer bundle from the latest release and double-click it, or drag it into the Claude Desktop window. Desktop adds it as an extension and the sink is connected. Nothing to type, nothing to configure.</p>
-        <a class="go" href="https://github.com/KitchenSink4AI/KitchenSink4Word/releases/latest" data-i18n="inst.g1">Download the .mcpb bundle →</a>
-        <p class="after" data-i18n="inst.p1b">One-time requirement: <a href="https://docs.astral.sh/uv/">uv</a> on your PATH, which the bundle uses to start the server.</p>
+        <h3 data-i18n="setup.desktopTitle">Using a desktop AI app?</h3>
+        <p data-i18n="setup.desktop">Claude Desktop: download the file ending in <b>.mcpb</b> under Assets on the download page. In Claude Desktop, open <b>Settings → Extensions → Advanced settings → Install Extension</b> and select that file.</p><p data-i18n="setup.local">ChatGPT Desktop, Codex, or another app with local MCP settings: add a local server using the command and argument below, then save and restart the app. Menu names and availability vary by app.</p><div class="term"><div>Command: uvx
+Arguments: kitchensink4word</div></div>
+        <a class="go" href="https://github.com/KitchenSink4AI/KitchenSink4Word/releases/latest" data-i18n="setup.download">Download for Claude Desktop →</a>
       </div>
       <div class="step">
         <span class="badge" data-i18n="inst.b2">One command</span>
-        <h3 data-i18n="inst.s2">Using Claude Code? Paste this.</h3>
-        <p data-i18n="inst.p2">One line in a terminal and you are done. It fetches and runs the server for you, so there is nothing to install first.</p>
-        <div class="term"><div><span class="p">$</span> claude mcp add word -s user -- uvx kitchensink4word</div></div>
-      </div>
-    </div>
-    <div class="tip">
-      <span class="seal">🔑</span>
-      <div>
-        <h3 data-i18n="tip.t">One tip that removes most permission pop-ups</h3>
-        <p data-i18n="tip.p">In Claude Desktop's Tool permissions for this server, set the Read-only tools group to Always Allow. Those tools cannot change anything, so approving them once is safe, and Claude stops asking about every read. Leave the acting tools on Ask, so anything that changes things still checks with you first.</p>
+        <h3 data-i18n="setup.cliTitle">Using Claude Code or Codex? Paste this.</h3><p data-i18n="setup.cli">With your app installed and the first-time setup complete, open PowerShell on Windows or Terminal on a Mac. Paste the command labeled for your app and press Enter. Then restart your AI session.</p><p class="client-label">Claude Code</p><div class="term"><div>claude mcp add word -s user -- uvx kitchensink4word</div></div><p class="client-label">Codex</p><div class="term"><div>codex mcp add word -- uvx kitchensink4word</div></div>
       </div>
     </div>
     <details class="devfold">
@@ -800,6 +802,17 @@ en: {
 "dept9.e": "e.g. insert text at the cursor while the document is open · scroll the window to what changed · toggle track changes mid-session",
 "dept10.e": "e.g. run a mail merge from a CSV · redact a name and verify it is gone · audit a report for accessibility",
 "dept11.e": "e.g. turn LaTeX into native Word equations · cite straight from a Zotero library · anonymize a manuscript for peer review",
+"setup.title": "First time? Start here.",
+"setup.intro": "These tools need a small launcher called uv. Set it up once for all four products. Already have it? Skip to your app below.",
+"setup.windows": "On Windows, open the Start menu, type PowerShell, and open Windows PowerShell. Paste this line into that window and press Enter:",
+"setup.restart": "When installation finishes, close and reopen your AI app and any command windows.",
+"setup.help": "Using a Mac, or need help? Follow the <a href=\"https://docs.astral.sh/uv/getting-started/installation/\">uv installation guide</a>. On a work computer, your IT team may need to install it for you.",
+"setup.cliTitle": "Using Claude Code or Codex? Paste this.",
+"setup.cli": "With your app installed and the first-time setup complete, open PowerShell on Windows or Terminal on a Mac. Paste the command labeled for your app and press Enter. Then restart your AI session.",
+"setup.desktopTitle": "Using a desktop AI app?",
+"setup.desktop": "Claude Desktop: download the file ending in <b>.mcpb</b> under Assets on the download page. In Claude Desktop, open <b>Settings → Extensions → Advanced settings → Install Extension</b> and select that file.",
+"setup.download": "Download for Claude Desktop →",
+"setup.local": "ChatGPT Desktop, Codex, or another app with local MCP settings: add a local server using the command and argument below, then save and restart the app. Menu names and availability vary by app.",
 "compat.lead": "Works with Claude Desktop, Claude Code, Codex, and other AI apps that support local MCP servers, including open-source clients.",
 "compat.chatgpt": "ChatGPT: use a desktop app with local MCP support. ChatGPT on the web needs a separate remote connection; these downloads do not set that up.",
 "compat.codex": "Codex setup",
@@ -949,6 +962,17 @@ ko: {
 "dept9.e": "예: 문서가 열린 채 커서 위치에 텍스트 삽입 · 바뀐 곳으로 화면 스크롤 · 세션 중 변경 추적 토글",
 "dept10.e": "예: CSV로 편지 병합 실행 · 이름을 검열 삭제하고 사라졌는지 검증 · 보고서 접근성 감사",
 "dept11.e": "예: LaTeX를 Word 네이티브 수식으로 변환 · Zotero 라이브러리에서 바로 인용 · 피어 리뷰용 원고 익명화",
+"setup.title": "처음이라면 여기부터 시작하세요.",
+"setup.intro": "이 도구에는 uv라는 작은 실행 프로그램이 필요합니다. 네 제품에 대해 한 번만 설치하면 됩니다. 이미 있다면 아래에서 앱을 선택하세요.",
+"setup.windows": "Windows 시작 메뉴에서 PowerShell을 검색하고 Windows PowerShell을 여세요. 아래 명령을 그 창에 붙여 넣고 Enter를 누르세요:",
+"setup.restart": "설치가 끝나면 AI 앱과 명령 창을 닫았다가 다시 여세요.",
+"setup.help": "Mac을 사용하거나 도움이 필요하면 <a href=\"https://docs.astral.sh/uv/getting-started/installation/\">uv 설치 안내</a>를 따르세요. 업무용 컴퓨터에서는 IT 담당자의 설치가 필요할 수 있습니다.",
+"setup.cliTitle": "Claude Code 또는 Codex를 사용하시나요? 붙여 넣으세요.",
+"setup.cli": "앱 설치와 첫 설정을 마친 뒤 Windows에서는 PowerShell, Mac에서는 터미널을 여세요. 해당 앱의 명령을 붙여 넣고 Enter를 누른 다음 AI 세션을 다시 시작하세요.",
+"setup.desktopTitle": "데스크톱 AI 앱을 사용하시나요?",
+"setup.desktop": "Claude Desktop: 다운로드 페이지의 Assets에서 <b>.mcpb</b> 파일을 받으세요. Claude Desktop의 <b>Settings → Extensions → Advanced settings → Install Extension</b>에서 해당 파일을 선택하세요.",
+"setup.download": "Claude Desktop용 다운로드 →",
+"setup.local": "ChatGPT Desktop, Codex 또는 로컬 MCP 설정이 있는 앱에서는 아래 명령과 인수로 로컬 서버를 추가하고 저장한 뒤 앱을 다시 시작하세요. 메뉴 이름과 지원 여부는 앱에 따라 다릅니다.",
 "compat.lead": "Claude Desktop, Claude Code, Codex 및 로컬 MCP 서버를 지원하는 다른 AI 앱과 함께 사용할 수 있습니다. 오픈소스 클라이언트도 포함됩니다.",
 "compat.chatgpt": "ChatGPT: 로컬 MCP를 지원하는 데스크톱 앱을 사용하세요. 웹 ChatGPT에는 별도의 원격 연결이 필요하며, 이 다운로드에는 해당 설정이 포함되지 않습니다.",
 "compat.codex": "Codex 설정",
@@ -1098,6 +1122,17 @@ ja: {
 "dept9.e": "例：文書を開いたままカーソル位置にテキストを挿入 · 変更箇所まで画面をスクロール · セッション中に変更履歴を切り替え",
 "dept10.e": "例：CSV から差し込み印刷を実行 · 名前を墨消しして消えたことを検証 · 報告書のアクセシビリティを監査",
 "dept11.e": "例：LaTeX を Word ネイティブ数式へ変換 · Zotero ライブラリから直接引用 · 査読用に原稿を匿名化",
+"setup.title": "初めての方はこちらから。",
+"setup.intro": "必要なのは uv という小さな起動ツールです。4 製品共通で一度だけ設定します。導入済みなら下でアプリを選んでください。",
+"setup.windows": "Windows のスタートメニューで PowerShell を検索し、Windows PowerShell を開きます。次の行をそのウィンドウに貼り付けて Enter を押してください:",
+"setup.restart": "インストールが終わったら、AI アプリとコマンドウィンドウを閉じて開き直してください。",
+"setup.help": "Mac を使用する場合やお困りの場合は <a href=\"https://docs.astral.sh/uv/getting-started/installation/\">uv のインストールガイド</a>をご覧ください。職場の PC では IT 担当者による導入が必要な場合があります。",
+"setup.cliTitle": "Claude Code または Codex をお使いですか? 貼り付けてください。",
+"setup.cli": "アプリのインストールと初期設定後、Windows では PowerShell、Mac ではターミナルを開きます。お使いのアプリ用のコマンドを貼り付けて Enter を押し、AI セッションを再起動してください。",
+"setup.desktopTitle": "デスクトップ AI アプリをお使いですか?",
+"setup.desktop": "Claude Desktop: ダウンロードページの Assets から <b>.mcpb</b> ファイルを取得します。Claude Desktop の <b>Settings → Extensions → Advanced settings → Install Extension</b> でそのファイルを選びます。",
+"setup.download": "Claude Desktop 用にダウンロード →",
+"setup.local": "ChatGPT Desktop、Codex、その他ローカル MCP 設定があるアプリでは、下のコマンドと引数でローカルサーバーを追加し、保存してアプリを再起動します。メニュー名や対応状況はアプリによって異なります。",
 "compat.lead": "Claude Desktop、Claude Code、Codex、およびローカル MCP サーバーに対応する AI アプリで利用できます。オープンソースのクライアントも含みます。",
 "compat.chatgpt": "ChatGPT: ローカル MCP 対応のデスクトップアプリを使用してください。Web 版には別途リモート接続が必要です。このダウンロードでは設定されません。",
 "compat.codex": "Codex の設定",
@@ -1247,6 +1282,17 @@ zh: {
 "dept9.e": "例：文档开着就在光标处插入文字 · 把窗口滚动到改动处 · 会话中切换修订开关",
 "dept10.e": "例：用 CSV 跑一次邮件合并 · 涂黑一个名字并验证它确实消失 · 审计报告的无障碍性",
 "dept11.e": "例：把 LaTeX 转成 Word 原生公式 · 直接引用 Zotero 文献库 · 为同行评审匿名化稿件",
+"setup.title": "首次使用？从这里开始。",
+"setup.intro": "这些工具需要一个名为 uv 的小型启动程序。四款产品只需设置一次。已经安装？直接在下方选择您的应用。",
+"setup.windows": "在 Windows 开始菜单搜索 PowerShell，打开 Windows PowerShell。将下面这一行粘贴到该窗口，然后按 Enter：",
+"setup.restart": "安装完成后，关闭并重新打开 AI 应用和命令窗口。",
+"setup.help": "使用 Mac 或需要帮助？请参阅 <a href=\"https://docs.astral.sh/uv/getting-started/installation/\">uv 安装指南</a>。工作电脑可能需要 IT 人员协助安装。",
+"setup.cliTitle": "使用 Claude Code 或 Codex？粘贴此命令。",
+"setup.cli": "安装应用并完成首次设置后，在 Windows 打开 PowerShell，或在 Mac 打开终端。粘贴对应应用的命令，按 Enter，然后重新启动 AI 会话。",
+"setup.desktopTitle": "使用桌面 AI 应用？",
+"setup.desktop": "Claude Desktop：下载页面 Assets 下以 <b>.mcpb</b> 结尾的文件。在 Claude Desktop 中打开 <b>Settings → Extensions → Advanced settings → Install Extension</b>，然后选择该文件。",
+"setup.download": "下载 Claude Desktop 安装包 →",
+"setup.local": "对于 ChatGPT Desktop、Codex 或其他提供本地 MCP 设置的应用，请使用下方命令和参数添加本地服务器，保存后重启应用。菜单名称和可用性因应用而异。",
 "compat.lead": "支持 Claude Desktop、Claude Code、Codex 及其他支持本地 MCP 服务器的 AI 应用，包括开源客户端。",
 "compat.chatgpt": "ChatGPT：请使用支持本地 MCP 的桌面应用。网页版需要单独配置远程连接；这些下载不会完成该配置。",
 "compat.codex": "Codex 设置",
@@ -1396,6 +1442,17 @@ de: {
 "dept9.e": "z. B. Text an der Cursorposition einfügen, während das Dokument offen ist · das Fenster zur Änderung scrollen · die Änderungsnachverfolgung mitten in der Sitzung umschalten",
 "dept10.e": "z. B. einen Serienbrief aus einer CSV fahren · einen Namen schwärzen und das Verschwinden verifizieren · einen Bericht auf Barrierefreiheit prüfen",
 "dept11.e": "z. B. LaTeX in native Word-Formeln übersetzen · direkt aus der Zotero-Bibliothek zitieren · ein Manuskript für Peer-Review anonymisieren",
+"setup.title": "Zum ersten Mal hier? Hier geht es los.",
+"setup.intro": "Diese Werkzeuge benötigen das kleine Startprogramm uv. Einmal einrichten reicht für alle vier Produkte. Schon installiert? Wählen Sie unten Ihre App.",
+"setup.windows": "Öffnen Sie unter Windows das Startmenü, suchen Sie PowerShell und öffnen Sie Windows PowerShell. Fügen Sie diese Zeile dort ein und drücken Sie die Eingabetaste:",
+"setup.restart": "Schließen und öffnen Sie nach der Installation Ihre KI-App und alle Befehlsfenster erneut.",
+"setup.help": "Mac oder weitere Hilfe? Nutzen Sie die <a href=\"https://docs.astral.sh/uv/getting-started/installation/\">uv-Installationsanleitung</a>. Auf einem Arbeitsrechner muss eventuell Ihre IT die Installation übernehmen.",
+"setup.cliTitle": "Claude Code oder Codex? Diesen Befehl einfügen.",
+"setup.cli": "Nach Installation der App und der Ersteinrichtung öffnen Sie PowerShell unter Windows oder Terminal auf dem Mac. Fügen Sie den Befehl für Ihre App ein und drücken Sie die Eingabetaste. Starten Sie danach Ihre KI-Sitzung neu.",
+"setup.desktopTitle": "Eine KI-App auf dem Desktop?",
+"setup.desktop": "Claude Desktop: Laden Sie unter Assets die Datei mit der Endung <b>.mcpb</b> herunter. Wählen Sie diese in Claude Desktop unter <b>Settings → Extensions → Advanced settings → Install Extension</b> aus.",
+"setup.download": "Für Claude Desktop herunterladen →",
+"setup.local": "ChatGPT Desktop, Codex oder andere Apps mit lokalen MCP-Einstellungen: Fügen Sie einen lokalen Server mit Befehl und Argument unten hinzu, speichern Sie und starten Sie die App neu. Menüs und Verfügbarkeit variieren.",
 "compat.lead": "Für Claude Desktop, Claude Code, Codex und andere KI-Apps mit Unterstützung für lokale MCP-Server, einschließlich Open-Source-Clients.",
 "compat.chatgpt": "ChatGPT: Verwenden Sie eine Desktop-App mit lokaler MCP-Unterstützung. ChatGPT im Web benötigt eine separate Remote-Verbindung; diese Downloads richten sie nicht ein.",
 "compat.codex": "Codex einrichten",
@@ -1545,6 +1602,17 @@ fr: {
 "dept9.e": "p. ex. insérer du texte au curseur pendant que le document est ouvert · faire défiler la fenêtre jusqu'au changement · basculer le suivi des modifications en pleine session",
 "dept10.e": "p. ex. lancer un publipostage depuis un CSV · caviarder un nom et vérifier qu'il a disparu · auditer l'accessibilité d'un rapport",
 "dept11.e": "p. ex. traduire du LaTeX en équations Word natives · citer directement depuis une bibliothèque Zotero · anonymiser un manuscrit pour l'évaluation par les pairs",
+"setup.title": "Première installation ? Commencez ici.",
+"setup.intro": "Ces outils ont besoin d'un petit lanceur appelé uv. Une seule installation suffit pour les quatre produits. Déjà installé ? Choisissez votre application ci-dessous.",
+"setup.windows": "Sous Windows, ouvrez le menu Démarrer, cherchez PowerShell et ouvrez Windows PowerShell. Collez cette ligne dans cette fenêtre, puis appuyez sur Entrée :",
+"setup.restart": "Une fois l'installation terminée, fermez puis rouvrez votre application IA et les fenêtres de commande.",
+"setup.help": "Sur Mac ou besoin d'aide ? Suivez le <a href=\"https://docs.astral.sh/uv/getting-started/installation/\">guide d'installation de uv</a>. Sur un ordinateur professionnel, votre service informatique devra peut-être l'installer.",
+"setup.cliTitle": "Claude Code ou Codex ? Collez cette commande.",
+"setup.cli": "Après avoir installé votre application et terminé la première configuration, ouvrez PowerShell sous Windows ou Terminal sur Mac. Collez la commande correspondant à votre application, appuyez sur Entrée, puis redémarrez votre session IA.",
+"setup.desktopTitle": "Une application IA de bureau ?",
+"setup.desktop": "Claude Desktop : téléchargez le fichier <b>.mcpb</b> dans Assets. Dans Claude Desktop, ouvrez <b>Settings → Extensions → Advanced settings → Install Extension</b> et sélectionnez ce fichier.",
+"setup.download": "Télécharger pour Claude Desktop →",
+"setup.local": "ChatGPT Desktop, Codex ou autre application avec des réglages MCP locaux : ajoutez un serveur local avec la commande et l'argument ci-dessous, enregistrez et redémarrez l'application. Les menus et la disponibilité varient.",
 "compat.lead": "Compatible avec Claude Desktop, Claude Code, Codex et les autres applications IA prenant en charge les serveurs MCP locaux, y compris les clients open source.",
 "compat.chatgpt": "ChatGPT : utilisez une application de bureau compatible avec les MCP locaux. La version web nécessite une connexion distante distincte, que ces téléchargements ne configurent pas.",
 "compat.codex": "Configurer Codex",
@@ -1694,6 +1762,17 @@ es: {
 "dept9.e": "p. ej. insertar texto en el cursor con el documento abierto · desplazar la ventana hasta el cambio · alternar el control de cambios en plena sesión",
 "dept10.e": "p. ej. ejecutar una combinación de correspondencia desde un CSV · censurar un nombre y verificar que desapareció · auditar la accesibilidad de un informe",
 "dept11.e": "p. ej. convertir LaTeX en ecuaciones nativas de Word · citar directamente desde una biblioteca Zotero · anonimizar un manuscrito para revisión por pares",
+"setup.title": "¿Primera vez? Empiece aquí.",
+"setup.intro": "Estas herramientas necesitan un pequeño programa de inicio llamado uv. Se configura una sola vez para los cuatro productos. ¿Ya lo tiene? Elija su aplicación abajo.",
+"setup.windows": "En Windows, abra el menú Inicio, busque PowerShell y abra Windows PowerShell. Pegue esta línea en esa ventana y pulse Intro:",
+"setup.restart": "Al terminar, cierre y vuelva a abrir su aplicación de IA y las ventanas de comandos.",
+"setup.help": "¿Usa Mac o necesita ayuda? Siga la <a href=\"https://docs.astral.sh/uv/getting-started/installation/\">guía de instalación de uv</a>. En un equipo de trabajo, puede necesitar que su departamento de TI lo instale.",
+"setup.cliTitle": "¿Usa Claude Code o Codex? Pegue este comando.",
+"setup.cli": "Tras instalar su aplicación y completar la configuración inicial, abra PowerShell en Windows o Terminal en Mac. Pegue el comando de su aplicación y pulse Intro. Después reinicie su sesión de IA.",
+"setup.desktopTitle": "¿Usa una aplicación de IA de escritorio?",
+"setup.desktop": "Claude Desktop: descargue el archivo <b>.mcpb</b> en Assets. En Claude Desktop, abra <b>Settings → Extensions → Advanced settings → Install Extension</b> y seleccione ese archivo.",
+"setup.download": "Descargar para Claude Desktop →",
+"setup.local": "ChatGPT Desktop, Codex u otra aplicación con ajustes MCP locales: añada un servidor local con el comando y argumento siguientes, guarde y reinicie la aplicación. Los menús y la disponibilidad varían.",
 "compat.lead": "Compatible con Claude Desktop, Claude Code, Codex y otras aplicaciones de IA que admitan servidores MCP locales, incluidos clientes de código abierto.",
 "compat.chatgpt": "ChatGPT: use una aplicación de escritorio compatible con MCP local. La versión web necesita una conexión remota aparte; estas descargas no la configuran.",
 "compat.codex": "Configurar Codex",
