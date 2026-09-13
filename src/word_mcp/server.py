@@ -1516,6 +1516,96 @@ def get_workflows(task: str | None = None) -> dict:
 # environment-variable value that could carry a path, no user name.
 
 
+_WORD_PROGID = "Word.Application"
+
+
+def _word_registration() -> tuple[str, str]:
+    """Is Word.Application registered on this machine?
+
+    Returns (state, detail). state is one of:
+
+      "registered"  the ProgID resolves to a class id, and that class id
+                    carries a COM server entry
+      "absent"      the machine holds no usable Word.Application
+                    registration
+      "probe_error" the probe could not answer, so nothing is known
+
+    Registry reads only, through winreg: no COM is initialised, no Word
+    is started, no document is opened. Both the 64-bit and the 32-bit
+    registry views are consulted, since an Office of either bitness can
+    be the registered one.
+
+    The three states are held apart on purpose. An earlier version of
+    this probe called a pythoncom attribute that does not exist and let
+    one broad handler report the resulting AttributeError as "no Word
+    here", which told users with a working Word that they had none. A
+    probe that cannot answer must say so.
+
+    A "registered" answer is a registry fact and nothing more. It does
+    not promise that a live automation session will start; com_word_status
+    is what answers that.
+    """
+    try:
+        import winreg
+    except Exception as exc:  # pragma: no cover - winreg ships with Windows
+        return "probe_error", type(exc).__name__
+
+    views = [0]
+    for name in ("KEY_WOW64_64KEY", "KEY_WOW64_32KEY"):
+        flag = getattr(winreg, name, 0)
+        if flag and flag not in views:
+            views.append(flag)
+
+    clsid = None
+    progid_missing = False
+    for view in views:
+        try:
+            with winreg.OpenKey(
+                winreg.HKEY_CLASSES_ROOT,
+                _WORD_PROGID + r"\CLSID",
+                0,
+                winreg.KEY_READ | view,
+            ) as key:
+                value = winreg.QueryValueEx(key, "")[0]
+        except FileNotFoundError:
+            progid_missing = True
+            continue
+        except OSError as exc:
+            return "probe_error", type(exc).__name__
+        except Exception as exc:
+            return "probe_error", type(exc).__name__
+        if value:
+            clsid = value
+            break
+    if clsid is None:
+        if progid_missing:
+            return "absent", "no Word.Application entry in either registry view"
+        return "probe_error", "the Word.Application entry named no class id"
+
+    # A class id with no server entry is a leftover, not an installation.
+    server_missing = False
+    for view in views:
+        for server_key in ("LocalServer32", "InprocServer32"):
+            try:
+                with winreg.OpenKey(
+                    winreg.HKEY_CLASSES_ROOT,
+                    "CLSID\\" + str(clsid) + "\\" + server_key,
+                    0,
+                    winreg.KEY_READ | view,
+                ):
+                    return "registered", "class id and COM server entry both present"
+            except FileNotFoundError:
+                server_missing = True
+                continue
+            except OSError as exc:
+                return "probe_error", type(exc).__name__
+            except Exception as exc:
+                return "probe_error", type(exc).__name__
+    if server_missing:
+        return "absent", "the registered class id carries no COM server entry"
+    return "probe_error", "the COM server entry could not be read"
+
+
 def _word_environment() -> dict:
     """Can the Word application tier (the com_/live_ tools) run here?
 
@@ -1536,7 +1626,7 @@ def _word_environment() -> dict:
         }
     out: dict = {}
     try:
-        import pythoncom
+        import pythoncom  # noqa: F401  (presence is the whole test)
     except Exception:
         return {
             "application": "unknown",
@@ -1545,17 +1635,31 @@ def _word_environment() -> dict:
             "note": "pywin32 is not installed; the com_ and live_ tools need it",
         }
     out["pywin32"] = "installed"
-    try:
-        pythoncom.CLSIDFromProgID("Word.Application")
-    except Exception:
+    state, detail = _word_registration()
+    out["registration_probe"] = "registry"
+    if state == "registered":
+        out["application"] = "installed"
+        out["com_tools"] = "available"
+        out["note"] = (
+            "Word.Application is registered here, which is a registry "
+            "fact rather than a live test; com_word_status is what "
+            "proves a session starts"
+        )
+    elif state == "absent":
         out["application"] = "not registered"
         out["com_tools"] = "unavailable"
         out["note"] = (
-            "no Word.Application registration found on this machine"
+            "no Word.Application registration found on this machine "
+            "(" + detail + ")"
         )
-        return out
-    out["application"] = "installed"
-    out["com_tools"] = "available"
+    else:
+        out["application"] = "unknown"
+        out["com_tools"] = "unknown"
+        out["note"] = (
+            "the registration probe could not complete (" + detail + "), "
+            "so this says nothing either way about whether Word is "
+            "installed; the com_ and live_ tools may still work"
+        )
     return out
 
 
