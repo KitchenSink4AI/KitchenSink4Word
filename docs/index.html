@@ -379,6 +379,9 @@ footer .row>span{min-width:0;overflow-wrap:anywhere}
 }
 
 .footer-links{text-align:center;padding:10px 20px;font-size:12px}.footer-links a{white-space:nowrap}.release-date{font-size:12px;color:var(--ink-soft);white-space:nowrap;margin-left:auto}
+
+/* Local MCP client compatibility and optional setup commands. */
+.mcp-compat{margin:0 0 24px;min-width:0;max-width:100%;line-height:1.6}.mcp-compat p{margin:10px 0;overflow-wrap:anywhere}.mcp-compat summary{cursor:pointer;font-weight:700}.mcp-compat pre{max-width:100%;overflow-x:auto;padding:12px;border:1px solid currentColor;font-size:13px;line-height:1.65}.mcp-compat code{font-family:monospace}
 </style>
 </head>
 <body>
@@ -534,6 +537,16 @@ footer .row>span{min-width:0;overflow-wrap:anywhere}
 <section id="install">
   <div class="wrap">
     <div class="sec-head"><span class="no" data-i18n="no5">DEPT. 05</span><h2 data-i18n="h2.install">Installation</h2></div>
+    <div class="mcp-compat">
+<p data-i18n="compat.lead">Works with Claude Desktop, Claude Code, Codex, and other AI apps that support local MCP servers, including open-source clients.</p>
+<p data-i18n="compat.chatgpt">ChatGPT: use a desktop app with local MCP support. ChatGPT on the web needs a separate remote connection; these downloads do not set that up.</p>
+<details><summary data-i18n="compat.codex">Codex setup</summary>
+<p data-i18n="compat.pre">Install uv first, then run:</p>
+<pre><code>codex mcp add word -- uvx kitchensink4word</code></pre>
+<p data-i18n="compat.other">Other clients: use uvx as the command and the package name as its argument. Follow your app's MCP setup instructions.</p>
+</details>
+</div>
+
     <p class="for-lead" data-i18n="inst.lead">Pick the line that describes you. Most people are the first one.</p>
     <div class="install-grid">
       <div class="step">
@@ -787,6 +800,11 @@ en: {
 "dept9.e": "e.g. insert text at the cursor while the document is open · scroll the window to what changed · toggle track changes mid-session",
 "dept10.e": "e.g. run a mail merge from a CSV · redact a name and verify it is gone · audit a report for accessibility",
 "dept11.e": "e.g. turn LaTeX into native Word equations · cite straight from a Zotero library · anonymize a manuscript for peer review",
+"compat.lead": "Works with Claude Desktop, Claude Code, Codex, and other AI apps that support local MCP servers, including open-source clients.",
+"compat.chatgpt": "ChatGPT: use a desktop app with local MCP support. ChatGPT on the web needs a separate remote connection; these downloads do not set that up.",
+"compat.codex": "Codex setup",
+"compat.pre": "Install uv first, then run:",
+"compat.other": "Other clients: use uvx as the command and the package name as its argument. Follow your app's MCP setup instructions.",
 "inst.s1": "Using Claude Desktop? One double-click.",
 "inst.s2": "Using Claude Code? Paste this.",
 "inst.note": "Windows. File-based tools need no Word installation; the Word-app tools (TOC refresh, PDF, proofing&hellip;) use a local Microsoft Word.",
@@ -931,6 +949,11 @@ ko: {
 "dept9.e": "예: 문서가 열린 채 커서 위치에 텍스트 삽입 · 바뀐 곳으로 화면 스크롤 · 세션 중 변경 추적 토글",
 "dept10.e": "예: CSV로 편지 병합 실행 · 이름을 검열 삭제하고 사라졌는지 검증 · 보고서 접근성 감사",
 "dept11.e": "예: LaTeX를 Word 네이티브 수식으로 변환 · Zotero 라이브러리에서 바로 인용 · 피어 리뷰용 원고 익명화",
+"compat.lead": "Claude Desktop, Claude Code, Codex 및 로컬 MCP 서버를 지원하는 다른 AI 앱과 함께 사용할 수 있습니다. 오픈소스 클라이언트도 포함됩니다.",
+"compat.chatgpt": "ChatGPT: 로컬 MCP를 지원하는 데스크톱 앱을 사용하세요. 웹 ChatGPT에는 별도의 원격 연결이 필요하며, 이 다운로드에는 해당 설정이 포함되지 않습니다.",
+"compat.codex": "Codex 설정",
+"compat.pre": "먼저 uv를 설치한 다음 실행하세요:",
+"compat.other": "다른 클라이언트에서는 명령을 uvx로, 인수를 패키지 이름으로 지정하세요. 앱의 MCP 설정 안내를 따르세요.",
 "inst.s1": "Claude Desktop을 쓰시나요? 더블클릭 한 번.",
 "inst.s2": "Claude Code를 쓰시나요? 이걸 붙여넣으세요.",
 "inst.note": "Windows 환경입니다. 파일 기반 도구는 Word 설치 없이 동작하고, Word 앱 도구(목차 새로 고침, PDF, 맞춤법 검사&hellip;)는 로컬 Microsoft Word를 사용합니다.",
@@ -1075,6 +1098,11 @@ ja: {
 "dept9.e": "例：文書を開いたままカーソル位置にテキストを挿入 · 変更箇所まで画面をスクロール · セッション中に変更履歴を切り替え",
 "dept10.e": "例：CSV から差し込み印刷を実行 · 名前を墨消しして消えたことを検証 · 報告書のアクセシビリティを監査",
 "dept11.e": "例：LaTeX を Word ネイティブ数式へ変換 · Zotero ライブラリから直接引用 · 査読用に原稿を匿名化",
+"compat.lead": "Claude Desktop、Claude Code、Codex、およびローカル MCP サーバーに対応する AI アプリで利用できます。オープンソースのクライアントも含みます。",
+"compat.chatgpt": "ChatGPT: ローカル MCP 対応のデスクトップアプリを使用してください。Web 版には別途リモート接続が必要です。このダウンロードでは設定されません。",
+"compat.codex": "Codex の設定",
+"compat.pre": "まず uv をインストールしてから実行:",
+"compat.other": "その他のクライアントでは、コマンドを uvx、引数をパッケージ名に設定してください。各アプリの MCP 設定手順に従ってください。",
 "inst.s1": "Claude Desktop をお使いですか? ダブルクリック一回。",
 "inst.s2": "Claude Code をお使いですか? これを貼り付けてください。",
 "inst.note": "Windows 向けです。ファイルベースのツールは Word のインストールなしで動作し、Word アプリのツール(目次の更新、PDF、文章校正&hellip;)はローカルの Microsoft Word を使います。",
@@ -1219,6 +1247,11 @@ zh: {
 "dept9.e": "例：文档开着就在光标处插入文字 · 把窗口滚动到改动处 · 会话中切换修订开关",
 "dept10.e": "例：用 CSV 跑一次邮件合并 · 涂黑一个名字并验证它确实消失 · 审计报告的无障碍性",
 "dept11.e": "例：把 LaTeX 转成 Word 原生公式 · 直接引用 Zotero 文献库 · 为同行评审匿名化稿件",
+"compat.lead": "支持 Claude Desktop、Claude Code、Codex 及其他支持本地 MCP 服务器的 AI 应用，包括开源客户端。",
+"compat.chatgpt": "ChatGPT：请使用支持本地 MCP 的桌面应用。网页版需要单独配置远程连接；这些下载不会完成该配置。",
+"compat.codex": "Codex 设置",
+"compat.pre": "先安装 uv，然后运行：",
+"compat.other": "其他客户端：将命令设为 uvx，参数设为包名，并按照应用的 MCP 设置说明操作。",
 "inst.s1": "用 Claude Desktop?双击一次就好。",
 "inst.s2": "用 Claude Code?把这行贴上。",
 "inst.note": "Windows 平台。基于文件的工具无需安装 Word;Word 应用类工具(刷新目录、导出 PDF、校对&hellip;)会调用本机的 Microsoft Word。",
@@ -1363,6 +1396,11 @@ de: {
 "dept9.e": "z. B. Text an der Cursorposition einfügen, während das Dokument offen ist · das Fenster zur Änderung scrollen · die Änderungsnachverfolgung mitten in der Sitzung umschalten",
 "dept10.e": "z. B. einen Serienbrief aus einer CSV fahren · einen Namen schwärzen und das Verschwinden verifizieren · einen Bericht auf Barrierefreiheit prüfen",
 "dept11.e": "z. B. LaTeX in native Word-Formeln übersetzen · direkt aus der Zotero-Bibliothek zitieren · ein Manuskript für Peer-Review anonymisieren",
+"compat.lead": "Für Claude Desktop, Claude Code, Codex und andere KI-Apps mit Unterstützung für lokale MCP-Server, einschließlich Open-Source-Clients.",
+"compat.chatgpt": "ChatGPT: Verwenden Sie eine Desktop-App mit lokaler MCP-Unterstützung. ChatGPT im Web benötigt eine separate Remote-Verbindung; diese Downloads richten sie nicht ein.",
+"compat.codex": "Codex einrichten",
+"compat.pre": "Zuerst uv installieren, dann ausführen:",
+"compat.other": "Andere Clients: uvx als Befehl und den Paketnamen als Argument verwenden. Folgen Sie der MCP-Anleitung Ihrer App.",
 "inst.s1": "Sie nutzen Claude Desktop? Ein Doppelklick.",
 "inst.s2": "Sie nutzen Claude Code? Fügen Sie das ein.",
 "inst.note": "Windows. Dateibasierte Werkzeuge brauchen keine Word-Installation; die Word-App-Werkzeuge (Inhaltsverzeichnis aktualisieren, PDF, Rechtschreibprüfung&hellip;) nutzen ein lokales Microsoft Word.",
@@ -1507,6 +1545,11 @@ fr: {
 "dept9.e": "p. ex. insérer du texte au curseur pendant que le document est ouvert · faire défiler la fenêtre jusqu'au changement · basculer le suivi des modifications en pleine session",
 "dept10.e": "p. ex. lancer un publipostage depuis un CSV · caviarder un nom et vérifier qu'il a disparu · auditer l'accessibilité d'un rapport",
 "dept11.e": "p. ex. traduire du LaTeX en équations Word natives · citer directement depuis une bibliothèque Zotero · anonymiser un manuscrit pour l'évaluation par les pairs",
+"compat.lead": "Compatible avec Claude Desktop, Claude Code, Codex et les autres applications IA prenant en charge les serveurs MCP locaux, y compris les clients open source.",
+"compat.chatgpt": "ChatGPT : utilisez une application de bureau compatible avec les MCP locaux. La version web nécessite une connexion distante distincte, que ces téléchargements ne configurent pas.",
+"compat.codex": "Configurer Codex",
+"compat.pre": "Installez uv, puis exécutez :",
+"compat.other": "Autres clients : utilisez uvx comme commande et le nom du paquet comme argument. Suivez les instructions MCP de votre application.",
 "inst.s1": "Vous utilisez Claude Desktop ? Un double-clic.",
 "inst.s2": "Vous utilisez Claude Code ? Collez ceci.",
 "inst.note": "Windows. Les outils sur fichier n'exigent aucune installation de Word ; les outils applicatifs (rafraîchissement de la table des matières, PDF, correction&hellip;) utilisent un Microsoft Word local.",
@@ -1651,6 +1694,11 @@ es: {
 "dept9.e": "p. ej. insertar texto en el cursor con el documento abierto · desplazar la ventana hasta el cambio · alternar el control de cambios en plena sesión",
 "dept10.e": "p. ej. ejecutar una combinación de correspondencia desde un CSV · censurar un nombre y verificar que desapareció · auditar la accesibilidad de un informe",
 "dept11.e": "p. ej. convertir LaTeX en ecuaciones nativas de Word · citar directamente desde una biblioteca Zotero · anonimizar un manuscrito para revisión por pares",
+"compat.lead": "Compatible con Claude Desktop, Claude Code, Codex y otras aplicaciones de IA que admitan servidores MCP locales, incluidos clientes de código abierto.",
+"compat.chatgpt": "ChatGPT: use una aplicación de escritorio compatible con MCP local. La versión web necesita una conexión remota aparte; estas descargas no la configuran.",
+"compat.codex": "Configurar Codex",
+"compat.pre": "Instale uv y ejecute:",
+"compat.other": "Otros clientes: use uvx como comando y el nombre del paquete como argumento. Siga las instrucciones MCP de su aplicación.",
 "inst.s1": "¿Usa Claude Desktop? Un doble clic.",
 "inst.s2": "¿Usa Claude Code? Pegue esto.",
 "inst.note": "Windows. Las herramientas basadas en archivo no requieren instalar Word; las herramientas de la aplicación (actualizar el índice, PDF, revisión&hellip;) usan un Microsoft Word local.",
