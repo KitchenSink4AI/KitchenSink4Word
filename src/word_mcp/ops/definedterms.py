@@ -210,7 +210,7 @@ def check_defined_terms(
             "count": data["count"],
             "paragraphs": sorted(data["paragraphs"]),
             "note": (
-                "heuristic review candidate — looks like a defined term "
+                "heuristic review candidate: looks like a defined term "
                 "(capitalized, recurring, used mid-sentence) but no "
                 "definition matched; may be a proper noun"
             ),
@@ -228,12 +228,12 @@ def check_defined_terms(
         "definition_patterns": list(raw_patterns),
         "paragraphs_scanned": len(paras),
         "notes": [
-            "body-level paragraphs only — definitions inside table cells, "
+            "body-level paragraphs only; definitions inside table cells, "
             "footnotes, or headers are not scanned",
             "used_never_defined is a shape heuristic (2+ occurrences, at "
             "least one mid-sentence); it flags review candidates, not "
             "certainties",
-            "use detection is case-sensitive and exact — inflected or "
+            "use detection is case-sensitive and exact; inflected or "
             "abbreviated references to a term are not counted",
         ],
     }

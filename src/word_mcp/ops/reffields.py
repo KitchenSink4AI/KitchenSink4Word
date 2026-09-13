@@ -224,6 +224,6 @@ def check_reference_field_integrity(pkg: DocxPackage) -> dict:
     if not ok:
         result["warning"] = (
             "field structure is damaged; citations may have lost their "
-            "reference-manager link — restore from backup or repair in Word"
+            "reference-manager link; restore from backup or repair in Word"
         )
     return result

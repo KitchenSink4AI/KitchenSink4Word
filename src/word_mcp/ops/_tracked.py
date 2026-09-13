@@ -35,7 +35,7 @@ def _same_parent(runs: list[etree._Element]) -> etree._Element:
     if len(parents) != 1:
         raise UnsupportedStructure(
             "the text range crosses a hyperlink or revision boundary; "
-            "tracked editing cannot wrap it — narrow the range"
+            "tracked editing cannot wrap it; narrow the range"
         )
     return next(iter(parents.values()))
 

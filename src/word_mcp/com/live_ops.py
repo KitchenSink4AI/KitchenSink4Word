@@ -136,7 +136,7 @@ def _lcid(tag: str) -> int:
     if lcid is None:
         raise WordMcpError(
             f"language tag {tag!r} has no live LCID mapping; supported live: "
-            f"{sorted(_LANGUAGE_LCIDS)} — for other tags close the document "
+            f"{sorted(_LANGUAGE_LCIDS)}; for other tags close the document "
             "and use the file-based tool (it writes the tag verbatim)"
         )
     return lcid
@@ -392,7 +392,7 @@ def _expect_guard(paras, index: int, expect: str | None, what: str) -> None:
             f"{what}: paragraph {index} does not contain the expected text "
             f"{expect[:80]!r}; its current text begins: {current[:120]!r}. "
             "Paragraph indices shift after insert/delete operations, "
-            "including ones made by another agent or by the user in Word — "
+            "including ones made by another agent or by the user in Word; "
             "re-read with get_text and retry. Nothing was changed."
         )
 
@@ -738,7 +738,7 @@ def search_and_replace(
             if in_fields:
                 skipped_fields[find] = in_fields
                 note = (
-                    "matches inside field results are skipped — Word "
+                    "matches inside field results are skipped. Word "
                     "regenerates field results, so edits there do not stick"
                 )
                 if note not in notes:
@@ -1060,7 +1060,7 @@ def word_count(path: str, by_section: bool = True) -> dict:
                 else ("cjk" if not non_cjk else "mixed")
             ),
             "note": (
-                "counted live by Word (ComputeStatistics — matches Word's "
+                "counted live by Word (ComputeStatistics, matching Word's "
                 "status bar); file mode counts whitespace tokens, so the "
                 "modes can differ by a few words on identical content"
             ),
@@ -1552,7 +1552,7 @@ def set_cells_body(
             except Exception as exc:
                 raise UnsupportedStructure(
                     "this table has vertically merged cells, which Word's "
-                    "live row addressing cannot handle — use the file-based "
+                    "live row addressing cannot handle; use the file-based "
                     "set_cells on the closed file (it is merge-aware)"
                 ) from exc
             if not 0 <= c < cell_count:
@@ -1623,7 +1623,7 @@ def format_text_body(
             raise WordMcpError(
                 f"language {formatting['language']!r} is an East-Asian "
                 "proofing language, which Word stores in the east-asian "
-                "slot and silently IGNORES in the latin slot — pass it as "
+                "slot and silently IGNORES in the latin slot; pass it as "
                 "east_asian_language instead (matches Word's own behavior)"
             )
     if find is None and paragraph_index is None:
@@ -1741,7 +1741,7 @@ def scroll_to(
     if find is not None and len(find) > _FIND_TEXT_LIMIT:
         raise WordMcpError(
             f"find string is {len(find)} characters; Word's Find accepts at "
-            f"most ~{_FIND_TEXT_LIMIT} — scroll with a shorter unique prefix"
+            f"most ~{_FIND_TEXT_LIMIT}; scroll with a shorter unique prefix"
         )
 
     def body(session):

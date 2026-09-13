@@ -275,7 +275,7 @@ def reply_to_comment(
     parent_para_id = _last_para_id(parent)
     if parent_para_id is None:
         raise WordMcpError(
-            "parent comment has no paraId; it predates threading — reply in Word"
+            "parent comment has no paraId; it predates threading; reply in Word"
         )
     for part in _PARTS:
         _ensure_part(pkg, part)

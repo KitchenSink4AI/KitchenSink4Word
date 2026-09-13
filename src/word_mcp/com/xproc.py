@@ -347,8 +347,8 @@ def _acquire_lockfile(lock_path: Path, holder: str, wait: float) -> bool:
                 "another kitchensink4word server process is driving Word "
                 f"right now ({detail}). Live COM sessions are serialized "
                 "across processes so two servers cannot interleave inside "
-                f"one edit. Waited {int(wait)}s; nothing was changed — "
-                "retry once that operation finishes."
+                f"one edit. Waited {int(wait)}s; nothing was changed. "
+                "Retry once that operation finishes."
             )
         time.sleep(_POLL_SECONDS)
 

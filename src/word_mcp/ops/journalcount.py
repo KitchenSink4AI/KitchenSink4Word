@@ -329,14 +329,14 @@ def word_count_with_exclusions(
     ]
     if "references" in active and ref_span is None:
         notes.append(
-            "no References/Bibliography heading found — the references "
+            "no References/Bibliography heading found; the references "
             "exclusion matched nothing"
         )
     if "abstract" in active and abstract_span is None:
-        notes.append("no Abstract heading found — the abstract exclusion matched nothing")
+        notes.append("no Abstract heading found; the abstract exclusion matched nothing")
     if "front_matter" in active and first_h1 is None:
         notes.append(
-            "no level-1 heading found — front_matter is undefined and "
+            "no level-1 heading found; front_matter is undefined and "
             "matched nothing (refusing to treat the whole document as "
             "front matter)"
         )

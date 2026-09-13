@@ -146,7 +146,7 @@ def _classify(exc):
     hrs = _hresults(exc)
     if hrs & GONE_HRESULTS:
         return WordDisconnected(
-            "Word or the document closed while the tool was running — the edit "
+            "Word or the document closed while the tool was running; the edit "
             "may be partially applied. If Word is still open, one Ctrl+Z undoes "
             "the partial step."
         )
@@ -375,7 +375,7 @@ def _resolve_document(pythoncom, pywintypes, win32com, app, path: str):
         )
     hint = f" Open documents: {open_names}" if open_names else ""
     raise DocumentNotOpenInWord(
-        f"{Path(path).name} is not open in the running Word instance — live "
+        f"{Path(path).name} is not open in the running Word instance; live "
         f"tools only work on open documents.{hint} For closed files use the "
         "regular file-based tools."
     )
@@ -517,7 +517,7 @@ class LiveSession:
         out["undo_grouped"] = self.undo_grouped
         if not self.undo_grouped:
             out["undo_note"] = (
-                "edits are individually undoable — one-step undo grouping "
+                "edits are individually undoable; one-step undo grouping "
                 "only works when the target is Word's active document"
             )
         if self.enforced_tracking:
@@ -774,7 +774,7 @@ def _live_repair_locked(pythoncom, win32com) -> dict:
                 if doc.TrackRevisions:
                     actions.append(
                         f"track_revisions_still_on:{doc.Name} (a crashed "
-                        "client's pre-crash value is unknowable — turn it "
+                        "client's pre-crash value is unknowable; turn it "
                         "off with live_set_track_changes if unwanted)"
                     )
         return {"word_running": True, "actions": actions}
@@ -823,7 +823,7 @@ def interactive_status() -> dict:
             "live_lock": _xproc.holder_info(),
             "note": (
                 "another COM operation holds the serialization lock; "
-                "Word state was not probed to avoid queuing — retry "
+                "Word state was not probed to avoid queuing; retry "
                 "after the running operation finishes"
             ),
         }
@@ -848,7 +848,7 @@ def _interactive_status_locked() -> dict:
         out["dialog_note"] = (
             "Word has a modal dialog open; live tools against a blocked "
             "instance will refuse until it is dismissed. Dismissal is the "
-            "user's decision — this server never clicks a dialog."
+            "user's decision; this server never clicks a dialog."
         )
     if state != "ready":
         return out

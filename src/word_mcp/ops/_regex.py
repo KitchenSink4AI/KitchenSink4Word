@@ -32,7 +32,7 @@ def finditer(pattern: str, text: str):
         return list(compiled.finditer(text, timeout=TIMEOUT_S))
     except TimeoutError as exc:
         raise WordMcpError(
-            f"regex {pattern!r} exceeded {TIMEOUT_S:.0f}s — catastrophic "
+            f"regex {pattern!r} exceeded {TIMEOUT_S:.0f}s: catastrophic "
             "backtracking is likely (nested quantifiers such as (a+)+). "
             "Nothing was changed; simplify the pattern."
         ) from exc

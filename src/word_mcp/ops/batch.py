@@ -183,7 +183,7 @@ def batch_apply(
                 saved.append(file_path)
             except Exception as exc:
                 entry["error"] = (
-                    f"save failed, file unchanged — {type(exc).__name__}: {exc}"
+                    f"save failed, file unchanged: {type(exc).__name__}: {exc}"
                 )
                 failed.append(file_path)
                 if stop_on_error:

@@ -366,7 +366,7 @@ def fill_form_fields(pkg: DocxPackage, values: dict, *, missing: str = "error") 
             ]
             raise AmbiguousTarget(
                 f"{len(matches)} form fields match {key!r}: {locs}; give the "
-                "fields unique names/tags, then retry — nothing was changed"
+                "fields unique names/tags, then retry; nothing was changed"
             )
         entry = matches[0]
         kind = entry["kind"]
@@ -411,8 +411,8 @@ def fill_form_fields(pkg: DocxPackage, values: dict, *, missing: str = "error") 
             )
     if unknown and missing == "error":
         raise WordMcpError(
-            f"no form field matches {sorted(unknown)}; nothing was changed — "
-            "check list_form_fields for names/tags or call with missing='skip'"
+            f"no form field matches {sorted(unknown)}; nothing was changed. "
+            "Check list_form_fields for names/tags or call with missing='skip'"
         )
 
     # -------- apply pass.
