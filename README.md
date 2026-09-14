@@ -178,9 +178,10 @@ validation on Windows.
 
 ## Requirements
 
-- Windows (COM tools require Microsoft Word installed; all other tools are
-  pure file manipulation and work without Word)
 - Python 3.12+ (developed on 3.14)
+- Most of this server needs no Word installed at all and runs on any
+  computer. The parts that ask Word to do the work (the `com-live` pack)
+  want Windows with Word on it.
 
 ## Install
 
@@ -225,6 +226,8 @@ python -m venv .venv
 .venv\Scripts\pip install -e .
 claude mcp add word -s user -- <absolute-path>\.venv\Scripts\word-mcp.exe
 ```
+
+For guided Windows setup, signed license receipts, and email support, see the KitchenSink4AI Business edition: https://kitchensink4.ai/products/business/
 
 ## Context cost (measured)
 
