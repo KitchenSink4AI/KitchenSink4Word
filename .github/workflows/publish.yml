@@ -1,9 +1,20 @@
 name: Publish to PyPI
 
+# A published GitHub Release is the ONLY thing that publishes a version.
+#
+# workflow_dispatch was removed in the 2026-09-15 security pass (finding 7). It
+# let anyone holding a gh token with workflow scope publish to PyPI from a
+# branch, with no Release, no tag and no reviewer, and Trusted Publishing did
+# nothing to stop that: it authenticates the repository, not the intent. The
+# pypi environment now also requires the owner's approval and only accepts main
+# or a v* tag, so the dispatch path was the last way around a human.
+#
+# To publish: cut a Release. To retry a failed publish: re-run this workflow
+# from its own Actions run, which keeps the Release as the thing that authorized
+# it.
 on:
   release:
     types: [published]
-  workflow_dispatch:
 
 jobs:
   build:
@@ -33,4 +44,7 @@ jobs:
         with:
           name: dist
           path: dist/
-      - uses: pypa/gh-action-pypi-publish@release/v1
+      # Pinned by commit, not by @release/v1. That ref is a BRANCH, so it moves,
+      # and this is the one step in the repository that can write to PyPI.
+      # v1.14.2, the release/v1 head as of 2026-07-28.
+      - uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33
