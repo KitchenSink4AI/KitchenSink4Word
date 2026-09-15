@@ -134,3 +134,143 @@ def test_the_published_title_table_matches_the_module():
     assert published == ann.TITLES, (
         "docs/TOOL_TITLES.md has drifted from tool_annotations.py. "
         "Regenerate it rather than editing either side by hand.")
+
+
+# --------------------------------------------- destructiveHint and friends
+
+#: HAND-AUDITED. Every name here was classified by reading the tool's
+#: implementation, against the rule stated in docs/TOOL_ANNOTATIONS.md: a
+#: tool is non-destructive only when every path either ADDS without
+#: replacing, or changes no user data at all.
+NON_DESTRUCTIVE_TOOLS = {
+    "com_import_pdf", "com_proofing_errors",
+    "com_readability_statistics", "com_validate_opens_clean",
+    "copy_document", "copy_table", "create_document", "create_table",
+    "disable_tools", "enable_tools", "export_images", "export_table",
+    "get_document_view", "insert_bookmark", "insert_break",
+    "insert_caption", "insert_chart", "insert_citation",
+    "insert_content_control", "insert_cross_reference",
+    "insert_document", "insert_equation", "insert_field",
+    "insert_hyperlink", "insert_image", "insert_list",
+    "insert_paragraphs", "insert_reference_list",
+    "insert_zotero_citation", "live_insert_at_cursor", "live_repair",
+    "live_scroll_to", "live_set_track_changes", "mail_merge",
+    "mark_index_entry", "search_zotero_library", "split_document"
+}
+
+
+def test_every_mutating_tool_carries_a_destructive_hint():
+    missing = []
+    for name, tool in sorted(_registered().items()):
+        annotations = getattr(tool, "annotations", None)
+        if annotations is None:
+            missing.append(name)
+            continue
+        if (annotations.readOnlyHint is False
+                and annotations.destructiveHint is None):
+            missing.append(name)
+    assert not missing, (
+        f"these tools can change something and say nothing about whether "
+        f"the change is destructive: {missing}")
+
+
+def test_no_read_only_tool_claims_a_destructive_hint():
+    """The field is meaningful only when readOnlyHint is false. A value on
+    a read-only tool is noise a reviewer has to interpret."""
+    noisy = [name for name, tool in _registered().items()
+             if tool.annotations.readOnlyHint is True
+             and tool.annotations.destructiveHint is not None]
+    assert not noisy, noisy
+
+
+def test_the_destructive_classification_covers_the_surface():
+    mutating = {name for name, tool in _registered().items()
+                if tool.annotations.readOnlyHint is False}
+    classified = ann.DESTRUCTIVE | ann.NON_DESTRUCTIVE
+    assert mutating - classified == set(), (
+        "unclassified tools (add them to tool_annotations.py): "
+        f"{sorted(mutating - classified)}")
+    assert classified - mutating == set(), (
+        "tool_annotations.py classifies tools that are read-only or gone: "
+        f"{sorted(classified - mutating)}")
+    assert not (ann.DESTRUCTIVE & ann.NON_DESTRUCTIVE)
+
+
+def test_the_non_destructive_set_matches_the_hand_audited_allowlist():
+    on_the_wire = {
+        name for name, tool in _registered().items()
+        if tool.annotations.destructiveHint is False
+    }
+    assert on_the_wire == NON_DESTRUCTIVE_TOOLS, (
+        "the non-destructive set changed. Added: "
+        f"{sorted(on_the_wire - NON_DESTRUCTIVE_TOOLS)}; removed: "
+        f"{sorted(NON_DESTRUCTIVE_TOOLS - on_the_wire)}. Classify the tool "
+        "by reading its implementation against the rule in "
+        "docs/TOOL_ANNOTATIONS.md, then update BOTH this allowlist and "
+        "tool_annotations.py.")
+
+
+def test_an_unclassified_mutating_tool_raises_at_registration():
+    try:
+        ann.annotations("a_tool_that_does_not_exist", read_only=False)
+    except RuntimeError:
+        return
+    raise AssertionError(
+        "an unclassified mutating tool must refuse to register rather than "
+        "defaulting: defaulting to false is a false safety claim and "
+        "defaulting to true is a lie about a read.")
+
+
+def test_open_world_hint_is_declared_on_every_tool():
+    missing = [name for name, tool in _registered().items()
+               if tool.annotations.openWorldHint is None]
+    assert not missing, missing
+
+
+def test_nothing_in_this_server_claims_an_open_world():
+    """No tool here reaches a remote service, so none may say it does."""
+    for name, tool in _registered().items():
+        assert tool.annotations.openWorldHint is False, name
+
+
+def test_idempotent_hint_is_true_or_absent_never_false():
+    for name, tool in _registered().items():
+        hint = tool.annotations.idempotentHint
+        assert hint in (True, None), (name, hint)
+        assert (hint is True) == (name in ann.IDEMPOTENT), name
+
+
+def test_the_published_annotation_tables_match_the_module():
+    text = (DOCS / "TOOL_ANNOTATIONS.md").read_text(encoding="utf-8")
+    destructive, non_destructive = set(), set()
+    bucket = None
+    for line in text.splitlines():
+        if line.startswith("## Tools that may perform destructive"):
+            bucket = destructive
+        elif line.startswith("## Tools that may not"):
+            bucket = non_destructive
+        elif line.startswith("## "):
+            bucket = None
+        elif bucket is not None and line.startswith("| `"):
+            bucket.add(line.strip("|").split("|")[0].strip().strip("`"))
+    assert destructive == ann.DESTRUCTIVE, (
+        "docs/TOOL_ANNOTATIONS.md destructive table has drifted: added "
+        f"{sorted(destructive - ann.DESTRUCTIVE)}, removed "
+        f"{sorted(ann.DESTRUCTIVE - destructive)}")
+    assert non_destructive == ann.NON_DESTRUCTIVE, (
+        "docs/TOOL_ANNOTATIONS.md non-destructive table has drifted: added "
+        f"{sorted(non_destructive - ann.NON_DESTRUCTIVE)}, removed "
+        f"{sorted(ann.NON_DESTRUCTIVE - non_destructive)}")
+
+
+def test_every_destructive_row_states_a_reason():
+    text = (DOCS / "TOOL_ANNOTATIONS.md").read_text(encoding="utf-8")
+    thin = []
+    for line in text.splitlines():
+        if not line.startswith("| `"):
+            continue
+        cells = [c.strip() for c in line.strip("|").split("|")]
+        if len(cells) == 2 and len(cells[1]) < 20:
+            thin.append(cells[0])
+    assert not thin, (
+        f"a reviewer cannot dispute a row with no reason on it: {thin}")
