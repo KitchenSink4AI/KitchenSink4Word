@@ -55,6 +55,7 @@ from .core.errors import (
     WordMcpError,
 )
 from .core import readonly as _readonly
+from .core import tool_annotations as _toolann
 from .core import sandbox as _sandbox
 from .core import update_check as _upd
 from .core import star_nudge as _star_nudge
@@ -206,9 +207,9 @@ def _tool(pack: str):
 
         tool = _FunctionTool.from_function(
             boundary,
-            annotations={
-                "readOnlyHint": _readonly.read_only_hint(fn.__name__)
-            },
+            annotations=_toolann.annotations(
+                fn.__name__, _readonly.read_only_hint(fn.__name__)
+            ),
         )
         mcp.add_tool(tool)
         _packs.register(fn.__name__, None if pack == "lite" else pack, tool)
