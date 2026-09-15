@@ -1,12 +1,14 @@
 # KitchenSink4Word
 
 > Word (.docx) MCP server for agents. 221 operations across 110 tools, one verb
-> grammar. Windows, stdio. Every mutation is preceded by an automatic backup and
+> grammar. stdio. Every mutation is preceded by an automatic backup and
 > committed by an atomic verified save.
 
 Release: v2.1.2
 MCP registry name: io.github.nometalalchemist/kitchensink4word
-Transport: stdio. Platform: Windows.
+Transport: stdio.
+Platform: the file tier is cross-platform and needs no Word installation.
+The `com-live` pack requires Windows with Microsoft Word installed.
 File-mode tools run without Microsoft Word installed. The `com_*` and `live_*`
 tools drive a local Microsoft Word through COM.
 
@@ -138,6 +140,7 @@ Upgrading from v1.x: call `get_workflows("migrate-from-v1")`, or read
 - PyPI: https://pypi.org/project/kitchensink4word/
 - Migration guide: https://github.com/KitchenSink4AI/KitchenSink4Word/blob/main/docs/MIGRATION_V2.md
 - Landing page: https://kitchensink4.ai/KitchenSink4Word/
+- Family: https://kitchensink4.ai/products/
 - Issues, including licensing: https://github.com/KitchenSink4AI/KitchenSink4Word/issues/new/choose
 
 ## 10. License
