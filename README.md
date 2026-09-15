@@ -124,7 +124,7 @@ comparison is about what each one can do, not how many names it has:
 
 | Capability | KitchenSink4Word | GongRzhe Office-Word (2.1k★, archived) | word-mcp-live (195★) | SecurityRonin docx-mcp (43★) |
 |---|---|---|---|---|
-| Tiered context loading (lite core, packs on demand) | ✅ from ~8.0k tokens | ❌ | ❌ | ❌ |
+| Tiered context loading (lite core, packs on demand) | ✅ from ~9.9k tokens | ❌ | ❌ | ❌ |
 | Live editing while the doc is open in Word | ✅ cursor-safe, one Ctrl+Z per call | ❌ | ✅ | ❌ |
 | Table column insert/delete | ✅ merge-aware | ❌ | ❌ | ❌ |
 | Bulk cell edits (one call) | ✅ | ❌ | ❌ | ❌ |
@@ -146,19 +146,21 @@ trackers. Corrections welcome: [open an issue](https://github.com/KitchenSink4AI
 ## The packs
 
 Numbers below come straight from `scripts/measure_surface.py`, never
-hand-counted. The lite core loads at startup; the seven packs load on demand.
+hand-counted, and every one counts the whole `tools/list` entry a client
+receives rather than the description and schema alone. The lite core loads at
+startup; the seven packs load on demand.
 
 | Pack | Tools | Approx tokens | What it carries |
 |---|---:|---:|---|
-| **lite** (startup) | 29 | ~8.0k | Everyday reading and editing: text, paragraphs, tables, cells, lists, find and replace, outline, document view, backups, workflow guide, server info, pack toggles |
-| references | 8 | ~2.4k | Word-native citations and bibliography, Zotero search and cite, parity checks, style conversion and detection |
-| review | 9 | ~1.8k | Tracked changes (read, accept/reject, reports), threaded comments, structured diff, anonymize and deanonymize |
-| academic | 24 | ~6.0k | Footnotes and endnotes, TOC, index, captions, cross-references, front matter, chapter headers, sections, styles, list numbering, word counts, validation batteries, submission prep, accessibility |
-| assembly | 7 | ~1.7k | Insert and split documents, move sections, copy tables across files, apply and fill templates, mail merge |
-| media-forms | 16 | ~4.6k | Images, charts, equations, text boxes, hyperlinks, table structure and styling, form fields, content controls, field codes |
-| com-live | 13 | ~2.2k | Drives a local Microsoft Word: PDF import/export, compare and combine, proofing, readability, field refresh, live editing of open documents |
-| protection-io | 6 | ~1.2k | Document protection, watermarks, redaction with verification, table data import and export |
-| **Full surface** | **112** | **~27.8k** | Everything (110 document tools plus `enable_tools` / `disable_tools`) |
+| **lite** (startup) | 29 | ~9.9k | Everyday reading and editing: text, paragraphs, tables, cells, lists, find and replace, outline, document view, backups, workflow guide, server info, pack toggles |
+| references | 8 | ~2.9k | Word-native citations and bibliography, Zotero search and cite, parity checks, style conversion and detection |
+| review | 9 | ~2.4k | Tracked changes (read, accept/reject, reports), threaded comments, structured diff, anonymize and deanonymize |
+| academic | 24 | ~7.6k | Footnotes and endnotes, TOC, index, captions, cross-references, front matter, chapter headers, sections, styles, list numbering, word counts, validation batteries, submission prep, accessibility |
+| assembly | 7 | ~2.1k | Insert and split documents, move sections, copy tables across files, apply and fill templates, mail merge |
+| media-forms | 16 | ~5.6k | Images, charts, equations, text boxes, hyperlinks, table structure and styling, form fields, content controls, field codes |
+| com-live | 13 | ~3.1k | Drives a local Microsoft Word: PDF import/export, compare and combine, proofing, readability, field refresh, live editing of open documents |
+| protection-io | 6 | ~1.6k | Document protection, watermarks, redaction with verification, table data import and export |
+| **Full surface** | **112** | **~35.2k** | Everything (110 document tools plus `enable_tools` / `disable_tools`) |
 
 ## Quickstart: start lite, enable what you need
 
@@ -213,26 +215,33 @@ schema).
   `scripts/count_operations.py`; the v1.6 run is
   `scripts/count_operations_v16.py`, which measures a v1.6 checkout with the
   same definition.
-- **Tiered loading: starts at about 8.0k tokens, scales to everything.** A
-  fresh session loads the 29-tool lite core (about 8,000 tokens) and turns on
+- **Tiered loading: starts at about 9.9k tokens, scales to everything.** A
+  fresh session loads the 29-tool lite core (about 9,900 tokens) and turns on
   capability packs only when a task needs them, with one `enable_tools` call.
-  Load every pack and the full surface measures about 27,800 tokens, down from
-  about 34,400 in v1.6: roughly 23% less for the whole sink, about 78% less at
-  lite start. (All figures are script-measured; see
-  [Context cost](#context-cost-measured) below.)
+  Load every pack and the full surface measures about 35,200 tokens, so a
+  session that never leaves lite carries roughly a quarter of the whole sink.
+  (All figures are script-measured and count what the client actually
+  receives; see [Context cost](#context-cost-measured) below.)
 
 ## Context cost (measured)
 
 Almost no MCP server tells you what it costs to load. Here is the bill, from
 `scripts/measure_surface.py`:
 
-- **Lite start:** 29 tools, about 8,000 tokens, loaded when the session opens.
+- **Lite start:** 29 tools, about 9,900 tokens, loaded when the session opens.
 - **Full surface:** 112 tools (110 document tools plus the two pack toggles),
-  about 27,800 tokens with every pack enabled.
-- **Versus v1.6:** the old full surface was about 34,400 tokens. v2 is roughly
-  23% smaller at full load and about 78% smaller at lite start.
+  about 35,200 tokens with every pack enabled.
 - Clients that defer tool schemas until first use (for example Claude Code)
   pay close to zero until a tool is actually called.
+
+Both figures count the entire `tools/list` entry the client receives: name,
+title, description, input and output schemas, annotations and metadata. The
+estimator used to sum description and input schema only, which published a
+number about a quarter below what crosses the wire, and a server whose pitch
+is that it tells you what it costs does not get to publish the flattering
+subset. The v1.6 comparison this section used to carry was taken on that
+older yardstick, so it is gone rather than restated: no v1.6 measurement
+exists on this one.
 
 ## Safety model
 
