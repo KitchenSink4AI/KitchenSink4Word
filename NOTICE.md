@@ -1,5 +1,7 @@
 # KitchenSink4Word : License Notice
 
+KitchenSink4Word is Copyright (c) 2026 Alvut Consulting, LLC.
+
 ## License
 
 KitchenSink4Word is dual-licensed:

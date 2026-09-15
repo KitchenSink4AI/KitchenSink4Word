@@ -1,0 +1,4 @@
+# The licence text is byte-exact to the canonical AGPL-3.0 from gnu.org so that
+# GitHub's licence detection identifies it. Never convert it on checkout or on
+# commit: a CRLF copy is no longer byte-exact.
+LICENSE -text
