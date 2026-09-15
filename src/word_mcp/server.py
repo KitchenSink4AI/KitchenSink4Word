@@ -57,6 +57,7 @@ from .core.errors import (
 from .core import readonly as _readonly
 from .core import sandbox as _sandbox
 from .core import update_check as _upd
+from .core import star_nudge as _star_nudge
 from .core.locate import is_range_spec, resolve_location, resolve_range
 from .core.package import DocxPackage, qn
 from .ops import (
@@ -5258,6 +5259,10 @@ def main() -> None:
         mcp.add_transform(_Visibility(False, names=disabled))
     # No update check here. It runs ON DEMAND, inside get_server_info, and
     # nowhere else: startup starts no thread and asks PyPI nothing.
+    # The one-time star nudge, last, after startup has already succeeded.
+    # It is a single line on stderr on the very first run of an install and
+    # nothing at all thereafter; it asks the network nothing.
+    _star_nudge.announce_once()
     mcp.run()
 
 
