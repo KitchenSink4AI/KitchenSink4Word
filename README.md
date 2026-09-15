@@ -13,54 +13,135 @@
 
 [Landing page](https://kitchensink4.ai/KitchenSink4Word/) · [llms.txt](https://kitchensink4.ai/KitchenSink4Word/llms.txt) (machine-readable capability manifest for agents and LLM crawlers)
 
-The most complete Word (.docx) MCP server available: 221 document operations
-across 110 tools. Live editing of open documents, tracked changes, citations
-and bibliography with Zotero, equations, document assembly, mail merge,
-tables, footnotes, TOC, redaction, accessibility audits, charts, document
-compare and merge, and PDF import and export. Works with Claude Code, Claude
-Desktop, Cursor, and any MCP client. Part of the KitchenSink4AI suite with
-kitchensink4xl (Excel), kitchensink4ppt (PowerPoint), and kitchensink4web
-(browser).
+**Edit Word documents with your AI assistant: tracked changes, citations, templates and live edits in Word.**
 
-**Everything plus the kitchen sink for Microsoft Word.** One consistent
-grammar, engineered not to corrupt and stress-tested against long, heavily
-formatted real-world documents. Live editing included: documents open in
-Word are edited in place, visibly, with each tool call landing as a single
-Ctrl+Z step.
+Edit real Word documents from Claude Code, Codex CLI, Copilot CLI or any other MCP client that runs local tools. KitchenSink4Word connects your assistant to .docx files on Windows, and can edit a document while it is open in Microsoft Word so you see the changes land. Files are processed on your computer; the only thing that leaves it is what your AI app sends to its own provider. The Community edition is free under the AGPL. The Business edition adds a Windows installer, a signed update channel, a licence your company can approve and support.
 
-> ### ⚠️ v2.0 is a breaking change
-> Every v1.x tool name changed. The 189-tool v1.6 surface was rebuilt as a
-> consolidated set of 110 tools that cover every prior capability under one
-> grammar. If you are upgrading from v1.x, read the
-> **[migration guide](docs/MIGRATION_V2.md)** first: it maps every old tool
-> name to its v2 home, and `get_workflows("migrate-from-v1")` returns the
-> same map in-session. New installs need nothing extra.
+**Works on:** Windows. File editing works without Microsoft Word; live editing and the Word-powered features need Word installed.
 
-New here? Start with the [Quickstart](docs/QUICKSTART.md).
+## Install
 
-## Two numbers that matter
+Pick the route for your AI app. The commands go in PowerShell on Windows or a terminal on macOS and Linux, not into an AI chat. The package routes need Python 3.12 or newer.
 
-- **221 document operations, 110 tools.** The operation count went up and the
-  tool count came down on purpose. v1 spread similar jobs across many
-  competing names; v2 gives each concept exactly one name built from a small
-  verb table (`insert_`, `set_`, `manage_`, `list_elements`, `validate`,
-  `delete_element`), so an agent picks the right tool the first time and
-  carries less schema to do it. Fewer tools, more reach. Measured with one
-  yardstick on both trees, v1.6 performed 200 operations across its 189
-  tools and v2.0 performs 221 across 110: every v1.6 capability survived the
-  consolidation (the migration map covers all 189, test-guarded) and v2 adds
-  the anchored batch editor, the anchored document view, deletion parity,
-  and wider dispatch on the multiplexers. Both figures come from
-  `scripts/count_operations.py`; the v1.6 run is
-  `scripts/count_operations_v16.py`, which measures a v1.6 checkout with the
-  same definition.
-- **Tiered loading: starts at about 8.0k tokens, scales to everything.** A
-  fresh session loads the 29-tool lite core (about 8,000 tokens) and turns on
-  capability packs only when a task needs them, with one `enable_tools` call.
-  Load every pack and the full surface measures about 27,800 tokens, down from
-  about 34,400 in v1.6: roughly 23% less for the whole sink, about 78% less at
-  lite start. (All figures are script-measured; see
-  [Context cost](#context-cost-measured) below.)
+**Claude Desktop**
+
+Install [uv](https://docs.astral.sh/uv/getting-started/installation/), then quit and reopen Claude Desktop. Download the `.mcpb` file from [KitchenSink4Word releases](https://github.com/KitchenSink4AI/KitchenSink4Word/releases/latest). In Claude Desktop open Settings, then Extensions, then Advanced settings, then Install extension, and choose the file. The bundle fetches the Python package the first time it starts, so the first launch needs a network connection. Restart your session and check that the tools show as connected.
+
+**Claude Code or Codex CLI**
+
+Install uv, then run the line for your app and restart your session:
+
+```sh
+claude mcp add word -s user -- uvx kitchensink4word
+```
+
+```sh
+codex mcp add word -- uvx kitchensink4word
+```
+
+**Any other local MCP client**
+
+Use `uvx` as the command and `kitchensink4word` as its argument, or install the package and use `kitchensink4word` as the server command:
+
+```sh
+pip install kitchensink4word
+```
+
+Then follow your client's guide for adding a local MCP server. Installing the package on its own does not connect it to an AI app.
+
+**Business edition**
+
+Compare the editions on the [pricing page](https://kitchensink4.ai/pricing/). Already purchased? Your Windows installer and download link are in your [licence portal](https://get.kitchensink4.ai/my-license/).
+
+## What it can do
+
+110 document tools, plus the pack on/off controls.
+
+- Revise a report while it stays open in Word, with edits you can watch.
+- Read, accept and reject tracked changes, and work through reviewer comments.
+- Fill a template or assemble chapters into one manuscript.
+- Build and format tables, lists, headings and page layouts.
+- Insert citations, bibliographies, footnotes and cross-references.
+- Find formatting, accessibility and structure problems before handoff.
+- Compare documents, prepare mail merges and redact selected text.
+- Import or export PDF through Word when it is installed.
+
+What is available depends on the packs you enable and the applications installed. The full tool reference is below.
+
+## Business edition
+
+Need a licence your company can approve and a setup someone supports? The Business edition pairs these tools with a Windows installer, a signed update channel and support under the Business terms. Update checks tell you when a covered release is available; nothing installs on its own. Compare the options on the [pricing page](https://kitchensink4.ai/pricing/). The Community edition stays free under the AGPL, including business use that meets its terms.
+
+## Privacy Policy
+
+The tools run on your computer, and KitchenSink4AI receives no documents and no usage data from them. Your AI app may send prompts, file contents and tool results to its own provider under that app's settings and terms. Installing downloads packages, and the Community version check contacts PyPI unless you disable it; those requests carry connection details such as your network address and never your documents. Cloud folders and backups follow their own settings. The [Privacy Policy](https://kitchensink4.ai/privacy/) covers the product, purchases and support records.
+
+Not affiliated with, endorsed by, or sponsored by Microsoft Corporation.
+Microsoft and Word are trademarks of the Microsoft group of companies.
+
+## What the 221 operations cover
+
+The everyday core covers text and formatting, tables (including merge-aware
+column insert/delete and one-call bulk cell edits), footnotes and endnotes
+(full lifecycle plus footnote and endnote conversion), TOC and caption lists,
+headers, footers, and sections, images, bulleted and numbered lists, content
+controls and fields, threaded comments, and tracked changes (read, accept and
+reject by author, and writing edits as tracked changes). Beyond that the
+surface spans equations (LaTeX to Word math), native charts, document assembly
+(chapter files into one manuscript), Zotero library citations, publication
+style conversion (8 styles, beta), review-cycle analytics, workflow suites
+(mail merge, batch operations, redaction, compliance and accessibility audits
+and fixes, submission prep, front matter, diagnostics), and Word-COM-backed
+document compare, field refresh, PDF export and import, and open-clean
+validation on Windows.
+
+## What makes it different
+
+- **Merge-aware table column operations.** `modify_table_structure` inserts
+  and deletes columns correctly through horizontally and vertically merged
+  cells (gridSpan shrinks, vMerge chains re-root). At the time of writing, no
+  other public Word MCP has this.
+- **Bulk-first API.** Editing 20 cells is ONE `set_cells` call with a payload,
+  not 20 round-trips.
+- **Tracked-change writing.** `track=True, author="Jane"` on edit tools
+  produces real Word revisions the recipient can accept or reject, proven
+  round-trip against the server's own revision engine.
+- **Document compare.** `com_multi_document(action="compare")` produces a
+  Word-native redline between two versions of a document.
+- **Never corrupts.** Atomic saves (temp file, structural validation, replace),
+  automatic slot backups before every mutation, byte-identical passthrough of
+  anything not being edited (equations, textboxes, content controls survive
+  untouched), and clean typed errors: a file open in Word is refused with a
+  message, not a hang.
+- **Fragmented-run safe.** Find and replace works across Word's arbitrarily
+  split runs while preserving per-character formatting, with a ReDoS timeout
+  guard on user regex and an optional blast-radius limit.
+
+## Why this one (the capability comparison)
+
+Every public Word MCP server was surveyed before building this. The honest
+comparison is about what each one can do, not how many names it has:
+
+| Capability | KitchenSink4Word | GongRzhe Office-Word (2.1k★, archived) | word-mcp-live (195★) | SecurityRonin docx-mcp (43★) |
+|---|---|---|---|---|
+| Tiered context loading (lite core, packs on demand) | ✅ from ~8.0k tokens | ❌ | ❌ | ❌ |
+| Live editing while the doc is open in Word | ✅ cursor-safe, one Ctrl+Z per call | ❌ | ✅ | ❌ |
+| Table column insert/delete | ✅ merge-aware | ❌ | ❌ | ❌ |
+| Bulk cell edits (one call) | ✅ | ❌ | ❌ | ❌ |
+| Cell merge/unmerge | ✅ | merge only | ❌ | ❌ |
+| Footnotes AND endnotes CRUD | ✅ + conversion | add only | ❌ | ✅ |
+| TOC insert + refresh | ✅ | ❌ | ❌ | ❌ |
+| Native citations/bibliography | ✅ 12 styles | ❌ | ❌ | ❌ |
+| Index generation | ✅ | ❌ | ❌ | ❌ |
+| Tracked-change WRITING | ✅ | ❌ | ✅ | ✅ |
+| Accept/reject by author | ✅ | ❌ | partial | ✅ |
+| Document compare + combine | ✅ Word-native | ❌ | ❌ | buggy |
+| Watermarks / protection / line numbers | ✅ | protect only | ❌ | ❌ |
+| Section moving / template transfer | ✅ | ❌ | ❌ | ❌ |
+| Atomic saves + auto-backup | ✅ | ❌ | ❌ | ❌ |
+
+Capability survey compiled from public repositories, documentation, and issue
+trackers. Corrections welcome: [open an issue](https://github.com/KitchenSink4AI/KitchenSink4Word/issues).
 
 ## The packs
 
@@ -116,122 +197,29 @@ re-enabled tool comes back as "no such tool", refresh the tool list on the
 client side (in Claude Code, a `ToolSearch` call for the tool reloads its
 schema).
 
-## Why this one (the capability comparison)
+## Two numbers that matter
 
-Every public Word MCP server was surveyed before building this. The honest
-comparison is about what each one can do, not how many names it has:
-
-| Capability | KitchenSink4Word | GongRzhe Office-Word (2.1k★, archived) | word-mcp-live (195★) | SecurityRonin docx-mcp (43★) |
-|---|---|---|---|---|
-| Tiered context loading (lite core, packs on demand) | ✅ from ~8.0k tokens | ❌ | ❌ | ❌ |
-| Live editing while the doc is open in Word | ✅ cursor-safe, one Ctrl+Z per call | ❌ | ✅ | ❌ |
-| Table column insert/delete | ✅ merge-aware | ❌ | ❌ | ❌ |
-| Bulk cell edits (one call) | ✅ | ❌ | ❌ | ❌ |
-| Cell merge/unmerge | ✅ | merge only | ❌ | ❌ |
-| Footnotes AND endnotes CRUD | ✅ + conversion | add only | ❌ | ✅ |
-| TOC insert + refresh | ✅ | ❌ | ❌ | ❌ |
-| Native citations/bibliography | ✅ 12 styles | ❌ | ❌ | ❌ |
-| Index generation | ✅ | ❌ | ❌ | ❌ |
-| Tracked-change WRITING | ✅ | ❌ | ✅ | ✅ |
-| Accept/reject by author | ✅ | ❌ | partial | ✅ |
-| Document compare + combine | ✅ Word-native | ❌ | ❌ | buggy |
-| Watermarks / protection / line numbers | ✅ | protect only | ❌ | ❌ |
-| Section moving / template transfer | ✅ | ❌ | ❌ | ❌ |
-| Atomic saves + auto-backup | ✅ | ❌ | ❌ | ❌ |
-
-Capability survey compiled from public repositories, documentation, and issue
-trackers. Corrections welcome: [open an issue](https://github.com/KitchenSink4AI/KitchenSink4Word/issues).
-
-## What the 221 operations cover
-
-The everyday core covers text and formatting, tables (including merge-aware
-column insert/delete and one-call bulk cell edits), footnotes and endnotes
-(full lifecycle plus footnote and endnote conversion), TOC and caption lists,
-headers, footers, and sections, images, bulleted and numbered lists, content
-controls and fields, threaded comments, and tracked changes (read, accept and
-reject by author, and writing edits as tracked changes). Beyond that the
-surface spans equations (LaTeX to Word math), native charts, document assembly
-(chapter files into one manuscript), Zotero library citations, publication
-style conversion (8 styles, beta), review-cycle analytics, workflow suites
-(mail merge, batch operations, redaction, compliance and accessibility audits
-and fixes, submission prep, front matter, diagnostics), and Word-COM-backed
-document compare, field refresh, PDF export and import, and open-clean
-validation on Windows.
-
-## What makes it different
-
-- **Merge-aware table column operations.** `modify_table_structure` inserts
-  and deletes columns correctly through horizontally and vertically merged
-  cells (gridSpan shrinks, vMerge chains re-root). At the time of writing, no
-  other public Word MCP has this.
-- **Bulk-first API.** Editing 20 cells is ONE `set_cells` call with a payload,
-  not 20 round-trips.
-- **Tracked-change writing.** `track=True, author="Jane"` on edit tools
-  produces real Word revisions the recipient can accept or reject, proven
-  round-trip against the server's own revision engine.
-- **Document compare.** `com_multi_document(action="compare")` produces a
-  Word-native redline between two versions of a document.
-- **Never corrupts.** Atomic saves (temp file, structural validation, replace),
-  automatic slot backups before every mutation, byte-identical passthrough of
-  anything not being edited (equations, textboxes, content controls survive
-  untouched), and clean typed errors: a file open in Word is refused with a
-  message, not a hang.
-- **Fragmented-run safe.** Find and replace works across Word's arbitrarily
-  split runs while preserving per-character formatting, with a ReDoS timeout
-  guard on user regex and an optional blast-radius limit.
-
-## Requirements
-
-- Python 3.12+ (developed on 3.14)
-- Most of this server needs no Word installed at all and runs on any
-  computer. The parts that ask Word to do the work (the `com-live` pack)
-  want Windows with Word on it.
-
-## Install
-
-### Claude Desktop: one click
-
-Download `kitchensink4word.mcpb` from the
-[latest release](https://github.com/KitchenSink4AI/KitchenSink4Word/releases/latest)
-and double-click it, or drag it into the Claude Desktop window. Desktop adds
-it as an extension and the sink is connected. Nothing to type, nothing to
-configure. The bundle launches the server with
-[uv](https://docs.astral.sh/uv/), so uv needs to be on your PATH
-(`pip install uv`); if Desktop does not pick the file up on a double-click,
-use Settings > Extensions > Advanced settings > Install extension.
-
-### Claude Code: one line
-
-```
-claude mcp add word -s user -- uvx kitchensink4word
-```
-
-That fetches and runs the server for you, so there is nothing to install
-first.
-
-### For developers: pip, source, other MCP clients
-
-Install the package and point any MCP client at the executable:
-
-```
-pip install kitchensink4word
-```
-
-```json
-{"mcpServers": {"word": {"command": "kitchensink4word"}}}
-```
-
-The `word-mcp` executable is an equivalent entry point. From a clone:
-
-```
-git clone https://github.com/KitchenSink4AI/KitchenSink4Word
-cd KitchenSink4Word
-python -m venv .venv
-.venv\Scripts\pip install -e .
-claude mcp add word -s user -- <absolute-path>\.venv\Scripts\word-mcp.exe
-```
-
-For guided Windows setup, signed license receipts, and email support, see the KitchenSink4AI Business edition: https://kitchensink4.ai/products/business/
+- **221 document operations, 110 tools.** The operation count went up and the
+  tool count came down on purpose. v1 spread similar jobs across many
+  competing names; v2 gives each concept exactly one name built from a small
+  verb table (`insert_`, `set_`, `manage_`, `list_elements`, `validate`,
+  `delete_element`), so an agent picks the right tool the first time and
+  carries less schema to do it. Fewer tools, more reach. Measured with one
+  yardstick on both trees, v1.6 performed 200 operations across its 189
+  tools and v2.0 performs 221 across 110: every v1.6 capability survived the
+  consolidation (the migration map covers all 189, test-guarded) and v2 adds
+  the anchored batch editor, the anchored document view, deletion parity,
+  and wider dispatch on the multiplexers. Both figures come from
+  `scripts/count_operations.py`; the v1.6 run is
+  `scripts/count_operations_v16.py`, which measures a v1.6 checkout with the
+  same definition.
+- **Tiered loading: starts at about 8.0k tokens, scales to everything.** A
+  fresh session loads the 29-tool lite core (about 8,000 tokens) and turns on
+  capability packs only when a task needs them, with one `enable_tools` call.
+  Load every pack and the full surface measures about 27,800 tokens, down from
+  about 34,400 in v1.6: roughly 23% less for the whole sink, about 78% less at
+  lite start. (All figures are script-measured; see
+  [Context cost](#context-cost-measured) below.)
 
 ## Context cost (measured)
 
@@ -304,10 +292,6 @@ them. A blocked call refuses with a typed error naming the offending path and
 the allowed roots before any file is opened. Recommended whenever the server
 runs against untrusted or semi-trusted agent traffic.
 
-## Privacy Policy
-
-[[OWNER: privacy policy section, links https://kitchensink4.ai/privacy/]]
-
 ## Testing
 
 1,846 tests (1,776 run everywhere; 70 live-marked tests drive a real Word
@@ -354,6 +338,7 @@ text-reference scan inside `validate(checks=["cross_references"])`. Each
 returns an explicit list of what it could not confidently handle.
 
 <!-- LIVE_MATRIX:START (generated by scripts/generate_live_matrix.py) -->
+
 ## Live-mode capability matrix
 
 Which tools work on a document that is OPEN in Word. Dual-mode tools auto-route (`live='auto'`); everything else refuses with `DOCUMENT_LOCKED` until the file is closed. Every COM call is **serialized server-side** (one call reaches Word at a time, across separate server processes as well as threads in one), so concurrent agents queue instead of corrupting; live edits stay unsaved until `com_save_document` (the Option C model: see `get_workflows(task='live-editing')`).
@@ -393,6 +378,15 @@ The remaining 63 writers and 14 readers are file-only: they refuse while the doc
   author honestly.
 - TOC and caption-list page numbers require a field update: automatic on next
   Word open, or immediate via `com_refresh_fields`.
+
+## Upgrading from v1.x
+
+Every v1.x tool name changed. The 189-tool v1.6 surface was rebuilt as a
+consolidated set of 110 tools that cover every prior capability under one
+grammar. If you are upgrading from v1.x, read the
+**[migration guide](docs/MIGRATION_V2.md)** first: it maps every old tool
+name to its v2 home, and `get_workflows("migrate-from-v1")` returns the
+same map in-session. New installs need nothing extra.
 
 ## License
 
