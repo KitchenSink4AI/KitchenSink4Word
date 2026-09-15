@@ -304,6 +304,10 @@ them. A blocked call refuses with a typed error naming the offending path and
 the allowed roots before any file is opened. Recommended whenever the server
 runs against untrusted or semi-trusted agent traffic.
 
+## Privacy Policy
+
+[[OWNER: privacy policy section, links https://kitchensink4.ai/privacy/]]
+
 ## Testing
 
 1,846 tests (1,776 run everywhere; 70 live-marked tests drive a real Word
