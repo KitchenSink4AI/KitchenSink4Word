@@ -4,7 +4,7 @@ Every declared dependency, its license, and why it is here. Enforced by
 `tests/unit/test_dependency_ledger.py`, which fails the build if
 `pyproject.toml` grows a dependency that is not listed here. Ported from
 KitchenSink4Web, which carried the only ledger in the family until the
-2026-09-15 licence audit (finding D-02).
+2026-09-15 license audit (finding D-02).
 
 Licenses below were read from the installed package metadata in this repo's
 virtual environment (`importlib.metadata`), not from a search result.
@@ -31,7 +31,7 @@ table in this file. The enforcing test reads them positionally.
 | `python-docx` | MIT | permissive | The .docx object model the file tier is built on. |
 | `lxml` | BSD-3-Clause | permissive | The XML engine, reached directly in 44 source files. The BSD-3 no-endorsement clause is the only obligation and it binds redistribution, which does not happen here. |
 | `latex2mathml` | MIT | permissive | First half of the equation path: LaTeX in, MathML out. |
-| `mathml2omml` | MIT | permissive | Second half: MathML to the OMML that Word actually stores. The wheel's `License` metadata field reads `UNKNOWN`, which is a packaging defect rather than an unlicensed release: the classifier says `License :: OSI Approved :: MIT License` and the wheel ships an MIT license text naming amedama, matching the upstream repository. Confirmed 2026-09-15 against the package's own license file, closing the caveat the licence audit raised. |
+| `mathml2omml` | MIT | permissive | Second half: MathML to the OMML that Word actually stores. The wheel's `License` metadata field reads `UNKNOWN`, which is a packaging defect rather than an unlicensed release: the classifier says `License :: OSI Approved :: MIT License` and the wheel ships an MIT license text naming amedama, matching the upstream repository. Confirmed 2026-09-15 against the package's own license file, closing the caveat the license audit raised. |
 | `regex` | Apache-2.0 AND CNRI-Python | both permissive | Backs the caller-pattern guard in `ops/_regex.py`. Needed rather than convenient: stdlib `re` has no match timeout, the server is single-threaded stdio, and one pathological caller pattern would deny service to the whole session. |
 | `packaging` | Apache-2.0 OR BSD-2-Clause | either, permissive | Version comparison in `core/update_check.py`. |
 | `pywin32` | PSF | permissive | The COM tier, which drives a real Word. Declared under a `sys_platform == 'win32'` marker, so it is never installed anywhere it cannot work. |

@@ -1,7 +1,7 @@
 """The dependency license ledger, enforced rather than maintained by hope.
 
 Ported from KitchenSink4Web, which carried the only ledger in the family
-until the 2026-09-15 licence audit (finding D-02). A dependency added to
+until the 2026-09-15 license audit (finding D-02). A dependency added to
 pyproject.toml and not to DEPENDENCY_LEDGER.md fails here, which is the only
 way a ledger stays true past the first week.
 
