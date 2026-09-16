@@ -437,36 +437,44 @@ footer .row>span{min-width:0;overflow-wrap:anywhere}
    both grounds it prints on, the banner's paper-deep and the sub-line's paper. */
 .ed-banner{--banner-accent:var(--copper,var(--brass,var(--patina,var(--ink))));
   --banner-ink:var(--banner-accent);
-  position:relative;margin:26px 0 0;padding:30px 26px 26px;
+  position:relative;margin:26px 0 0;padding:20px 20px 16px;
   border:3px solid var(--ink);background:var(--paper-deep);box-shadow:var(--shadow);
-  text-align:center;min-width:0}
+  text-align:center;min-width:0;
+  display:grid;grid-template-columns:minmax(0,1fr);justify-items:center;align-items:center;gap:8px}
 .ed-banner:before{content:"";position:absolute;left:0;right:0;top:0;height:10px;
   background:repeating-linear-gradient(90deg,var(--ink) 0 22px,var(--paper-deep) 22px 44px)}
 .ed-banner-title{font-family:'Fraunces',Georgia,serif;
-  font-size:clamp(23px,3.6vw,38px);font-weight:800;line-height:1.15;letter-spacing:-.01em;
+  font-size:clamp(19px,2.3vw,27px);font-weight:800;line-height:1.2;letter-spacing:-.01em;
   margin:0;color:var(--ink);overflow-wrap:anywhere;text-wrap:balance}
-.ed-banner-sub{display:table;margin:15px auto 0;padding:6px 16px;
+.ed-banner-sub{display:table;margin:0;padding:5px 14px;
   border:2px solid var(--banner-ink);color:var(--banner-ink);background:var(--paper);
   font-family:'IBM Plex Mono',ui-monospace,monospace;
-  font-size:11px;letter-spacing:.18em;text-transform:uppercase;line-height:1.7;
+  font-size:11px;letter-spacing:.14em;text-transform:uppercase;line-height:1.6;
   max-width:100%;overflow-wrap:anywhere}
-.ed-banner-cta{margin:20px 0 0;font-size:12px;line-height:1.6}
+.ed-banner-cta{margin:0;font-size:12px;line-height:1.6}
 /* The Business link is a real button, cut to the same shape as the page's
    primary button and filled with the deepened accent the sub-line already
    uses, so the paper-coloured label clears WCAG AA on every finish, the
    evening coats included. One block, four palettes, as above. */
 .ed-banner-cta .ed-banner-btn{display:inline-block;max-width:100%;overflow-wrap:anywhere;
-  padding:12px 26px;border:2px solid var(--banner-ink);
+  padding:12px 22px;border:2px solid var(--banner-ink);
   background:var(--banner-ink);color:var(--paper);text-decoration:none;
-  font-size:14px;font-weight:700;letter-spacing:.05em;line-height:1.4;
+  font-size:13px;font-weight:700;letter-spacing:.04em;line-height:1.4;
   box-shadow:3px 3px 0 var(--ink);transition:all .15s}
 .ed-banner-cta .ed-banner-btn:hover{transform:translate(-2px,-2px);box-shadow:5px 5px 0 var(--ink)}
 .ed-banner-cta .ed-banner-btn:focus-visible{outline:3px solid var(--ink);outline-offset:4px}
+@media(min-width:1000px){
+  .ed-banner{grid-template-columns:minmax(0,1fr) auto;column-gap:22px;row-gap:5px;
+    justify-items:start;align-items:center;text-align:left;padding:18px 22px 16px}
+  .ed-banner-title{grid-column:1;grid-row:1}
+  .ed-banner-sub{grid-column:1;grid-row:2}
+  .ed-banner-cta{grid-column:2;grid-row:1/span 2;justify-self:end;align-self:center}
+}
 @media(max-width:560px){.ed-banner-cta .ed-banner-btn{padding:11px 16px;font-size:13px;letter-spacing:.02em}}
 @supports (color:color-mix(in srgb,red 50%,blue)){
   .ed-banner{--banner-ink:color-mix(in srgb,var(--banner-accent) 70%,var(--ink))}
 }
-@media(max-width:560px){.ed-banner{padding:26px 16px 22px}.ed-banner-sub{letter-spacing:.1em}}
+@media(max-width:560px){.ed-banner{padding:18px 14px 14px;gap:7px}.ed-banner-sub{letter-spacing:.1em}}
 .platform-label,.hero .platform-label{display:table;margin:16px auto 10px;padding:8px 15px;border:2px solid var(--ink);background:var(--paper-deep);color:var(--ink);font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:700;letter-spacing:.04em;line-height:1.5;max-width:100%}
 .platform-hero-note,.hero .platform-hero-note{font-family:inherit;font-size:12px;line-height:1.6;margin:8px auto 18px;max-width:640px}
 
