@@ -392,7 +392,7 @@ def _check_fonts(pkg, ctx, rule, report) -> None:
                 "location": {"paragraph_index": idx},
                 "reason": (
                     f"font resolves to theme indirection {theme!r}; theme "
-                    "fonts are reported, not resolved — verify the theme "
+                    "fonts are reported, not resolved; verify the theme "
                     "part (word/theme/theme1.xml) manually"
                 ),
             }
@@ -560,7 +560,7 @@ def _check_colors(pkg, ctx, rule, report) -> None:
                 "location": {"paragraph_index": idx},
                 "reason": (
                     f"run color is theme-indirected ({theme!r}); theme colors "
-                    "are reported, not resolved — verify manually"
+                    "are reported, not resolved; verify manually"
                 ),
             }
         )

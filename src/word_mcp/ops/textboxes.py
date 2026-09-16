@@ -188,7 +188,7 @@ def get_textbox_text(pkg: DocxPackage) -> dict:
         "boxes": out,
         "note": (
             "generic read tools (get_text/find_text) exclude text-box "
-            "content entirely — this tool is the one sanctioned reader; "
+            "content entirely; this tool is the one sanctioned reader; "
             "box_index above is the stable address for set_textbox_text"
         ),
     }
@@ -213,7 +213,7 @@ def set_textbox_text(pkg: DocxPackage, box_index: int, text: str) -> dict:
     if not 0 <= box_index < len(boxes):
         raise TargetNotFound(
             f"no text box with index {box_index}; document has "
-            f"{len(boxes)} box(es) — run get_textbox_text for the list"
+            f"{len(boxes)} box(es); run get_textbox_text for the list"
         )
     box = boxes[box_index]
     content = box["element"]
@@ -223,8 +223,8 @@ def set_textbox_text(pkg: DocxPackage, box_index: int, text: str) -> dict:
         if found is not None:
             raise UnsupportedStructure(
                 f"text box {box_index} ({box['shape_name'] or 'unnamed'}) "
-                f"holds non-text content (<{spec}>); refusing to flatten it "
-                "— edit that box in Word"
+                f"holds non-text content (<{spec}>); refusing to flatten it; "
+                "edit that box in Word"
             )
 
     # Formatting to carry over: first paragraph's pPr, first run's rPr.

@@ -158,7 +158,7 @@ def export_table(
     out = Path(output_path) if output_path else None
     if out is not None and out.exists():
         raise WordMcpError(
-            f"output file already exists: {out} — refusing to overwrite; "
+            f"output file already exists: {out}: refusing to overwrite; "
             "delete it or choose another path"
         )
 
@@ -304,7 +304,7 @@ def import_table(
         raise WordMcpError(
             f"dimension mismatch: table {table_index} is "
             f"{len(model)}x{n_grid} (rows x grid columns) but data is "
-            f"{_shape_desc(rows)} — refusing to overwrite; fix the data or "
+            f"{_shape_desc(rows)}: refusing to overwrite; fix the data or "
             "omit table_index to create a new table"
         )
 
@@ -328,7 +328,7 @@ def import_table(
     if offenders:
         raise WordMcpError(
             "data has values in merge-covered positions, which Word would "
-            f"never display: {offenders[:10]} — move each value to its merge "
+            f"never display: {offenders[:10]}; move each value to its merge "
             "anchor (top-left of the merge) or blank it"
         )
 
@@ -472,7 +472,7 @@ def extract_images(
         planned.append((entry, dest, data))
     if collisions:
         raise WordMcpError(
-            f"output files already exist: {collisions} — refusing to "
+            f"output files already exist: {collisions}: refusing to "
             "overwrite; nothing was written. Clear them or use another "
             "output_dir/prefix"
         )
@@ -615,7 +615,7 @@ def split_document(
     if not boundaries:
         raise TargetNotFound(
             f"document has no headings at level {level} (or higher); "
-            "nothing to split on — check get_outline for the actual levels"
+            "nothing to split on. Check get_outline for the actual levels"
         )
 
     sections: list[dict] = []
@@ -653,7 +653,7 @@ def split_document(
     existing = [str(t) for t in targets if t.exists()]
     if existing:
         raise WordMcpError(
-            f"output files already exist: {existing} — refusing to "
+            f"output files already exist: {existing}: refusing to "
             "overwrite; nothing was written"
         )
     out_dir.mkdir(parents=True, exist_ok=True)

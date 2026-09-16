@@ -114,7 +114,7 @@ def prepare_for_submission(
     if prot.get("protected"):
         raise DocumentProtected(
             f"document has an enforced editing restriction "
-            f"(edit={prot.get('edit')!r}); refusing to half-clean it — run "
+            f"(edit={prot.get('edit')!r}); refusing to half-clean it; run "
             "remove_document_protection first, then retry"
         )
 
@@ -190,7 +190,7 @@ def prepare_for_submission(
     if remaining["footnotes"] or remaining["endnotes"]:
         result["actions"].append(
             f"document still contains {remaining['footnotes']} footnote(s) "
-            f"and {remaining['endnotes']} endnote(s) — content is kept, this "
+            f"and {remaining['endnotes']} endnote(s); content is kept, this "
             "is normal"
         )
     return result

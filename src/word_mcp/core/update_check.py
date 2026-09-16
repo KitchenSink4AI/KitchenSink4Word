@@ -434,10 +434,15 @@ def update_notice() -> str | None:
             return None
         if latest <= running:
             return None
+        # The star line rides ALONG with the update notice rather than on its
+        # own surface. A user reading this has an update waiting, which means
+        # the project is alive and being worked on, and that is the one moment
+        # asking is fair. PRODUCT is also the repository name.
         return (
             f"{PRODUCT} {running} is running; {latest} is available. "
             f"Update: pip install -U {PACKAGE} (or download the new "
-            f"installer from the releases page)."
+            f"installer from the releases page). "
+            f"Star the project: github.com/KitchenSink4AI/{PRODUCT}"
         )
     except Exception:
         return None

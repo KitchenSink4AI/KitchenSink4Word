@@ -65,7 +65,7 @@ def _check_block_movable(block: list[etree._Element]) -> None:
         ) is not None:
             raise WordMcpError(
                 "the section contains a section break; moving it would "
-                "restructure page layout — move content without the break"
+                "restructure page layout; move content without the break"
             )
         for fc in el.iter(qn("w:fldChar")):
             t = fc.get(qn("w:fldCharType"))

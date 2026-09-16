@@ -214,7 +214,7 @@ WORKFLOWS: dict[str, dict] = {
     "comment-partner": {
         "summary": (
             "PREVIEW recipe using shipped tools only: collaborate through "
-            "Word comments on an open document — poll for comments "
+            "Word comments on an open document; poll for comments "
             "addressed to the AI, fix as tracked changes, reply/resolve "
             "after saving. Live in-thread reply/resolve arrives in v2.1."
         ),
@@ -242,13 +242,13 @@ WORKFLOWS: dict[str, dict] = {
         "notes": [
             "Etiquette: act ONLY on comments addressed to the AI; leave "
             "the humans' discussion threads alone.",
-            "Every edit goes in tracked, attributed to the AI author — "
+            "Every edit goes in tracked, attributed to the AI author; "
             "the human reviews with accept/reject as usual.",
             "An ambiguous comment gets a REPLY asking for clarification, "
             "never a guessed edit.",
             "manage_comment needs the file saved (and briefly closed if "
             "Word holds the lock: com_save_document close=true, then the "
-            "user reopens) — this friction is what v2.1's live comment "
+            "user reopens); this friction is what v2.1's live comment "
             "route removes.",
         ],
     },

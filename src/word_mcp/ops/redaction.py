@@ -85,12 +85,12 @@ def _validate_targets(targets: list[dict]) -> list[tuple[str, bool]]:
             if _regex.finditer(find, ""):
                 raise WordMcpError(
                     f"regex {find!r} can match the empty string and would "
-                    "match at every position; anchor the pattern — nothing "
+                    "match at every position; anchor the pattern; nothing "
                     "was changed"
                 )
         elif not find:
             raise WordMcpError(
-                f"target {i}: empty literal find string refused — nothing "
+                f"target {i}: empty literal find string refused; nothing "
                 "was changed"
             )
         norm.append((find, use_regex))
@@ -447,7 +447,7 @@ def _not_examined(pkg: DocxPackage, excluded_parts: list[str]) -> list[dict]:
                     "class": label,
                     "parts": len(parts),
                     "reason": (
-                        "binary content — pixels/objects are never examined "
+                        "binary content; pixels/objects are never examined "
                         "or OCRed; text rendered inside is NOT redacted"
                     ),
                 }
@@ -463,7 +463,7 @@ def _not_examined(pkg: DocxPackage, excluded_parts: list[str]) -> list[dict]:
                 "class": "other binary parts",
                 "parts": len(other_binary),
                 "names": other_binary[:20],
-                "reason": "binary content — not examined",
+                "reason": "binary content, not examined",
             }
         )
     if excluded_parts:
@@ -472,7 +472,7 @@ def _not_examined(pkg: DocxPackage, excluded_parts: list[str]) -> list[dict]:
                 "class": "story parts excluded by scope",
                 "names": excluded_parts,
                 "reason": (
-                    "outside the requested scope — verification still scans "
+                    "outside the requested scope; verification still scans "
                     "them, so a secret there flips verified_clean to False"
                 ),
             }
@@ -544,7 +544,7 @@ def redact_text(
         "verified_clean": not residual,
         "parts_scanned": parts_scanned,
         "note": (
-            "text redaction only — content stored as pixels (scanned pages, "
+            "text redaction only; content stored as pixels (scanned pages, "
             "screenshots, charts rendered as images) is never examined"
         ),
     }

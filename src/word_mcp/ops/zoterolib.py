@@ -502,7 +502,7 @@ def insert_zotero_citation(
     if len(item_keys) > 1 and (page or prefix or suffix):
         raise WordMcpError(
             "page/prefix/suffix apply to a single cited item; with multiple "
-            "item_keys Zotero attaches them per item — insert one citation "
+            "item_keys Zotero attaches them per item; insert one citation "
             "per item instead"
         )
     page = str(page) if page is not None else None

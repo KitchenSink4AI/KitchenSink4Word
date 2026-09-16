@@ -155,7 +155,7 @@ def _run_bounded(name: str, timeout: float, fn):
         )
         raise WordBusy(
             f"{name} waited {timeout:.0f}s for the COM serialization lock "
-            f"({running} is still running); retry when it finishes — "
+            f"({running} is still running); retry when it finishes; "
             "com_word_status reports the running operation"
         )
     killed = _kill_invisible_for_thread(worker_tid[0] if worker_tid else None)
@@ -163,7 +163,7 @@ def _run_bounded(name: str, timeout: float, fn):
     raise WordBlocked(
         f"{name} did not finish within {timeout:.0f}s and was aborted"
         + (" (its invisible Word instance was terminated)" if killed else "")
-        + ". The document may be very large, or Word may be stuck — check "
+        + ". The document may be very large, or Word may be stuck; check "
         "com_word_status, and pass a larger timeout to raise the bound."
     )
 
@@ -294,7 +294,7 @@ def refresh_fields(path: str) -> dict:
     if state.get("protected"):
         raise WordMcpError(
             f"document is protected (edit={state.get('edit')}); Word will not "
-            "update fields under protection — remove_document_protection "
+            "update fields under protection; remove_document_protection "
             "first, refresh, then re-protect (build → refresh → protect)"
         )
     with _word() as app:
@@ -657,7 +657,7 @@ def _retry_word_call(fn, *, attempts: int = 5, first_delay: float = 0.5):
     raise WordBusy(
         f"Word refused the operation {attempts} times (file contention or "
         f"a permission error; last error: {last_exc}). Alerts were "
-        "suppressed, so no dialog is pending — wait a moment and retry, "
+        "suppressed, so no dialog is pending; wait a moment and retry, "
         "or save manually in Word."
     ) from last_exc
 
@@ -749,7 +749,7 @@ def proofing_errors(path: str, *, limit: int = 100) -> dict:
         "grammar_truncated": len(grammar) >= limit,
         "note": (
             "Word's proofing engine; includes proper nouns and citations it "
-            "does not recognize — review, do not auto-fix"
+            "does not recognize; review, do not auto-fix"
         ),
     }
 
@@ -769,7 +769,7 @@ def readability_statistics(path: str) -> dict:
         raise WordBusy(
             f"{p.name} is open in Word right now; close it first "
             "(com_save_document with close=true) or run the statistics on "
-            "a copy (copy_document) — a second invisible copy of an open "
+            "a copy (copy_document); a second invisible copy of an open "
             "document risks Word's same-name dialog cascade."
         )
     with _word() as app:

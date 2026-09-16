@@ -50,7 +50,7 @@ def import_pdf(pdf_path: str, output_path: str | None = None) -> dict:
         raise DocumentNotFound(f"no file at {pdf_path}")
     if src.suffix.lower() != ".pdf":
         raise WordMcpError(
-            f"import_pdf expects a .pdf, got {src.suffix!r} — for other "
+            f"import_pdf expects a .pdf, got {src.suffix!r}; for other "
             "formats open the file in Word manually"
         )
     # magic-byte check: Word "successfully" text-fallback-imports a renamed
@@ -58,18 +58,18 @@ def import_pdf(pdf_path: str, output_path: str | None = None) -> dict:
     with open(src, "rb") as fh:
         if fh.read(5) != b"%PDF-":
             raise WordMcpError(
-                f"{src.name} is not a PDF (missing %PDF- header) — rename "
+                f"{src.name} is not a PDF (missing %PDF- header); rename "
                 "tricks do not survive the magic-byte check"
             )
     out = Path(output_path) if output_path else src.with_suffix(".docx")
     if out.exists():
         raise WordMcpError(
-            f"output already exists: {out} — refusing to overwrite; pass a "
+            f"output already exists: {out}: refusing to overwrite; pass a "
             "different output_path or remove the file first"
         )
     if not out.parent.exists():
         raise WordMcpError(
-            f"output directory does not exist: {out.parent} — create it "
+            f"output directory does not exist: {out.parent}; create it "
             "first (Word's converter cannot)"
         )
 
@@ -96,7 +96,7 @@ def import_pdf(pdf_path: str, output_path: str | None = None) -> dict:
         raise
     except Exception as exc:
         raise WordMcpError(
-            f"Word could not convert {src.name}: {exc} — the PDF may be "
+            f"Word could not convert {src.name}: {exc}; the PDF may be "
             "encrypted, damaged, or the output location unwritable"
         ) from exc
 
@@ -123,13 +123,13 @@ def import_pdf(pdf_path: str, output_path: str | None = None) -> dict:
         "paragraphs": paragraphs,
         "note": (
             "Word's PDF reflow: fidelity depends on the PDF's internal "
-            "structure — text-based PDFs convert well; complex layouts may "
+            "structure: text-based PDFs convert well; complex layouts may "
             "reflow imperfectly and need review"
         ),
     }
     if words <= _SCANNED_PDF_WORD_FLOOR:
         result["warning"] = (
-            f"result contains little or no text (word count {words}) — the "
+            f"result contains little or no text (word count {words}); the "
             "PDF is likely a scanned image; Word's reflow does not OCR, so "
             "the page content was not recovered as text"
         )

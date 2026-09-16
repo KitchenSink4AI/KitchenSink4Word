@@ -337,7 +337,7 @@ def _resolve_position(
             for i, el in matches
         ]
         raise AmbiguousTarget(
-            f"anchor text matches {len(matches)} paragraphs — refusing to "
+            f"anchor text matches {len(matches)} paragraphs; refusing to "
             f"guess. Matches (body item indices): {locations}. Use "
             "after_index with the intended index instead."
         )
@@ -958,7 +958,7 @@ def _open_source(pkg: DocxPackage, source_path: str) -> DocxPackage:
         same = str(src.path) == str(pkg.path)
     if same:
         raise WordMcpError(
-            "source and target are the same file — refusing to insert a "
+            "source and target are the same file; refusing to insert a "
             "document into itself"
         )
     return src
@@ -1150,7 +1150,7 @@ def _transplant(
         if not src.has_part(cfg["part"]):
             raise UnsupportedStructure(
                 f"source references {kind} ids {ref_ids} but has no "
-                f"{cfg['part']} — the source document is corrupt"
+                f"{cfg['part']}; the source document is corrupt"
             )
         defs = {
             n.get(qn("w:id")): n
@@ -1160,7 +1160,7 @@ def _transplant(
         if missing:
             raise UnsupportedStructure(
                 f"source references {kind} ids {missing} that have no "
-                f"definition in {cfg['part']} — the source document is corrupt"
+                f"definition in {cfg['part']}; the source document is corrupt"
             )
         note_plan[kind] = [(i, copy.deepcopy(defs[i])) for i in ref_ids]
 
@@ -1405,7 +1405,7 @@ def _transplant(
                 if not src.has_part(child_src):
                     raise UnsupportedStructure(
                         f"source part {src_part} references missing part "
-                        f"{child_src} — the source document is corrupt; "
+                        f"{child_src}; the source document is corrupt; "
                         "nothing was inserted"
                     )
                 child_new = _copy_subtree(child_src)

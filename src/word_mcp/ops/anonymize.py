@@ -230,7 +230,7 @@ def anonymize_for_review(
     check_path(map_path, "write anonymization mapping")
     if map_path.exists():
         raise WordMcpError(
-            f"mapping file already exists: {map_path} — refusing to "
+            f"mapping file already exists: {map_path}; refusing to "
             "overwrite it (it may hold the reversal record of a previous "
             "anonymization). Move or delete it first."
         )
@@ -397,7 +397,7 @@ def anonymize_for_review(
         "mapping_path": str(map_path),
         "reference_section_found": ref_span is not None,
         "warnings": [
-            "KEEP THE MAPPING FILE PRIVATE — it re-identifies the author; "
+            "KEEP THE MAPPING FILE PRIVATE: it re-identifies the author; "
             "never upload it with the submission",
             "flagged prose was NOT edited: rewriting self-identifying "
             "sentences changes meaning and is the author's job",
@@ -406,7 +406,7 @@ def anonymize_for_review(
             []
             if ref_span is not None
             else [
-                "no References/Bibliography heading found — reference-list "
+                "no References/Bibliography heading found; reference-list "
                 "entries were not masked"
             ]
         ),
@@ -523,7 +523,7 @@ def deanonymize(pkg: DocxPackage, mapping_path: str | None = None) -> dict:
             "document has drifted since anonymization; NOTHING was restored. "
             "Mismatches: "
             + json.dumps(drift, ensure_ascii=False)[:2000]
-            + " — fix these spots manually using the mapping's recorded "
+            + "; fix these spots manually using the mapping's recorded "
             "originals, or restore from backup."
         )
 
@@ -563,7 +563,7 @@ def deanonymize(pkg: DocxPackage, mapping_path: str | None = None) -> dict:
         "restored_metadata_fields": meta_count,
         "mapping_path": str(map_path),
         "note": (
-            "mapping file left on disk — delete it once the restore is "
+            "mapping file left on disk; delete it once the restore is "
             "confirmed; it re-identifies the author"
         ),
     }

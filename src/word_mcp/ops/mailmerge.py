@@ -217,8 +217,8 @@ def fill_template(pkg: DocxPackage, data: dict, *, missing: str = "error") -> di
     if missing_names and missing == "error":
         raise WordMcpError(
             "template needs values for "
-            f"{missing_names} that data does not provide; nothing was changed "
-            "— add the keys or call with missing='skip' or 'empty'"
+            f"{missing_names} that data does not provide; nothing was changed. "
+            "Add the keys or call with missing='skip' or 'empty'"
         )
 
     def value_for(name: str) -> str | None:
@@ -387,7 +387,7 @@ def mail_merge(
                 "refusing to merge (nothing written): "
                 + "; ".join(problems[:20])
                 + ("; ..." if len(problems) > 20 else "")
-                + " — fix the data or call with missing='skip' or 'empty'"
+                + "; fix the data or call with missing='skip' or 'empty'"
             )
 
     check_path(output_dir, "mail merge output")
@@ -404,7 +404,7 @@ def mail_merge(
     if dupes:
         raise WordMcpError(
             f"filename_pattern maps multiple rows to the same file {dupes}; "
-            "nothing was written — include {row_index} or a unique column"
+            "nothing was written. Include {row_index} or a unique column"
         )
     collisions = [str(out_dir / n) for n in names if (out_dir / n).exists()]
     if collisions:
