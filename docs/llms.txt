@@ -4,7 +4,7 @@
 > grammar. stdio. Every mutation is preceded by an automatic backup and
 > committed by an atomic verified save.
 
-Release: v2.1.2
+Release: v2.1.3
 MCP registry name: io.github.nometalalchemist/kitchensink4word
 Transport: stdio.
 Platform: the file tier is cross-platform and needs no Word installation.
