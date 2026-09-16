@@ -270,15 +270,14 @@ class TestStaleLockLegs:
         info = {"pid": dead_pid, "token": "foreign", "time": time.time()}
         assert safesave._is_stale(info) is True
 
-    def test_live_foreign_pid_with_an_ancient_timestamp_is_stale(
+    def test_live_foreign_pid_with_an_ancient_timestamp_retains_ownership(
         self, sacrificial
     ):
-        """Kills lines 465 and 466: age alone must break a lock whose holder
-        is demonstrably still running."""
+        """A demonstrably live holder must not lose ownership due to age."""
         _proc, pid = sacrificial
         info = {"pid": pid, "token": "foreign",
                 "time": time.time() - (10 * 60) - 60}
-        assert safesave._is_stale(info) is True
+        assert safesave._is_stale(info) is False
 
     def test_live_foreign_pid_with_a_fresh_timestamp_is_not_stale(
         self, sacrificial
@@ -648,13 +647,13 @@ class TestMeasuredBoundaries:
         info = {"pid": pid, "token": "foreign", "time": now - 600.0}
         assert safesave._is_stale(info) is False
 
-    def test_a_lock_just_past_the_stale_boundary_is_stale(self, monkeypatch,
+    def test_a_lock_just_past_the_stale_boundary_retains_ownership(self, monkeypatch,
                                                           sacrificial):
         _proc, pid = sacrificial
         now = 1_700_000_000.0
         monkeypatch.setattr(safesave, "time", _FrozenClock(now))
         info = {"pid": pid, "token": "foreign", "time": now - 600.5}
-        assert safesave._is_stale(info) is True
+        assert safesave._is_stale(info) is False
 
     def test_anchor_idle_seconds_is_one_hour(self):
         assert safesave.ANCHOR_IDLE_SECONDS == 3600
@@ -1122,11 +1121,11 @@ class TestMarkDirtyOrdering:
 
 
 class TestXprocStaleness:
-    def test_an_abandoned_lock_ages_out(self, sacrificial):
+    def test_an_old_live_lock_retains_ownership(self, sacrificial):
         _proc, pid = sacrificial
         info = {"pid": pid, "token": "foreign",
                 "time": time.time() - (10 * 60) - 60}
-        assert xproc._is_stale(info) is True
+        assert xproc._is_stale(info) is False
 
     def test_a_working_holder_is_not_aged_out(self, sacrificial):
         _proc, pid = sacrificial

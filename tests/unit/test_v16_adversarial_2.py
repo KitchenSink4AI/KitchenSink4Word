@@ -32,9 +32,9 @@ from pathlib import Path
 import pytest
 from lxml import etree
 
-pytestmark = pytest.mark.skipif(
+pytestmark = [pytest.mark.live, pytest.mark.skipif(
     sys.platform != "win32", reason="COM tests require Windows + Word"
-)
+)]
 
 
 def _word_registration():

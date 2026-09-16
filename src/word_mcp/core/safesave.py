@@ -28,8 +28,9 @@ Write serialization (fixes the parallel read-modify-save race):
   normcase(realpath(path)).
 - Cross-process: an advisory lockfile inside the document's slot folder
   carrying PID, a per-process-instance token, the holder's process creation
-  time, and a timestamp. Stale locks (dead PID, recycled PID, or older than
-  LOCK_STALE_SECONDS) are broken; otherwise acquisition waits up to
+  time, host, and a timestamp. Same-host locks with dead or recycled PIDs
+  are broken; age never revokes live ownership. Named foreign-host locks
+  are never reclaimed locally. Otherwise acquisition waits up to
   LOCK_WAIT_SECONDS and then refuses with MutationLockTimeout naming the
   holder. Two server processes on one machine is the normal case.
 
@@ -51,6 +52,7 @@ import hashlib
 import json
 import os
 import shutil
+import socket
 import sys
 import threading
 import time
@@ -80,8 +82,8 @@ ANCHOR_IDLE_SECONDS = 60 * 60
 LOCK_FILE_NAME = "write.lock"
 #: How long an acquirer waits for a live holder before refusing.
 LOCK_WAIT_SECONDS = 10.0
-#: A lockfile older than this is broken regardless of PID liveness
-#: (generous: no single mutation legitimately holds the lock this long).
+#: Deprecated compatibility constant, unused; elapsed time never overrides live ownership.
+#: Retained for integrations which import it; waiters use LOCK_WAIT_SECONDS.
 LOCK_STALE_SECONDS = 10 * 60
 
 #: Slot folder names longer than this are truncated + hash-suffixed
@@ -411,7 +413,7 @@ def _publish_lockfile(lock_path: Path) -> bool:
         "token": _OWNER_TOKEN,
         "pid_created": _OWNER_CREATED,
         "time": time.time(),
-        "host": os.environ.get("COMPUTERNAME", ""),
+        "host": _local_host(),
     })
     tmp = lock_path.parent / f".lock-{uuid.uuid4().hex}.tmp"
     try:
@@ -443,8 +445,20 @@ def _publish_lockfile(lock_path: Path) -> bool:
             pass
 
 
+def _local_host() -> str:
+    return os.environ.get("COMPUTERNAME") or socket.gethostname()
+
+
+def _foreign_host(info: dict) -> bool:
+    # Legacy payloads without host metadata retain same-machine behavior.
+    # A named remote host cannot be assessed using this machine's PID table.
+    host = info.get("host")
+    return bool(host) and (not isinstance(host, str)
+                           or host.casefold() != _local_host().casefold())
+
+
 def _is_ours(info: dict) -> bool:
-    return info.get("token") == _OWNER_TOKEN
+    return not _foreign_host(info) and info.get("token") == _OWNER_TOKEN
 
 
 def _break_lock(lock_path: Path) -> None:
@@ -457,13 +471,13 @@ def _break_lock(lock_path: Path) -> None:
 def _is_stale(info: dict) -> bool:
     """A lock nobody can still be holding. Callers must rule out _is_ours
     first, so our own PID reaching here means the number was recycled."""
+    if _foreign_host(info):
+        return False  # Wait/refuse; only the remote host can establish liveness.
     pid = info.get("pid", -1)
-    stamp = info.get("time", 0.0)
-    age = time.time() - stamp if isinstance(stamp, (int, float)) else None
     if not isinstance(pid, int) or not _pid_alive(pid):
         return True
-    if age is None or age > LOCK_STALE_SECONDS:
-        return True
+    # A slow live holder retains ownership regardless of elapsed time.
+    # Timeout the waiter; never admit a second writer based on age alone.
     if pid == os.getpid():
         # Our own PID under a foreign token: the number was recycled and the
         # writer that held this lock is gone.
