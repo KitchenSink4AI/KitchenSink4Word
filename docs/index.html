@@ -429,6 +429,36 @@ footer .row>span{min-width:0;overflow-wrap:anywhere}
 @supports (color:color-mix(in srgb,red 50%,blue)){
   .edition-badge{--edition-fill:color-mix(in srgb,var(--edition-accent) 80%,var(--ink))}
 }
+/* The Community editions banner, the same tab the storefront carries, cut in
+   this page's own finish. It sits above the hero so the edition is read before
+   the name. --banner-accent walks the same fallback chain as .edition-badge, so
+   one block serves four palettes; --banner-ink is that accent deepened 70/30
+   toward the page ink, which is what carries the small type past WCAG AA on
+   both grounds it prints on, the banner's paper-deep and the sub-line's paper. */
+.ed-banner{--banner-accent:var(--copper,var(--brass,var(--patina,var(--ink))));
+  --banner-ink:var(--banner-accent);
+  position:relative;margin:26px 0 0;padding:30px 26px 26px;
+  border:3px solid var(--ink);background:var(--paper-deep);box-shadow:var(--shadow);
+  text-align:center;min-width:0}
+.ed-banner:before{content:"";position:absolute;left:0;right:0;top:0;height:10px;
+  background:repeating-linear-gradient(90deg,var(--ink) 0 22px,var(--paper-deep) 22px 44px)}
+.ed-banner-title{font-family:'Fraunces',Georgia,serif;
+  font-size:clamp(23px,3.6vw,38px);font-weight:800;line-height:1.15;letter-spacing:-.01em;
+  margin:0;color:var(--ink);overflow-wrap:anywhere;text-wrap:balance}
+.ed-banner-sub{display:table;margin:15px auto 0;padding:6px 16px;
+  border:2px solid var(--banner-ink);color:var(--banner-ink);background:var(--paper);
+  font-family:'IBM Plex Mono',ui-monospace,monospace;
+  font-size:11px;letter-spacing:.18em;text-transform:uppercase;line-height:1.7;
+  max-width:100%;overflow-wrap:anywhere}
+.ed-banner-cta{margin:14px 0 0;font-size:12px;line-height:1.6}
+.ed-banner-cta a{color:var(--banner-ink);font-weight:700;text-decoration:none;
+  border-bottom:2px solid var(--banner-ink);padding-bottom:2px;
+  display:inline-block;max-width:100%;overflow-wrap:anywhere}
+.ed-banner-cta a:hover{color:var(--ink);border-bottom-color:var(--ink)}
+@supports (color:color-mix(in srgb,red 50%,blue)){
+  .ed-banner{--banner-ink:color-mix(in srgb,var(--banner-accent) 70%,var(--ink))}
+}
+@media(max-width:560px){.ed-banner{padding:26px 16px 22px}.ed-banner-sub{letter-spacing:.1em}}
 .platform-label,.hero .platform-label{display:table;margin:16px auto 10px;padding:8px 15px;border:2px solid var(--ink);background:var(--paper-deep);color:var(--ink);font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:700;letter-spacing:.04em;line-height:1.5;max-width:100%}
 .platform-hero-note,.hero .platform-hero-note{font-family:inherit;font-size:12px;line-height:1.6;margin:8px auto 18px;max-width:640px}
 
@@ -460,7 +490,7 @@ footer .row>span{min-width:0;overflow-wrap:anywhere}
 <div class="wrap masthead rev d1">
   <span data-i18n="m.left"><b>EST. 2026</b> · FINE INSTRUMENTS FOR DOCUMENT PLUMBING</span>
   <nav class="lang-toggle" id="langToggle" aria-label="Language"></nav>
-  <span><span data-i18n="m.catalog">CATALOG № 221</span> · <a href="https://kitchensink4.ai/products/community/" data-i18n="m.family">FAMILY</a> · <a href="https://kitchensink4.ai/products/business/">BUSINESS EDITION</a> · <a href="#service" data-i18n="m.service">SERVICE</a> · <a href="https://kitchensink4.ai/corporate/" data-i18n="m.company">COMPANY</a> · <a href="https://github.com/KitchenSink4AI/KitchenSink4Word">GITHUB</a> · <a href="https://pypi.org/project/kitchensink4word/">PYPI</a> · <a href="llms.txt">LLMS.TXT</a></span>
+  <span><span data-i18n="m.catalog">CATALOG № 221</span> · <a href="https://kitchensink4.ai/products/community/" data-i18n="m.family">FAMILY</a> · <a href="#service" data-i18n="m.service">SERVICE</a> · <a href="https://kitchensink4.ai/corporate/" data-i18n="m.company">COMPANY</a> · <a href="https://github.com/KitchenSink4AI/KitchenSink4Word">GITHUB</a> · <a href="https://pypi.org/project/kitchensink4word/">PYPI</a> · <a href="llms.txt">LLMS.TXT</a></span>
 </div>
 
 <div class="switchbar">
@@ -470,6 +500,14 @@ footer .row>span{min-width:0;overflow-wrap:anywhere}
   <a href="https://kitchensink4.ai/KitchenSink4XL/">🔌 KitchenSink4XL</a>
   <a href="https://kitchensink4.ai/KitchenSink4Web/">🪴 KitchenSink4Web</a>
   <a href="https://kitchensink4.ai/products/community/">🏪 <span data-i18n="sw.store">The storefront</span></a>
+</div>
+
+<div class="wrap">
+  <div class="ed-banner rev d1" role="note">
+    <p class="ed-banner-title">The Community editions</p>
+    <p class="ed-banner-sub">Free and open source under the AGPL</p>
+    <p class="ed-banner-cta"><a href="https://kitchensink4.ai/products/business/">Business edition</a></p>
+  </div>
 </div>
 
 <header class="hero wrap">
