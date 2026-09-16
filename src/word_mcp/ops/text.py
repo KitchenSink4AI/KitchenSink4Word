@@ -120,7 +120,7 @@ def search_and_replace(
             raise WordMcpError(
                 f"would make {projected} replacements, over the "
                 f"max_replacements guard of {max_replacements}; nothing was "
-                "changed — narrow the pattern or raise the limit"
+                "changed. Narrow the pattern or raise the limit"
             )
     for part in _replace_parts(pkg, scope):
         dirty = False
@@ -230,7 +230,7 @@ def _resolve_anchor(pkg: DocxPackage, anchor_text: str) -> etree._Element:
         msg = f"anchor text not found: {anchor_text!r}"
         if re.search(r"&amp;|&lt;|&gt;", anchor_text):
             msg += (
-                " — note: anchors match the paragraph's PLAIN text, not its "
+                ". Note: anchors match the paragraph's PLAIN text, not its "
                 "XML; write XML entities as the literal character "
                 "('&' not '&amp;', '<' not '&lt;', '>' not '&gt;')"
             )
@@ -483,7 +483,7 @@ def _expect_guard(el, index: int, expect: str | None) -> None:
             f"expected text {expect[:80]!r}; its current text begins: "
             f"{current[:120]!r}. Paragraph indices shift after "
             "insert/delete operations, including ones made by another "
-            "agent or by the user in Word — re-read with get_text and "
+            "agent or by the user in Word; re-read with get_text and "
             "retry. Nothing was changed."
         )
 
@@ -567,7 +567,7 @@ def delete_paragraphs(
     if depth != 0:
         raise WordMcpError(
             "the paragraph range cuts through a field (TOC, PAGEREF, SEQ...); "
-            "deleting it would corrupt the document — widen the range to cover "
+            "deleting it would corrupt the document; widen the range to cover "
             "the whole field or use delete_toc for TOCs"
         )
     for el in targets:
@@ -575,7 +575,7 @@ def delete_paragraphs(
         if el.find(f"{qn('w:pPr')}/{qn('w:sectPr')}") is not None:
             raise WordMcpError(
                 f"paragraph {start + targets.index(el)} carries a section break; "
-                "delete_paragraphs refuses it — remove the section first"
+                "delete_paragraphs refuses it; remove the section first"
             )
         body.remove(el)
     if deletes_all:

@@ -68,7 +68,7 @@ def _latex_to_omath(latex: str, *, display: bool) -> etree._Element:
     if _banned:
         raise WordMcpError(
             f"\\{_banned.group(1)} is a file/preamble macro, not equation "
-            "content; remove it — only math-mode LaTeX converts"
+            "content; remove it; only math-mode LaTeX converts"
         )
     fixed = _rewrite_aligned(latex)
     try:

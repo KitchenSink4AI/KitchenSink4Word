@@ -1,6 +1,10 @@
 <!-- mcp-name: io.github.nometalalchemist/kitchensink4word -->
+<!-- The line above verifies the name server.json declares today. The line below
+     is the org namespace the next version bump moves to; both may sit here, because
+     the registry looks for the one string that matches server.json. -->
+<!-- mcp-name: io.github.KitchenSink4AI/kitchensink4word -->
 
-# 🚰 KitchenSink4Word
+# 🚰 KitchenSink4Word Community Edition
 
 [![Tests](https://github.com/KitchenSink4AI/KitchenSink4Word/actions/workflows/tests.yml/badge.svg)](https://github.com/KitchenSink4AI/KitchenSink4Word/actions/workflows/tests.yml)
 [![PyPI](https://img.shields.io/pypi/v/kitchensink4word)](https://pypi.org/project/kitchensink4word/)
@@ -9,134 +13,71 @@
 
 [Landing page](https://kitchensink4.ai/KitchenSink4Word/) · [llms.txt](https://kitchensink4.ai/KitchenSink4Word/llms.txt) (machine-readable capability manifest for agents and LLM crawlers)
 
-The most complete Word (.docx) MCP server available: 221 document operations
-across 110 tools. Live editing of open documents, tracked changes, citations
-and bibliography with Zotero, equations, document assembly, mail merge,
-tables, footnotes, TOC, redaction, accessibility audits, charts, document
-compare and merge, and PDF import and export. Works with Claude Code, Claude
-Desktop, Cursor, and any MCP client. Part of the KitchenSink4AI suite with
-kitchensink4xl (Excel), kitchensink4ppt (PowerPoint), and kitchensink4web
-(browser).
+**Edit Word documents with your AI assistant: tracked changes, citations, templates and live edits in Word.**
 
-**Everything plus the kitchen sink for Microsoft Word.** One consistent
-grammar, engineered not to corrupt and stress-tested against long, heavily
-formatted real-world documents. Live editing included: documents open in
-Word are edited in place, visibly, with each tool call landing as a single
-Ctrl+Z step.
+Edit real Word documents from Claude Code, Codex CLI, Copilot CLI or any other MCP client that runs local tools. KitchenSink4Word connects your assistant to .docx files on Windows, and can edit a document while it is open in Microsoft Word so you see the changes land. Files are processed on your computer; the only thing that leaves it is what your AI app sends to its own provider. The Community edition is free under the AGPL. The Business edition adds a Windows installer, a signed update channel, a license your company can approve and support.
 
-> ### ⚠️ v2.0 is a breaking change
-> Every v1.x tool name changed. The 189-tool v1.6 surface was rebuilt as a
-> consolidated set of 110 tools that cover every prior capability under one
-> grammar. If you are upgrading from v1.x, read the
-> **[migration guide](docs/MIGRATION_V2.md)** first: it maps every old tool
-> name to its v2 home, and `get_workflows("migrate-from-v1")` returns the
-> same map in-session. New installs need nothing extra.
+**Works on:** Windows. File editing works without Microsoft Word; live editing and the Word-powered features need Word installed.
 
-New here? Start with the [Quickstart](docs/QUICKSTART.md).
+## Install
 
-## Two numbers that matter
+Pick the route for your AI app. The commands go in PowerShell on Windows or a terminal on macOS and Linux, not into an AI chat. The package routes need Python 3.12 or newer.
 
-- **221 document operations, 110 tools.** The operation count went up and the
-  tool count came down on purpose. v1 spread similar jobs across many
-  competing names; v2 gives each concept exactly one name built from a small
-  verb table (`insert_`, `set_`, `manage_`, `list_elements`, `validate`,
-  `delete_element`), so an agent picks the right tool the first time and
-  carries less schema to do it. Fewer tools, more reach. Measured with one
-  yardstick on both trees, v1.6 performed 200 operations across its 189
-  tools and v2.0 performs 221 across 110: every v1.6 capability survived the
-  consolidation (the migration map covers all 189, test-guarded) and v2 adds
-  the anchored batch editor, the anchored document view, deletion parity,
-  and wider dispatch on the multiplexers. Both figures come from
-  `scripts/count_operations.py`; the v1.6 run is
-  `scripts/count_operations_v16.py`, which measures a v1.6 checkout with the
-  same definition.
-- **Tiered loading: starts at about 8.0k tokens, scales to everything.** A
-  fresh session loads the 29-tool lite core (about 8,000 tokens) and turns on
-  capability packs only when a task needs them, with one `enable_tools` call.
-  Load every pack and the full surface measures about 27,800 tokens, down from
-  about 34,400 in v1.6: roughly 23% less for the whole sink, about 78% less at
-  lite start. (All figures are script-measured; see
-  [Context cost](#context-cost-measured) below.)
+**Claude Desktop**
 
-## The packs
+Install [uv](https://docs.astral.sh/uv/getting-started/installation/), then quit and reopen Claude Desktop. Download the `.mcpb` file from [KitchenSink4Word releases](https://github.com/KitchenSink4AI/KitchenSink4Word/releases/latest). In Claude Desktop open Settings, then Extensions, then Advanced settings, then Install extension, and choose the file. The bundle fetches the Python package the first time it starts, so the first launch needs a network connection. Restart your session and check that the tools show as connected.
 
-Numbers below come straight from `scripts/measure_surface.py`, never
-hand-counted. The lite core loads at startup; the seven packs load on demand.
+**Claude Code or Codex CLI**
 
-| Pack | Tools | Approx tokens | What it carries |
-|---|---:|---:|---|
-| **lite** (startup) | 29 | ~8.0k | Everyday reading and editing: text, paragraphs, tables, cells, lists, find and replace, outline, document view, backups, workflow guide, server info, pack toggles |
-| references | 8 | ~2.4k | Word-native citations and bibliography, Zotero search and cite, parity checks, style conversion and detection |
-| review | 9 | ~1.8k | Tracked changes (read, accept/reject, reports), threaded comments, structured diff, anonymize and deanonymize |
-| academic | 24 | ~6.0k | Footnotes and endnotes, TOC, index, captions, cross-references, front matter, chapter headers, sections, styles, list numbering, word counts, validation batteries, submission prep, accessibility |
-| assembly | 7 | ~1.7k | Insert and split documents, move sections, copy tables across files, apply and fill templates, mail merge |
-| media-forms | 16 | ~4.6k | Images, charts, equations, text boxes, hyperlinks, table structure and styling, form fields, content controls, field codes |
-| com-live | 13 | ~2.2k | Drives a local Microsoft Word: PDF import/export, compare and combine, proofing, readability, field refresh, live editing of open documents |
-| protection-io | 6 | ~1.2k | Document protection, watermarks, redaction with verification, table data import and export |
-| **Full surface** | **112** | **~27.8k** | Everything (110 document tools plus `enable_tools` / `disable_tools`) |
+Install uv, then run the line for your app and restart your session:
 
-## Quickstart: start lite, enable what you need
-
-A session begins with the lite core. When a task needs more, the agent turns
-on the pack by name:
-
-```
-enable_tools(["references"])          # citations, bibliography, Zotero
-enable_tools(["academic", "review"])  # notes, TOC, tracked changes, comments
+```sh
+claude mcp add word -s user -- uvx kitchensink4word
 ```
 
-Lite-tool refusals name the pack and the exact `enable_tools` call to run, and
-`get_workflows` recipes name the packs each workflow needs, so discovery is
-built in. To skip tiering entirely, start the server with `KS4W_MODE=full` and
-every tool is present from the first call.
+```sh
+codex mcp add word -- uvx kitchensink4word
+```
 
-Installed from the `.mcpb` bundle, the same two choices are checkboxes in the
-server's Claude Desktop settings: "Load every tool at startup" and "Lock the
-tool set at startup" (which fixes the surface so `enable_tools` refuses).
-They write `KS4W_ALL_TOOLS` and `KS4W_LOCK_TOOLS`. Both take `true` or
-`false`, treat empty as off, and refuse to start on anything else rather than
-guessing. `KS4W_MODE` beats the first and `KS4W_PACK_POLICY` beats the second
-whenever they are set, so a pinned pack list survives an install, and the
-server writes one line to stderr at startup naming what decided the surface.
+**Any other local MCP client**
 
-One tip that removes most permission pop-ups: In Claude Desktop's Tool
-permissions for this server, set the Read-only tools group to Always Allow.
-Those tools cannot change anything, so approving them once is safe, and Claude
-stops asking about every read. Leave the acting tools on Ask, so anything that
-changes things still checks with you first.
+Use `uvx` as the command and `kitchensink4word` as its argument, or install the package and use `kitchensink4word` as the server command:
 
-One client-side caveat: some MCP clients drop a tool's schema when a pack is
-disabled and do not pick it back up on re-enable, even though the server sends
-`tools/list_changed` both ways (observed in Claude Code, 2026-09). If a
-re-enabled tool comes back as "no such tool", refresh the tool list on the
-client side (in Claude Code, a `ToolSearch` call for the tool reloads its
-schema).
+```sh
+pip install kitchensink4word
+```
 
-## Why this one (the capability comparison)
+Then follow your client's guide for adding a local MCP server. Installing the package on its own does not connect it to an AI app.
 
-Every public Word MCP server was surveyed before building this. The honest
-comparison is about what each one can do, not how many names it has:
+**Business edition**
 
-| Capability | KitchenSink4Word | GongRzhe Office-Word (2.1k★, archived) | word-mcp-live (195★) | SecurityRonin docx-mcp (43★) |
-|---|---|---|---|---|
-| Tiered context loading (lite core, packs on demand) | ✅ from ~8.0k tokens | ❌ | ❌ | ❌ |
-| Live editing while the doc is open in Word | ✅ cursor-safe, one Ctrl+Z per call | ❌ | ✅ | ❌ |
-| Table column insert/delete | ✅ merge-aware | ❌ | ❌ | ❌ |
-| Bulk cell edits (one call) | ✅ | ❌ | ❌ | ❌ |
-| Cell merge/unmerge | ✅ | merge only | ❌ | ❌ |
-| Footnotes AND endnotes CRUD | ✅ + conversion | add only | ❌ | ✅ |
-| TOC insert + refresh | ✅ | ❌ | ❌ | ❌ |
-| Native citations/bibliography | ✅ 12 styles | ❌ | ❌ | ❌ |
-| Index generation | ✅ | ❌ | ❌ | ❌ |
-| Tracked-change WRITING | ✅ | ❌ | ✅ | ✅ |
-| Accept/reject by author | ✅ | ❌ | partial | ✅ |
-| Document compare + combine | ✅ Word-native | ❌ | ❌ | buggy |
-| Watermarks / protection / line numbers | ✅ | protect only | ❌ | ❌ |
-| Section moving / template transfer | ✅ | ❌ | ❌ | ❌ |
-| Atomic saves + auto-backup | ✅ | ❌ | ❌ | ❌ |
+Compare the editions on the [pricing page](https://kitchensink4.ai/pricing/). Already purchased? Your Windows installer and download link are in your [license portal](https://get.kitchensink4.ai/my-license/).
 
-Capability survey compiled from public repositories, documentation, and issue
-trackers. Corrections welcome: [open an issue](https://github.com/KitchenSink4AI/KitchenSink4Word/issues).
+## What it can do
+
+110 document tools, plus the pack on/off controls.
+
+- Revise a report while it stays open in Word, with edits you can watch.
+- Read, accept and reject tracked changes, and work through reviewer comments.
+- Fill a template or assemble chapters into one manuscript.
+- Build and format tables, lists, headings and page layouts.
+- Insert citations, bibliographies, footnotes and cross-references.
+- Find formatting, accessibility and structure problems before handoff.
+- Compare documents, prepare mail merges and redact selected text.
+- Import or export PDF through Word when it is installed.
+
+What is available depends on the packs you enable and the applications installed. The full tool reference is below.
+
+## Business edition
+
+Need a license your company can approve and a setup someone supports? The Business edition pairs these tools with a Windows installer, a signed update channel and support under the Business terms. Update checks tell you when a covered release is available; nothing installs on its own. Compare the options on the [pricing page](https://kitchensink4.ai/pricing/). The Community edition stays free under the AGPL, including business use that meets its terms.
+
+## Privacy Policy
+
+The tools run on your computer, and KitchenSink4AI receives no documents and no usage data from them. Your AI app may send prompts, file contents and tool results to its own provider under that app's settings and terms. Installing downloads packages, and the Community version check contacts PyPI unless you disable it; those requests carry connection details such as your network address and never your documents. Cloud folders and backups follow their own settings. The [Privacy Policy](https://kitchensink4.ai/privacy/) covers the product, purchases and support records.
+
+Not affiliated with, endorsed by, or sponsored by Microsoft Corporation.
+Microsoft and Word are trademarks of the Microsoft group of companies.
 
 ## What the 221 operations cover
 
@@ -176,68 +117,131 @@ validation on Windows.
   split runs while preserving per-character formatting, with a ReDoS timeout
   guard on user regex and an optional blast-radius limit.
 
-## Requirements
+## Why this one (the capability comparison)
 
-- Windows (COM tools require Microsoft Word installed; all other tools are
-  pure file manipulation and work without Word)
-- Python 3.12+ (developed on 3.14)
+Every public Word MCP server was surveyed before building this. The honest
+comparison is about what each one can do, not how many names it has:
 
-## Install
+| Capability | KitchenSink4Word | GongRzhe Office-Word (2.1k★, archived) | word-mcp-live (195★) | SecurityRonin docx-mcp (43★) |
+|---|---|---|---|---|
+| Tiered context loading (lite core, packs on demand) | ✅ from ~9.9k tokens | ❌ | ❌ | ❌ |
+| Live editing while the doc is open in Word | ✅ cursor-safe, one Ctrl+Z per call | ❌ | ✅ | ❌ |
+| Table column insert/delete | ✅ merge-aware | ❌ | ❌ | ❌ |
+| Bulk cell edits (one call) | ✅ | ❌ | ❌ | ❌ |
+| Cell merge/unmerge | ✅ | merge only | ❌ | ❌ |
+| Footnotes AND endnotes CRUD | ✅ + conversion | add only | ❌ | ✅ |
+| TOC insert + refresh | ✅ | ❌ | ❌ | ❌ |
+| Native citations/bibliography | ✅ 12 styles | ❌ | ❌ | ❌ |
+| Index generation | ✅ | ❌ | ❌ | ❌ |
+| Tracked-change WRITING | ✅ | ❌ | ✅ | ✅ |
+| Accept/reject by author | ✅ | ❌ | partial | ✅ |
+| Document compare + combine | ✅ Word-native | ❌ | ❌ | buggy |
+| Watermarks / protection / line numbers | ✅ | protect only | ❌ | ❌ |
+| Section moving / template transfer | ✅ | ❌ | ❌ | ❌ |
+| Atomic saves + auto-backup | ✅ | ❌ | ❌ | ❌ |
 
-### Claude Desktop: one click
+Capability survey compiled from public repositories, documentation, and issue
+trackers. Corrections welcome: [open an issue](https://github.com/KitchenSink4AI/KitchenSink4Word/issues).
 
-Download `kitchensink4word.mcpb` from the
-[latest release](https://github.com/KitchenSink4AI/KitchenSink4Word/releases/latest)
-and double-click it, or drag it into the Claude Desktop window. Desktop adds
-it as an extension and the sink is connected. Nothing to type, nothing to
-configure. The bundle launches the server with
-[uv](https://docs.astral.sh/uv/), so uv needs to be on your PATH
-(`pip install uv`); if Desktop does not pick the file up on a double-click,
-use Settings > Extensions > Advanced settings > Install extension.
+## The packs
 
-### Claude Code: one line
+Numbers below come straight from `scripts/measure_surface.py`, never
+hand-counted, and every one counts the whole `tools/list` entry a client
+receives rather than the description and schema alone. The lite core loads at
+startup; the seven packs load on demand.
+
+| Pack | Tools | Approx tokens | What it carries |
+|---|---:|---:|---|
+| **lite** (startup) | 29 | ~9.9k | Everyday reading and editing: text, paragraphs, tables, cells, lists, find and replace, outline, document view, backups, workflow guide, server info, pack toggles |
+| references | 8 | ~2.9k | Word-native citations and bibliography, Zotero search and cite, parity checks, style conversion and detection |
+| review | 9 | ~2.4k | Tracked changes (read, accept/reject, reports), threaded comments, structured diff, anonymize and deanonymize |
+| academic | 24 | ~7.6k | Footnotes and endnotes, TOC, index, captions, cross-references, front matter, chapter headers, sections, styles, list numbering, word counts, validation batteries, submission prep, accessibility |
+| assembly | 7 | ~2.1k | Insert and split documents, move sections, copy tables across files, apply and fill templates, mail merge |
+| media-forms | 16 | ~5.6k | Images, charts, equations, text boxes, hyperlinks, table structure and styling, form fields, content controls, field codes |
+| com-live | 13 | ~3.1k | Drives a local Microsoft Word: PDF import/export, compare and combine, proofing, readability, field refresh, live editing of open documents |
+| protection-io | 6 | ~1.6k | Document protection, watermarks, redaction with verification, table data import and export |
+| **Full surface** | **112** | **~35.2k** | Everything (110 document tools plus `enable_tools` / `disable_tools`) |
+
+## Quickstart: start lite, enable what you need
+
+A session begins with the lite core. When a task needs more, the agent turns
+on the pack by name:
 
 ```
-claude mcp add word -s user -- uvx kitchensink4word
+enable_tools(["references"])          # citations, bibliography, Zotero
+enable_tools(["academic", "review"])  # notes, TOC, tracked changes, comments
 ```
 
-That fetches and runs the server for you, so there is nothing to install
-first.
+Lite-tool refusals name the pack and the exact `enable_tools` call to run, and
+`get_workflows` recipes name the packs each workflow needs, so discovery is
+built in. To skip tiering entirely, start the server with `KS4W_MODE=full` and
+every tool is present from the first call.
 
-### For developers: pip, source, other MCP clients
+Installed from the `.mcpb` bundle, the same two choices are checkboxes in the
+server's Claude Desktop settings: "Load every tool at startup" and "Lock the
+tool set at startup" (which fixes the surface so `enable_tools` refuses).
+They write `KS4W_ALL_TOOLS` and `KS4W_LOCK_TOOLS`. Both take `true` or
+`false`, treat empty as off, and refuse to start on anything else rather than
+guessing. `KS4W_MODE` beats the first and `KS4W_PACK_POLICY` beats the second
+whenever they are set, so a pinned pack list survives an install, and the
+server writes one line to stderr at startup naming what decided the surface.
 
-Install the package and point any MCP client at the executable:
+One tip that removes most permission pop-ups: In Claude Desktop's Tool
+permissions for this server, set the Read-only tools group to Always Allow.
+Those tools cannot change anything, so approving them once is safe, and Claude
+stops asking about every read. Leave the acting tools on Ask, so anything that
+changes things still checks with you first.
 
-```
-pip install kitchensink4word
-```
+One client-side caveat: some MCP clients drop a tool's schema when a pack is
+disabled and do not pick it back up on re-enable, even though the server sends
+`tools/list_changed` both ways (observed in Claude Code, 2026-09). If a
+re-enabled tool comes back as "no such tool", refresh the tool list on the
+client side (in Claude Code, a `ToolSearch` call for the tool reloads its
+schema).
 
-```json
-{"mcpServers": {"word": {"command": "kitchensink4word"}}}
-```
+## Two numbers that matter
 
-The `word-mcp` executable is an equivalent entry point. From a clone:
-
-```
-git clone https://github.com/KitchenSink4AI/KitchenSink4Word
-cd KitchenSink4Word
-python -m venv .venv
-.venv\Scripts\pip install -e .
-claude mcp add word -s user -- <absolute-path>\.venv\Scripts\word-mcp.exe
-```
+- **221 document operations, 110 tools.** The operation count went up and the
+  tool count came down on purpose. v1 spread similar jobs across many
+  competing names; v2 gives each concept exactly one name built from a small
+  verb table (`insert_`, `set_`, `manage_`, `list_elements`, `validate`,
+  `delete_element`), so an agent picks the right tool the first time and
+  carries less schema to do it. Fewer tools, more reach. Measured with one
+  yardstick on both trees, v1.6 performed 200 operations across its 189
+  tools and v2.0 performs 221 across 110: every v1.6 capability survived the
+  consolidation (the migration map covers all 189, test-guarded) and v2 adds
+  the anchored batch editor, the anchored document view, deletion parity,
+  and wider dispatch on the multiplexers. Both figures come from
+  `scripts/count_operations.py`; the v1.6 run is
+  `scripts/count_operations_v16.py`, which measures a v1.6 checkout with the
+  same definition.
+- **Tiered loading: starts at about 9.9k tokens, scales to everything.** A
+  fresh session loads the 29-tool lite core (about 9,900 tokens) and turns on
+  capability packs only when a task needs them, with one `enable_tools` call.
+  Load every pack and the full surface measures about 35,200 tokens, so a
+  session that never leaves lite carries roughly a quarter of the whole sink.
+  (All figures are script-measured and count what the client actually
+  receives; see [Context cost](#context-cost-measured) below.)
 
 ## Context cost (measured)
 
 Almost no MCP server tells you what it costs to load. Here is the bill, from
 `scripts/measure_surface.py`:
 
-- **Lite start:** 29 tools, about 8,000 tokens, loaded when the session opens.
+- **Lite start:** 29 tools, about 9,900 tokens, loaded when the session opens.
 - **Full surface:** 112 tools (110 document tools plus the two pack toggles),
-  about 27,800 tokens with every pack enabled.
-- **Versus v1.6:** the old full surface was about 34,400 tokens. v2 is roughly
-  23% smaller at full load and about 78% smaller at lite start.
+  about 35,200 tokens with every pack enabled.
 - Clients that defer tool schemas until first use (for example Claude Code)
   pay close to zero until a tool is actually called.
+
+Both figures count the entire `tools/list` entry the client receives: name,
+title, description, input and output schemas, annotations and metadata. The
+estimator used to sum description and input schema only, which published a
+number about a quarter below what crosses the wire, and a server whose pitch
+is that it tells you what it costs does not get to publish the flattering
+subset. The v1.6 comparison this section used to carry was taken on that
+older yardstick, so it is gone rather than restated: no v1.6 measurement
+exists on this one.
 
 ## Safety model
 
@@ -343,6 +347,7 @@ text-reference scan inside `validate(checks=["cross_references"])`. Each
 returns an explicit list of what it could not confidently handle.
 
 <!-- LIVE_MATRIX:START (generated by scripts/generate_live_matrix.py) -->
+
 ## Live-mode capability matrix
 
 Which tools work on a document that is OPEN in Word. Dual-mode tools auto-route (`live='auto'`); everything else refuses with `DOCUMENT_LOCKED` until the file is closed. Every COM call is **serialized server-side** (one call reaches Word at a time, across separate server processes as well as threads in one), so concurrent agents queue instead of corrupting; live edits stay unsaved until `com_save_document` (the Option C model: see `get_workflows(task='live-editing')`).
@@ -382,6 +387,15 @@ The remaining 63 writers and 14 readers are file-only: they refuse while the doc
   author honestly.
 - TOC and caption-list page numbers require a field update: automatic on next
   Word open, or immediate via `com_refresh_fields`.
+
+## Upgrading from v1.x
+
+Every v1.x tool name changed. The 189-tool v1.6 surface was rebuilt as a
+consolidated set of 110 tools that cover every prior capability under one
+grammar. If you are upgrading from v1.x, read the
+**[migration guide](docs/MIGRATION_V2.md)** first: it maps every old tool
+name to its v2 home, and `get_workflows("migrate-from-v1")` returns the
+same map in-session. New installs need nothing extra.
 
 ## License
 

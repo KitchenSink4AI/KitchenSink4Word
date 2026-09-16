@@ -113,9 +113,27 @@ _STALE = [
 ]
 
 
+#: Lines that carry a PER-PACK bill rather than a headline figure. The stale
+#: list above retires lite and full bills, and a per-pack bill is free to land
+#: on a number a headline once used: academic measures ~7.6k on the 2026-09-16
+#: estimator, which is also the lite bill this repo retired in September. Pack
+#: rows have their own guard (test_readme_pack_table_matches_measurement reads
+#: them straight off packs.pack_cost), so dropping them here loses no coverage.
+_PACK_BILL_LINE = re.compile(
+    r"^\|\s*\*{0,2}(lite|references|review|academic|assembly|media-forms|"
+    r"com-live|protection-io|Full surface)\b|^- Pack costs, from"
+)
+
+
+def _without_pack_bills(text: str) -> str:
+    return "\n".join(
+        line for line in text.splitlines() if not _PACK_BILL_LINE.match(line)
+    )
+
+
 def test_no_stale_figures_in_public_copy():
     for path in PUBLIC:
-        text = path.read_text(encoding="utf-8")
+        text = _without_pack_bills(path.read_text(encoding="utf-8"))
         for pat, why in _STALE:
             m = re.search(pat, text)
             assert m is None, (
@@ -230,14 +248,12 @@ def test_i18n_dictionaries_carry_current_figures():
         return [base] + [base.replace(",", s)
                          for s in (".", " ", " ", " ")]
 
-    sep = forms_of("8,000")
-    full = forms_of("27,800")
-    old = forms_of("34,400")
+    sep = forms_of("9,900")
+    full = forms_of("35,200")
     for i, lang in enumerate(langs):
         block = text[spans[i]:spans[i + 1]]
         assert "221" in block, f"i18n {lang}: operations count 221 missing"
-        for name, forms in (("lite 8.0k", sep), ("full 27.8k", full),
-                            ("v1.6 34.4k", old)):
+        for name, forms in (("lite 9.9k", sep), ("full 35.2k", full)):
             assert any(f in block for f in forms), (
                 f"i18n {lang}: {name} figure missing in all accepted formats"
             )

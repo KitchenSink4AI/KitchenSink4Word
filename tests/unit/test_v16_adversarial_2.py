@@ -32,31 +32,55 @@ from pathlib import Path
 import pytest
 from lxml import etree
 
-pytestmark = pytest.mark.skipif(
+pytestmark = [pytest.mark.live, pytest.mark.skipif(
     sys.platform != "win32", reason="COM tests require Windows + Word"
-)
+)]
 
 
-def _word_available():
+def _word_registration():
+    """Registry-only readiness probe, matching test_live_core.py.
+
+    Returns "registered", "absent" or "probe_error". The old version of
+    this helper started a real Word through DispatchEx at import time,
+    which launched (and sometimes leaked) a WINWORD.EXE during plain
+    collection and turned any transient COM failure into a silent skip
+    of this whole file. A registry read starts nothing.
+
+    Only a confirmed "absent" skips. A probe that cannot answer lets the
+    tests run and fail loudly, since a skip would hide the failure.
+    """
     try:
-        import pythoncom
-        import win32com.client
-        pythoncom.CoInitialize()
-        try:
-            app = win32com.client.DispatchEx("Word.Application")
-            app.Visible = False
-            app.Quit(0)
-            return True
-        except Exception:
-            return False
-        finally:
-            pythoncom.CoUninitialize()
+        import pythoncom  # noqa: F401
+        import win32com.client  # noqa: F401
     except ImportError:
-        return False
+        return "absent"
+    import winreg
+
+    try:
+        with winreg.OpenKey(winreg.HKEY_CLASSES_ROOT, "Word.Application\\CLSID") as k:
+            clsid = winreg.QueryValueEx(k, "")[0]
+    except FileNotFoundError:
+        return "absent"
+    except OSError:
+        return "probe_error"
+    if not clsid:
+        return "probe_error"
+    try:
+        with winreg.OpenKey(
+            winreg.HKEY_CLASSES_ROOT, "CLSID\\" + str(clsid) + "\\LocalServer32"
+        ):
+            return "registered"
+    except FileNotFoundError:
+        return "absent"
+    except OSError:
+        return "probe_error"
 
 
-WORD_OK = _word_available()
-needs_word = pytest.mark.skipif(not WORD_OK, reason="Word not installed")
+WORD_STATE = _word_registration()
+WORD_OK = WORD_STATE != "absent"
+needs_word = pytest.mark.skipif(
+    not WORD_OK, reason="no Word.Application registration on this machine"
+)
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 

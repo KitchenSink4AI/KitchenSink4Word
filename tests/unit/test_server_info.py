@@ -18,6 +18,7 @@ import asyncio
 import json
 import os
 import re
+import types
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -94,9 +95,9 @@ def test_reports_the_host(info):
 def test_word_tier_is_reported_without_starting_word(info):
     word = info["word"]
     assert set(word) >= {"application", "com_tools"}
-    assert word["com_tools"] in ("available", "unavailable")
-    if word["com_tools"] == "unavailable":
-        assert word["note"], "an unavailable COM tier must say why"
+    assert word["com_tools"] in ("available", "unavailable", "unknown")
+    if word["com_tools"] != "available":
+        assert word["note"], "anything but a working COM tier must say why"
 
 
 def test_word_tier_survives_a_machine_without_pywin32(monkeypatch):
@@ -115,6 +116,198 @@ def test_word_tier_survives_a_machine_without_pywin32(monkeypatch):
     word = server._word_environment()
     assert word["com_tools"] == "unavailable"
     assert word["note"]
+
+
+# ------------------------------------------- the Word registration probe
+#
+# BUG-001. The probe used to call pythoncom.CLSIDFromProgID, an attribute
+# pywin32 does not have, and one broad except turned the resulting
+# AttributeError into "no Word.Application registration found on this
+# machine". Users with Word installed, registered and running were told
+# they had no Word. The three cases below are the whole point of the fix:
+# a registered Word, an absent one, and a probe that could not answer are
+# three different facts and must never collapse into two.
+#
+# The fake registry lets all three run on any machine, Windows or not.
+
+
+class _FakeKey:
+    def __init__(self, value=""):
+        self._value = value
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+
+class _FakeWinreg:
+    """Just enough winreg to drive the probe, with no registry behind it."""
+
+    HKEY_CLASSES_ROOT = 0
+    KEY_READ = 0x20019
+    KEY_WOW64_64KEY = 0x0100
+    KEY_WOW64_32KEY = 0x0200
+
+    def __init__(self, keys=None, errors=None):
+        self.keys = dict(keys or {})
+        self.errors = dict(errors or {})
+        self.opened = []
+
+    def OpenKey(self, root, sub, reserved=0, access=0):
+        self.opened.append(sub)
+        if sub in self.errors:
+            raise self.errors[sub]
+        if sub in self.keys:
+            return _FakeKey(self.keys[sub])
+        raise FileNotFoundError(2, "no such key")
+
+    def QueryValueEx(self, key, name):
+        return (key._value, 1)
+
+
+_CLSID = "{000209FF-0000-0000-C000-000000000046}"
+
+
+def _with_registry(monkeypatch, fake):
+    monkeypatch.setitem(__import__("sys").modules, "winreg", fake)
+    return fake
+
+
+def test_probe_reports_registered_when_progid_and_server_both_resolve(monkeypatch):
+    fake = _with_registry(monkeypatch, _FakeWinreg(keys={
+        "Word.Application\\CLSID": _CLSID,
+        "CLSID\\" + _CLSID + "\\LocalServer32": "",
+    }))
+    state, detail = server._word_registration()
+    assert state == "registered", detail
+    assert "Word.Application\\CLSID" in fake.opened
+
+
+def test_probe_accepts_an_inproc_server_too(monkeypatch):
+    _with_registry(monkeypatch, _FakeWinreg(keys={
+        "Word.Application\\CLSID": _CLSID,
+        "CLSID\\" + _CLSID + "\\InprocServer32": "",
+    }))
+    assert server._word_registration()[0] == "registered"
+
+
+def test_probe_reports_absent_when_the_progid_is_not_there(monkeypatch):
+    _with_registry(monkeypatch, _FakeWinreg())
+    state, detail = server._word_registration()
+    assert state == "absent"
+    assert detail
+
+
+def test_probe_reports_absent_when_the_class_id_has_no_server(monkeypatch):
+    """A leftover class id with no server entry is not an installation."""
+    _with_registry(monkeypatch, _FakeWinreg(keys={
+        "Word.Application\\CLSID": _CLSID,
+    }))
+    state, detail = server._word_registration()
+    assert state == "absent"
+    assert detail
+
+
+def test_a_refused_read_is_a_probe_error_not_an_absent_word(monkeypatch):
+    _with_registry(monkeypatch, _FakeWinreg(errors={
+        "Word.Application\\CLSID": PermissionError(5, "access denied"),
+    }))
+    state, detail = server._word_registration()
+    assert state == "probe_error"
+    assert detail == "PermissionError"
+
+
+def test_an_unexpected_exception_is_a_probe_error_not_an_absent_word(monkeypatch):
+    """The BUG-001 shape itself: the probe blows up in a way nobody
+    planned for, and the answer must be 'I could not tell', never 'you
+    have no Word'."""
+    _with_registry(monkeypatch, _FakeWinreg(errors={
+        "Word.Application\\CLSID": AttributeError("module has no attribute"),
+    }))
+    state, detail = server._word_registration()
+    assert state == "probe_error"
+    assert detail == "AttributeError"
+
+
+def test_a_broken_server_key_read_is_a_probe_error(monkeypatch):
+    _with_registry(monkeypatch, _FakeWinreg(
+        keys={"Word.Application\\CLSID": _CLSID},
+        errors={"CLSID\\" + _CLSID + "\\LocalServer32": OSError(1, "boom")},
+    ))
+    assert server._word_registration()[0] == "probe_error"
+
+
+def test_an_empty_class_id_value_is_a_probe_error(monkeypatch):
+    _with_registry(monkeypatch, _FakeWinreg(keys={
+        "Word.Application\\CLSID": "",
+    }))
+    assert server._word_registration()[0] == "probe_error"
+
+
+@pytest.mark.parametrize(
+    "state,application,com_tools",
+    [
+        ("registered", "installed", "available"),
+        ("absent", "not registered", "unavailable"),
+        ("probe_error", "unknown", "unknown"),
+    ],
+)
+def test_get_server_info_reports_each_probe_state_truthfully(
+    monkeypatch, state, application, com_tools
+):
+    """The reason the bug mattered: whatever the probe says has to reach
+    the user unchanged, and a probe error may never be dressed up as an
+    absent Word."""
+    import sys as _s
+
+    monkeypatch.setattr(_s, "platform", "win32")
+    monkeypatch.setitem(_s.modules, "pythoncom", types.ModuleType("pythoncom"))
+    monkeypatch.setattr(server, "_word_registration", lambda: (state, "detail"))
+    word = server._word_environment()
+    assert word["application"] == application
+    assert word["com_tools"] == com_tools
+    assert word["registration_probe"] == "registry"
+    if state == "probe_error":
+        note = word["note"].lower()
+        assert "not registered" not in note
+        assert "could not complete" in note
+    if state == "registered":
+        assert "com_word_status" in word["note"], (
+            "a registration is not proof that automation works, and the "
+            "report has to say so"
+        )
+
+
+def test_the_probe_does_not_call_the_api_that_never_existed():
+    """pywin32 has ProgIDFromCLSID; it has never had CLSIDFromProgID."""
+    source = Path(server.__file__).read_text(encoding="utf-8")
+    assert "CLSIDFromProgID" not in source
+    pythoncom = pytest.importorskip("pythoncom")
+    assert not hasattr(pythoncom, "CLSIDFromProgID")
+
+
+def test_the_probe_starts_no_word_and_opens_no_document(monkeypatch):
+    """It reads the registry and nothing else: no COM apartment, no
+    Dispatch, no file."""
+    import sys as _s
+
+    if "win32com.client" in _s.modules:
+        mod = _s.modules["win32com.client"]
+        for name in ("Dispatch", "DispatchEx", "GetActiveObject"):
+            if hasattr(mod, name):
+                monkeypatch.setattr(mod, name, _refuse_com)
+    if "pythoncom" in _s.modules:
+        pc = _s.modules["pythoncom"]
+        if hasattr(pc, "CoInitialize"):
+            monkeypatch.setattr(pc, "CoInitialize", _refuse_com)
+    state, _ = server._word_registration()
+    assert state in ("registered", "absent", "probe_error")
+
+
+def _refuse_com(*args, **kwargs):
+    raise AssertionError("the registration probe must not touch COM")
 
 
 def test_sandbox_is_reported_as_shape_not_as_paths(monkeypatch, tmp_path):

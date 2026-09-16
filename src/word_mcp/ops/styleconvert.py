@@ -1276,7 +1276,7 @@ def convert_citation_style(
                 "confidence": "full",
                 "problem": (
                     "entry paragraph holds fields/hyperlinks/tracked "
-                    "changes; rebuilding would destroy them — left verbatim "
+                    "changes; rebuilding would destroy them; left verbatim "
                     "(its citations were also left unconverted)"
                 ),
             })
@@ -1355,11 +1355,11 @@ def convert_citation_style(
     review = []
     if citation_flags:
         review.append(
-            f"{len(citation_flags)} citation(s) not converted or degraded — review each"
+            f"{len(citation_flags)} citation(s) not converted or degraded; review each"
         )
     if entry_flags:
         review.append(
-            f"{len(entry_flags)} reference-entry issue(s) — review each"
+            f"{len(entry_flags)} reference-entry issue(s); review each"
         )
     if target_system == "notes" and pkg.has_part("word/footnotes.xml"):
         existing = sum(
@@ -1370,7 +1370,7 @@ def convert_citation_style(
         if existing:
             review.append(
                 f"document already has {existing} footnote(s); new citation "
-                "footnotes are interleaved with them — check numbering"
+                "footnotes are interleaved with them; check numbering"
             )
     if source_system == "notes" and target_system != "notes":
         review.append(
@@ -1420,7 +1420,7 @@ def convert_citation_style(
             "review_required": review,
             "note": (
                 "Dry run: the file was NOT modified. This is heuristic text "
-                "conversion — review the plan and flags before applying."
+                "conversion; review the plan and flags before applying."
             ),
         }
 
@@ -1448,7 +1448,7 @@ def convert_citation_style(
                 "confidence": "full",
                 "problem": (
                     "entry paragraph holds fields/hyperlinks/tracked "
-                    "changes; rebuilding would destroy them — left verbatim"
+                    "changes; rebuilding would destroy them; left verbatim"
                 ),
             })
             continue
@@ -1565,7 +1565,7 @@ def convert_citation_style(
         "list_reordered": bool(reorder),
         "heading_renamed": heading_op["after"] if heading_op else None,
         "flags": flags,
-        "review_required": review or ["clean conversion — still worth a read-through"],
+        "review_required": review or ["clean conversion, still worth a read-through"],
         "note": (
             "Heuristic text conversion. Flagged entries/citations were left "
             "verbatim; review every flag before treating the manuscript as "
@@ -2028,7 +2028,7 @@ def apply_manuscript_format(
         raise WordMcpError(
             f"no defined manuscript format for {style!r}. Supported: apa7 "
             "(=apa7-student), apa7-professional, mla9, chicago17 (=turabian). "
-            "IEEE/Vancouver/ASA/Harvard page formats are journal-specific — "
+            "IEEE/Vancouver/ASA/Harvard page formats are journal-specific; "
             "use the journal's template."
         )
 

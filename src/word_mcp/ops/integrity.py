@@ -191,7 +191,7 @@ def validate_cross_references(pkg: DocxPackage) -> dict:
             "checked": checked,
             "unverified": unverified,
             "note": (
-                "heuristic text scan — unverified items are review "
+                "heuristic text scan: unverified items are review "
                 "candidates, not confirmed errors; numbers computed by Word "
                 "(un-updated fields show placeholders) cannot be verified "
                 "here"
@@ -336,7 +336,7 @@ def validate_captions(pkg: DocxPackage) -> dict:
         "note": (
             "body-level tables and images only; drawings inside table cells "
             "or text boxes are not checked. Convention detection reads the "
-            "SEQ switches and cached numbers — captions never updated in "
+            "SEQ switches and cached numbers; captions never updated in "
             "Word may lack a readable number."
         ),
     }

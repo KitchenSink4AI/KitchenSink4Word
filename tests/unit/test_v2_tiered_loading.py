@@ -124,11 +124,17 @@ def test_pack_bills_cost_aware():
     """The 2026-09-02 granularity ruling: lite within reach of the gate
     (honest ceiling asserted, exact number in the phase report) and no
     pack below ~1.5k except the two documented exceptions: com-live is
-    environment-gated at any size, protection-io is kept as rare-use."""
+    environment-gated at any size, protection-io is kept as rare-use.
+
+    The ceiling was re-based from 8,000 to 10,200 on 2026-09-16 because the
+    estimator changed, not because the surface grew: approx_tokens now
+    measures the whole tools/list entry the client receives instead of
+    description plus input schema. Lite measures 9,909 on the new yardstick;
+    10,200 keeps the same headroom the old number carried."""
     lite_cost = sum(
         packs.approx_tokens(t) for t in packs._REGISTRY["lite"].values()
     )
-    assert lite_cost <= 8000, f"lite regressed to ~{lite_cost} tokens"
+    assert lite_cost <= 10200, f"lite regressed to ~{lite_cost} tokens"
     for pack in packs.pack_names():
         if pack in ("com-live", "protection-io"):
             continue

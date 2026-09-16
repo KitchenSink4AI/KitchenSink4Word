@@ -492,7 +492,7 @@ def replace_formatted(
     if max_replacements is not None and total > max_replacements:
         raise WordMcpError(
             f"would make {total} replacements, over the max_replacements "
-            f"guard of {max_replacements}; nothing was changed — narrow the "
+            f"guard of {max_replacements}; nothing was changed. Narrow the "
             "criteria/find or raise the limit"
         )
 

@@ -84,7 +84,7 @@ def _pre_flight(items: list[tuple[str, str, bool]]) -> list[dict]:
                             "regex can match the empty string; "
                             "search_and_replace silently skips zero-length "
                             "matches, so this pattern likely does not do "
-                            "what you intend — anchor it"
+                            "what you intend; anchor it"
                         ),
                     }
                 )
@@ -107,7 +107,7 @@ def _pre_flight(items: list[tuple[str, str, bool]]) -> list[dict]:
                     "problem": (
                         "replacement contains control characters (e.g. "
                         "\\x07) that XML cannot store; the real run would "
-                        "fail — remove them before replacing"
+                        "fail; remove them before replacing"
                     ),
                 }
             )
@@ -252,7 +252,7 @@ def preview_replace(
                     "through the host paragraph (matching the real engine's "
                     "primary pass). If a replacement string itself contains "
                     "a find pattern, the real run can re-apply it inside "
-                    "boxes — avoid self-recreating replacements here."
+                    "boxes; avoid self-recreating replacements here."
                 ),
             }
         )
