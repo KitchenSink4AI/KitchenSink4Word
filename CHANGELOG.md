@@ -1,5 +1,10 @@
 # Changelog
 
+### 2.1.3
+- `get_server_info`: the Word registration probe no longer calls a pywin32 attribute that does not exist. It read the registration through `pythoncom.CLSIDFromProgID`, which pywin32 has never had, so the call raised on every machine and the report said Word was not registered even where Word was installed and automating. The probe now reads the registry directly.
+- Probe failures are reported instead of hidden. A probe that cannot answer says so, and a registered Word, an absent one, and a failed lookup are three different answers rather than two.
+- Fixes #24.
+
 ### 2.1.2
 - The license notice packaged with the product said the wrong thing. It said the AGPL made this free for any use, which skipped the AGPL's source-sharing obligations and read as though no commercial license existed. The notice, the README, and the landing page now state the dual license plainly, and licensing@kitchensink4.ai is the address for it.
 - The LICENSE file carries a copyright line. The copyright holder, the package author, and the contributor agreement all name Alvut Consulting, LLC.
