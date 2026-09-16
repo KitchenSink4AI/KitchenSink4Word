@@ -450,11 +450,19 @@ footer .row>span{min-width:0;overflow-wrap:anywhere}
   font-family:'IBM Plex Mono',ui-monospace,monospace;
   font-size:11px;letter-spacing:.18em;text-transform:uppercase;line-height:1.7;
   max-width:100%;overflow-wrap:anywhere}
-.ed-banner-cta{margin:14px 0 0;font-size:12px;line-height:1.6}
-.ed-banner-cta a{color:var(--banner-ink);font-weight:700;text-decoration:none;
-  border-bottom:2px solid var(--banner-ink);padding-bottom:2px;
-  display:inline-block;max-width:100%;overflow-wrap:anywhere}
-.ed-banner-cta a:hover{color:var(--ink);border-bottom-color:var(--ink)}
+.ed-banner-cta{margin:20px 0 0;font-size:12px;line-height:1.6}
+/* The Business link is a real button, cut to the same shape as the page's
+   primary button and filled with the deepened accent the sub-line already
+   uses, so the paper-coloured label clears WCAG AA on every finish, the
+   evening coats included. One block, four palettes, as above. */
+.ed-banner-cta .ed-banner-btn{display:inline-block;max-width:100%;overflow-wrap:anywhere;
+  padding:12px 26px;border:2px solid var(--banner-ink);
+  background:var(--banner-ink);color:var(--paper);text-decoration:none;
+  font-size:14px;font-weight:700;letter-spacing:.05em;line-height:1.4;
+  box-shadow:3px 3px 0 var(--ink);transition:all .15s}
+.ed-banner-cta .ed-banner-btn:hover{transform:translate(-2px,-2px);box-shadow:5px 5px 0 var(--ink)}
+.ed-banner-cta .ed-banner-btn:focus-visible{outline:3px solid var(--ink);outline-offset:4px}
+@media(max-width:560px){.ed-banner-cta .ed-banner-btn{padding:11px 16px;font-size:13px;letter-spacing:.02em}}
 @supports (color:color-mix(in srgb,red 50%,blue)){
   .ed-banner{--banner-ink:color-mix(in srgb,var(--banner-accent) 70%,var(--ink))}
 }
@@ -506,7 +514,7 @@ footer .row>span{min-width:0;overflow-wrap:anywhere}
   <div class="ed-banner rev d1" role="note">
     <p class="ed-banner-title">The Community editions</p>
     <p class="ed-banner-sub">Free and open source under the AGPL</p>
-    <p class="ed-banner-cta"><a href="https://kitchensink4.ai/products/business/">Business edition</a></p>
+    <p class="ed-banner-cta"><a class="ed-banner-btn" href="https://kitchensink4.ai/products/business/">Business Editions and commercial workflows? Click here</a></p>
   </div>
 </div>
 
@@ -1761,7 +1769,7 @@ function apply(lang){
   for (var j = 0; j < btns.length; j++){
     btns[j].setAttribute("aria-pressed", String(btns[j].getAttribute("data-lang") === lang));
   }
-  try { localStorage.setItem("ks4w-lang", lang); } catch(e){}
+  try { localStorage.setItem("ks4-lang", lang); } catch(e){}
 }
 var nav = document.getElementById("langToggle");
 if (nav){
@@ -1776,8 +1784,20 @@ if (nav){
     nav.appendChild(b);
   });
 }
+/* One key, shared by the storefront and all four product pages on this
+   origin, so a language chosen anywhere carries everywhere. A ?lang=
+   parameter wins over the stored choice and is then stored itself, and
+   the old per-page key is still read once so returning visitors keep
+   the language they already picked. Storage can be unavailable, so
+   every touch of it stays inside a try. */
 var saved = null;
-try { saved = localStorage.getItem("ks4w-lang"); } catch(e){}
+try {
+  var q = new URLSearchParams(window.location.search).get("lang");
+  if (q){ q = String(q).toLowerCase().slice(0, 2); if (I18N[q]) saved = q; }
+} catch(e){}
+if (!saved){
+  try { saved = localStorage.getItem("ks4-lang") || localStorage.getItem("ks4w-lang"); } catch(e){}
+}
 var lang = (saved && I18N[saved]) ? saved : null;
 if (!lang){
   var pref = (navigator.languages && navigator.languages[0]) || navigator.language || "en";
