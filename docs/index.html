@@ -92,35 +92,6 @@ h1,h2,h3,.serif{font-family:'Fraunces',Georgia,serif}
 a{color:var(--copper)}
 .wrap{max-width:1080px;margin:0 auto;padding:0 24px}
 
-/* ---------- masthead ---------- */
-/* grid, not flex: the language toggle keeps the same centre column in every
-   language, so switching languages never moves it. */
-.masthead{border-bottom:3px double var(--ink);padding:14px 0;font-size:12px;
-  letter-spacing:.18em;text-transform:uppercase;display:grid;
-  grid-template-columns:1fr auto 1fr;align-items:baseline;gap:12px}
-.masthead>span:last-child{justify-self:end;text-align:right}
-.masthead b{letter-spacing:.02em}
-@media(max-width:900px){
-  .masthead{grid-template-columns:1fr;justify-items:center;text-align:center}
-  .masthead>span:last-child{justify-self:center;text-align:center}
-}
-
-/* ---------- product switch bar ---------- */
-.switchbar{border-bottom:1px solid var(--rule);background:var(--paper-deep);
-  padding:9px 0;font-size:11.5px;letter-spacing:.16em;text-transform:uppercase;
-  display:flex;justify-content:center;align-items:center;gap:14px;flex-wrap:wrap}
-.switchbar .lbl{color:var(--ink-soft);letter-spacing:.22em}
-.switchbar a{color:var(--copper);text-decoration:none;font-weight:600;
-  border-bottom:2px solid transparent;padding-bottom:2px}
-.switchbar a:hover{border-bottom-color:var(--copper)}
-.switchbar .here{color:var(--ink);font-weight:700;border-bottom:2px solid var(--ink);
-  padding-bottom:2px}
-.lang-toggle{display:inline-flex;gap:1px;align-items:baseline;flex-wrap:wrap;text-transform:none;letter-spacing:.05em}
-.lang-toggle button{font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:11px;background:none;border:none;border-bottom:2px solid transparent;color:var(--ink-soft);cursor:pointer;padding:1px 5px;letter-spacing:.05em}
-.lang-toggle button:hover{color:var(--copper)}
-.lang-toggle button[aria-pressed="true"]{color:var(--copper);font-weight:600;border-bottom-color:var(--copper)}
-.lang-toggle .sep{color:var(--rule);padding:0 1px}
-
 /* ---------- hero ---------- */
 .hero{padding:72px 0 56px;text-align:center;position:relative;overflow:hidden}
 .catalog-no{display:inline-block;border:1.5px solid var(--ink);padding:4px 14px;
@@ -132,14 +103,17 @@ a{color:var(--copper)}
 .hero h1 .four{color:var(--copper)}
 .tagline{font-family:'Fraunces',serif;font-style:italic;font-size:clamp(18px,2.6vw,26px);
   color:var(--ink-soft);margin:22px auto 0;max-width:640px}
-.faucet{font-size:clamp(56px,8vw,88px);line-height:1;display:block;margin-bottom:6px;
-  filter:sepia(.25) saturate(.8)}
-.drip{width:7px;height:10px;background:var(--ink-soft);border-radius:50% 50% 60% 60%;
-  margin:2px auto 0;opacity:0;animation:drip 3.4s ease-in infinite}
-@keyframes drip{0%,55%{opacity:0;transform:translateY(-6px) scaleY(.6)}
-  62%{opacity:.85;transform:translateY(0) scaleY(1)}
-  96%{opacity:.85;transform:translateY(84px) scaleY(1.25)}
-  100%{opacity:0;transform:translateY(90px)}}
+/* ---------- the hero mark: a standing two-handle faucet, still dripping ---- */
+.faucetmark{display:block;width:min(190px,58vw);margin:0 auto}
+.faucetmark svg{display:block;width:100%;height:auto;overflow:visible}
+/* the drop leaves the spout, falls to the deck, and the spout makes another */
+.faucetmark .drop{animation:drop-fall 3.4s ease-in infinite}
+@keyframes drop-fall{0%,50%{opacity:0;transform:translateY(-4px) scaleY(.7)}
+  58%{opacity:1;transform:translateY(0) scaleY(1)}
+  94%{opacity:1;transform:translateY(36px) scaleY(1.2)}
+  100%{opacity:0;transform:translateY(42px)}}
+.faucet-hint{display:block;margin-top:6px;font-size:9px;letter-spacing:.22em;
+  text-transform:uppercase;color:var(--ink-soft);opacity:.7}
 .specs-strip{display:flex;justify-content:center;gap:0;margin:44px auto 0;
   border:2px solid var(--ink);max-width:720px;background:var(--paper-deep);
   box-shadow:var(--shadow);flex-wrap:wrap}
@@ -347,8 +321,7 @@ footer a{color:var(--copper)}
 
 /* Responsive polish: keep navigation, cards, and closing credits legible at
    translated lengths without letting labels collide with their content. */
-.masthead>span{min-width:0;overflow-wrap:anywhere}
-.masthead>span:last-child{line-height:1.9}
+
 .dept h3{flex-wrap:wrap;row-gap:4px}
 .dept h3 .num{margin-left:auto;white-space:nowrap}
 .counter,.forcard,.step{min-width:0;overflow-wrap:anywhere}
@@ -359,15 +332,13 @@ footer .row>span{min-width:0;overflow-wrap:anywhere}
   .famrow .counter{flex:1 1 0;min-width:0}
 }
 @media(max-width:900px){
-  .masthead{align-items:center}
-  .lang-toggle{justify-content:center}
+
   footer .row{grid-template-columns:1fr;gap:20px;text-align:center}
   footer .row>span:last-child{text-align:center!important}
 }
 @media(max-width:640px){
   .wrap{padding-left:18px;padding-right:18px}
-  .switchbar{gap:8px 12px;padding:10px 16px;line-height:1.45}
-  .switchbar a,.switchbar .here{white-space:nowrap}
+
   .hero{padding-top:48px;padding-bottom:44px}
   section{padding-top:48px;padding-bottom:48px}
   .sec-head{align-items:flex-start;gap:9px 12px;flex-wrap:wrap}
@@ -379,7 +350,6 @@ footer .row>span{min-width:0;overflow-wrap:anywhere}
 }
 
 .footer-links{text-align:center;padding:10px 20px;font-size:12px}.footer-links a{white-space:nowrap}.release-date{font-size:12px;color:var(--ink-soft);white-space:nowrap;margin-left:auto}
-
 
  /* Installation guidance uses the existing lead, note, card and terminal typography. */
  .mcp-compat{margin:0 0 24px;max-width:840px}
@@ -393,7 +363,6 @@ footer .row>span{min-width:0;overflow-wrap:anywhere}
  .install-grid .client-label,.route .client-label{font-size:11px;font-weight:700;letter-spacing:.08em;margin:16px 0 6px;color:var(--ink)}
  .route h3[data-i18n^="setup."]{font-size:15px;line-height:1.5;margin:0 0 12px}
  .install-grid h3{line-height:1.5}
-
 
 .setup-note .term,.install-grid .term{font-size:13px}
 .setup-note .term div,.install-grid .term div{white-space:pre-wrap;overflow-wrap:anywhere}
@@ -498,39 +467,232 @@ footer .row>span{min-width:0;overflow-wrap:anywhere}
 .ux-copy{align-self:stretch;flex:0 0 auto;border:0;border-left:1px solid var(--ink-soft);background:var(--paper);color:var(--ink);padding:8px 12px;min-width:64px;min-height:44px;font:600 14px/1.4 'Fraunces',Georgia,serif;cursor:pointer}.ux-copy:hover{background:var(--paper-deep)}
 .ux-fields{margin:20px 0;padding:16px;border:1px solid var(--ink-soft)}.ux-fields h5{margin:0 0 12px}.ux-fields dl{margin:0}.ux-fields dt{font-weight:600}.ux-fields dd{margin:0}.ux-fields .ux-command{margin:4px 0 12px}.ux-support{margin-top:24px;border-top:1px solid var(--ink-soft);padding-top:20px}.ux-copy-status{min-height:1.65em;font-weight:600}.ux-help{font-size:15px!important}
 @media(max-width:600px){.ux-install{font-size:16px}.ux-body{padding:4px 14px 16px}.ux-path summary{padding:14px;font-size:17px}.ux-body ol{padding-left:23px}.ux-body li{padding-left:3px}.ux-command{flex-direction:column}.ux-copy{align-self:flex-end;border-left:1px solid var(--ink-soft);border-top:1px solid var(--ink-soft)}.ux-downloads{flex-direction:column}.ux-downloads a.ux-download{width:100%}.ux-choices{gap:12px}.ux-choices label{width:100%;min-width:0}.ux-fields{padding:10px}.ux-command pre{padding:10px}}
+/* ==========================================================================
+   THE SHARED MASTHEAD (#847)
+   Three rows above the awning, the same on the showroom and on all four
+   product pages. The corporate rail is the one the business pages already
+   carry, in this page's paper finish: same markup, same class names, same
+   nav.js behaviour, so a change there lands here. The glyph row under it is
+   GENERATED: the markup between the sinks-row markers is written by
+   scripts/render-sinks-row.py in the storefront repository from
+   scripts/sinks.json. Edit the list, run the script; never edit the row.
+   ========================================================================== */
+.mast{border-bottom:3px double var(--ink)}
+.mast-in{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;
+  gap:24px;height:60px}
+.mast .wordmark{display:flex;align-items:baseline;white-space:nowrap;color:var(--ink);
+  text-decoration:none;font-family:'Fraunces',"Fraunces Fallback",Georgia,serif;
+  font-weight:900;font-size:24px;line-height:1;letter-spacing:-.01em}
+.mast .wordmark:hover{text-decoration:none}
+.mast .wordmark .four{color:#955323}
+nav.top{display:flex;align-items:center;justify-content:center;gap:22px;min-width:0}
+.mast-tools{display:flex;align-items:center;gap:6px;justify-self:end}
+nav.top a,nav.top summary,.mast-tools summary,.mast-gh,.nav-pop a,.nav-pop button{
+  font-family:'IBM Plex Mono',"Plex Mono Fallback",ui-monospace,monospace;
+  font-size:11px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--ink);text-decoration:none}
+nav.top>a{display:inline-flex;align-items:center;height:44px;white-space:nowrap}
+nav.top>a:hover,.mast-gh:hover{color:var(--ink-soft);text-decoration:none}
+/* Products, the language control and the phone menu are all <details>, so they
+   open with no script at all; nav.js only closes them on an outside tap or on
+   Escape, which is what it already does for the corporate pages. */
+details.nav-menu{position:relative}
+details.nav-menu>summary{display:inline-flex;align-items:center;gap:6px;height:44px;
+  padding:0 10px;cursor:pointer;list-style:none;color:var(--ink-soft)}
+details.nav-menu>summary::-webkit-details-marker,
+details.nav-menu>summary::marker{display:none;content:""}
+details.nav-menu>summary:hover,details.nav-menu[open]>summary{color:var(--ink)}
+details.nav-menu>summary:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+/* the menu rows are hit targets, not text: full width, 44px tall, one face */
+.nav-pop{position:absolute;top:calc(100% + 6px);left:0;z-index:30;display:flex;
+  flex-direction:column;min-width:215px;padding:6px 0;border:1.5px solid var(--ink);
+  background:var(--paper);box-shadow:0 2px 0 var(--rule),0 10px 30px rgba(30,53,80,.10)}
+.nav-pop a,.nav-pop button{display:flex;align-items:center;min-height:44px;padding:0 13px;
+  margin:0;border:0;border-left:3px solid transparent;background:none;text-align:left;
+  cursor:pointer;letter-spacing:.08em}
+.nav-pop a:hover,.nav-pop button:hover,.nav-pop a:focus-visible,.nav-pop button:focus-visible{
+  background:var(--paper-deep);color:var(--ink);text-decoration:none}
+.mast-tools .nav-pop{left:auto;right:0}
+.lang-menu>summary{height:32px;padding:0 10px;border:1.5px solid var(--ink);color:var(--ink)}
+.lang-pop{min-width:150px}
+.lang-pop button{text-transform:none;letter-spacing:.02em;font-size:12px;font-weight:400}
+.lang-pop button[aria-pressed="true"]{border-left-color:var(--ink);font-weight:700}
+.mast-gh{display:inline-flex;align-items:center;height:32px;padding:0 12px;
+  border:1.5px solid var(--ink);font-weight:700;letter-spacing:.08em}
+.burger-menu{display:none}
+.burger-menu>summary{width:36px;height:32px;padding:0;justify-content:center;
+  border:1.5px solid var(--ink);color:var(--ink)}
 
+/* ---------- the sink switcher, one 52px row of glyph tabs ---------- */
+.sinkbar{border-bottom:1px solid var(--rule)}
+.sinkbar-in{display:flex;align-items:center;justify-content:space-between;gap:16px;height:52px}
+.sinkrow{display:flex;align-items:center;gap:2px;min-width:0}
+.sinkrow .sink{display:flex;align-items:center;gap:7px;height:44px;padding:0 10px;
+  border-bottom:2px solid transparent;color:var(--sink,var(--ink));text-decoration:none;
+  font-size:11.5px;font-weight:600;letter-spacing:.04em;white-space:nowrap}
+.sinkrow .sink:hover{border-bottom-color:var(--sink,var(--ink));text-decoration:none}
+.sinkrow .sink.is-here{color:var(--ink);font-weight:700;border-bottom-color:var(--ink)}
+.sinkrow .sink svg{flex:none}
+.sinkrow .sink-more>summary{text-transform:none;font-size:11.5px;font-weight:600;
+  letter-spacing:.04em;color:var(--ink-soft)}
+.sink-install{display:inline-flex;align-items:center;height:34px;padding:0 14px;
+  border:2px solid var(--ink);background:var(--ink);color:var(--paper);white-space:nowrap;
+  font-family:'IBM Plex Mono',"Plex Mono Fallback",ui-monospace,monospace;
+  font-size:11px;font-weight:700;letter-spacing:.08em;text-decoration:none}
+.sink-install:hover{background:var(--paper);color:var(--ink);text-decoration:none}
+/* The fold: past six entries the row keeps The Works and five sinks and puts
+   the rest in a menu. Under 700px nothing folds and the row scrolls instead,
+   so the folded entries are in the row as well and one set is always hidden.
+   Five sinks exist today, so the menu is not rendered and this is dormant. */
+@media(min-width:700px){.sinkrow .sink-folded{display:none}}
+@media(max-width:699.98px){.sinkrow .sink-more{display:none}}
+
+/* ---------- the department line ---------- */
+.deptline{display:flex;align-items:center;justify-content:space-between;gap:16px;
+  min-height:30px;border-bottom:1px solid var(--rule);color:var(--ink-soft);
+  font-family:'IBM Plex Mono',"Plex Mono Fallback",ui-monospace,monospace;
+  font-size:10px;letter-spacing:.2em;text-transform:uppercase}
+.deptline b{color:var(--ink);letter-spacing:.02em;font-weight:600}
+.deptline>span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.deptline>span:last-child{white-space:nowrap}
+
+/* ---------- under 700px: two rows, then the row of tabs scrolls ---------- */
+@media(max-width:699.98px){
+  .mast-in{height:56px;gap:10px;grid-template-columns:auto minmax(0,1fr)}
+  .mast .wordmark{font-size:20px}
+  nav.top,.mast-gh,.sink-install{display:none}
+  .burger-menu{display:block}
+  .sinkbar-in{display:block;height:auto;padding:0}
+  .sinkrow{overflow-x:auto;scroll-snap-type:x mandatory;background:var(--paper-deep);
+    padding:0 8px;scrollbar-width:none}
+  .sinkrow::-webkit-scrollbar{display:none}
+  .sinkrow .sink{scroll-snap-align:center}
+  .deptline{font-size:9px;letter-spacing:.14em;gap:8px}
+}
+
+/* ---------- the Community editions banner, now under the H1 (#846) ---------- */
+.hero .ed-banner{max-width:620px;margin:16px auto 0;padding:11px 12px 8px;border-width:2px;
+  gap:4px;text-align:center}
+.hero .ed-banner:before{height:6px;
+  background:repeating-linear-gradient(90deg,var(--ink) 0 14px,var(--paper-deep) 14px 28px)}
+.hero .ed-banner-title{font-size:13px;line-height:1.2}
+.hero .ed-banner-sub{margin:0;padding:2px 7px;border-width:1.5px;font-size:7.5px;
+  letter-spacing:.12em;line-height:1.5}
+.hero .ed-banner-cta{margin:0}
+.hero .ed-banner-cta .ed-banner-btn{padding:6px 11px;font-size:10px;letter-spacing:.02em;
+  line-height:1.35;box-shadow:2px 2px 0 var(--ink)}
+.hero .ed-banner-cta .ed-banner-btn:hover{box-shadow:4px 4px 0 var(--ink)}
+.hero .ed-banner.solo{max-width:420px;justify-items:center;text-align:center}
+@media(min-width:700px){
+  .hero .ed-banner{grid-template-columns:minmax(0,1fr) auto;column-gap:12px;row-gap:2px;
+    justify-items:start;align-items:center;text-align:left;padding:11px 12px 8px}
+  .hero .ed-banner-title{grid-column:1;grid-row:1}
+  .hero .ed-banner-sub{grid-column:1;grid-row:2}
+  .hero .ed-banner-cta{grid-column:2;grid-row:1/span 2;justify-self:end;align-self:center}
+  .hero .ed-banner.solo{grid-template-columns:minmax(0,1fr);justify-items:center;text-align:center}
+}
+
+/* ---------- the awning, unrolled under the department line ---------- */
+.awning{height:44px;margin:0 0 17px;position:relative;
+  background:repeating-linear-gradient(90deg, var(--ink) 0 46px, var(--paper-deep) 46px 92px);
+  border-bottom:3px solid var(--ink);
+  animation:unroll .9s cubic-bezier(.2,.7,.25,1.15) both;transform-origin:top center}
+@keyframes unroll{0%{transform:translateY(-105%)}72%{transform:translateY(2px)}100%{transform:translateY(0)}}
+.awning:after{content:"";position:absolute;left:0;right:0;bottom:-17px;height:17px;
+  background-image:radial-gradient(circle at 23px -6px, var(--ink) 0 21px, transparent 22px);
+  background-size:46px 17px;background-position:0 0;
+  animation:scallop-sway 3.2s ease-in-out .9s 2}
+.awning .scallop-alt{position:absolute;left:46px;right:0;bottom:-17px;height:17px;
+  background-image:radial-gradient(circle at 23px -6px, var(--paper-deep) 0 21px, transparent 22px);
+  background-size:92px 17px;
+  animation:scallop-sway 3.2s ease-in-out .9s 2}
+@keyframes scallop-sway{0%,100%{transform:translateY(0)}50%{transform:translateY(2.5px)}}
 </style>
 </head>
 <body>
 
-<div class="wrap masthead rev d1">
-  <span data-i18n="m.left"><b>EST. 2026</b> · FINE INSTRUMENTS FOR DOCUMENT PLUMBING</span>
-  <nav class="lang-toggle" id="langToggle" aria-label="Language"></nav>
-  <span><span data-i18n="m.catalog">CATALOG № 221</span> · <a href="https://kitchensink4.ai/products/" data-i18n="m.family">FAMILY</a> · <a href="#service" data-i18n="m.service">SERVICE</a> · <a href="https://kitchensink4.ai/corporate/" data-i18n="m.company">COMPANY</a> · <a href="https://github.com/KitchenSink4AI/KitchenSink4Word">GITHUB</a> · <a href="https://pypi.org/project/kitchensink4word/">PYPI</a> · <a href="llms.txt">LLMS.TXT</a></span>
-</div>
+<header class="mast">
+  <div class="wrap mast-in">
+    <a class="wordmark" href="https://kitchensink4.ai/corporate/">KitchenSink<span class="four">4</span>AI</a>
+    <nav class="top" aria-label="Site">
+      <details class="nav-menu">
+        <summary>Products<svg width="10" height="10" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M5 8l5 5 5-5"></path></svg></summary>
+        <div class="nav-pop">
+          <a href="https://kitchensink4.ai/products/community/">Community editions</a>
+          <a href="https://kitchensink4.ai/products/business/">Business edition</a>
+          <a href="https://kitchensink4.ai/products/business/fixtures/">Business Fixtures</a>
+        </div>
+      </details>
+      <a href="https://kitchensink4.ai/products/business/">Business</a>
+      <a href="https://kitchensink4.ai/pricing/">Pricing</a>
+      <a href="https://kitchensink4.ai/corporate/">Company</a>
+    </nav>
+    <div class="mast-tools">
+      <details class="nav-menu lang-menu">
+        <summary aria-label="Language"><svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="10" cy="10" r="7"></circle><path d="M3 10h14"></path><path d="M10 3c3 3 3 11 0 14"></path><path d="M10 3c-3 3-3 11 0 14"></path></svg><span class="lang-code" id="langCode">EN</span><svg width="10" height="10" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M5 8l5 5 5-5"></path></svg></summary>
+        <div class="nav-pop lang-pop" id="langToggle"></div>
+      </details>
+      <a class="mast-gh" href="https://github.com/KitchenSink4AI/KitchenSink4Word">GitHub</a>
+      <details class="nav-menu burger-menu">
+        <summary aria-label="Menu"><svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M3 6h14"></path><path d="M3 10h14"></path><path d="M3 14h14"></path></svg></summary>
+        <div class="nav-pop burger-pop">
+          <a href="https://kitchensink4.ai/products/community/">Products</a>
+          <a href="https://kitchensink4.ai/products/business/">Business</a>
+          <a href="https://kitchensink4.ai/pricing/">Pricing</a>
+          <a href="https://kitchensink4.ai/corporate/">Company</a>
+          <a href="https://github.com/KitchenSink4AI/KitchenSink4Word">GitHub</a>
+          <a href="#install">Install</a>
+        </div>
+      </details>
+    </div>
+  </div>
+</header>
 
-<div class="switchbar">
-  <span class="lbl">THE KITCHENSINK WORKS</span>
-  <span class="here">🚰 KitchenSink4Word <span data-i18n="sw.here">(you are here)</span></span>
-  <a href="https://kitchensink4.ai/KitchenSink4PPT/">🖌️ KitchenSink4PPT</a>
-  <a href="https://kitchensink4.ai/KitchenSink4XL/">🔌 KitchenSink4XL</a>
-  <a href="https://kitchensink4.ai/KitchenSink4Web/">🪴 KitchenSink4Web</a>
-  <a href="https://kitchensink4.ai/products/">🏪 <span data-i18n="sw.store">The storefront</span></a>
-</div>
-
-<div class="wrap">
-  <div class="ed-banner rev d1" role="note">
-    <p class="ed-banner-title">The Community editions</p>
-    <p class="ed-banner-sub">Free and open source under the AGPL</p>
-    <p class="ed-banner-cta"><a class="ed-banner-btn" href="https://kitchensink4.ai/products/business/">Business Editions and commercial workflows? Click here</a></p>
+<div class="sinkbar">
+  <div class="wrap sinkbar-in">
+<!-- BEGIN sinks-row: generated by scripts/render-sinks-row.py from scripts/sinks.json in the storefront repository. Do not edit by hand. -->
+<nav class="sinkrow" aria-label="Product">
+  <a class="sink" href="https://kitchensink4.ai/products/" style="--sink:#1e3550"><svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8l1.5-4h11L17 8"></path><path d="M3 8c0 1.2 1 2 2.3 2S7.7 9.2 7.7 8c0 1.2 1 2 2.3 2s2.3-.8 2.3-2c0 1.2 1 2 2.3 2S17 9.2 17 8"></path><path d="M4.5 10v7h11v-7"></path><path d="M8.5 17v-4h3v4"></path></svg><span data-i18n="sw.store">The Works</span></a>
+  <a class="sink is-here" aria-current="page" href="https://kitchensink4.ai/KitchenSink4Word/" style="--sink:#955323"><svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 17h15"></path><path d="M9.5 17v-8a4.5 4.5 0 0 1 4.5-4.5h3"></path><path d="M17 4.5v3"></path><path d="M5 17v-3.5"></path><path d="M3 13.5h4"></path><path d="M14 17v-3.5"></path><path d="M12 13.5h4"></path></svg><span>Word</span></a>
+  <a class="sink" href="https://kitchensink4.ai/KitchenSink4PPT/" style="--sink:#2c6a52"><svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 3l1 1-7 7-1-1z"></path><path d="M9 10l1 1"></path><path d="M9 11c-1 0-3 .5-3.5 2S4 17 4 17s2.5-.5 4-1 2-2.5 2-3.5"></path></svg><span>PPT</span></a>
+  <a class="sink" href="https://kitchensink4.ai/KitchenSink4XL/" style="--sink:#7d5c14"><svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 3v4"></path><path d="M13 3v4"></path><path d="M5 7h10v3a5 5 0 0 1-10 0z"></path><path d="M10 15v3"></path></svg><span>XL</span></a>
+  <a class="sink" href="https://kitchensink4.ai/KitchenSink4Web/" style="--sink:#277240"><svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 17V9"></path><path d="M10 12c-4 0-6-2-6-6 4 0 6 2 6 6z"></path><path d="M10 9c0-4 2-6 6-6 0 4-2 6-6 6z"></path><path d="M5 17h10"></path></svg><span>Web</span></a>
+</nav>
+<!-- END sinks-row -->
+    <a class="sink-install" href="#install">INSTALL</a>
   </div>
 </div>
 
+<div class="wrap deptline">
+  <span data-i18n="m.left"><b>EST. 2026</b> · FINE INSTRUMENTS FOR DOCUMENT PLUMBING</span>
+  <span data-i18n="m.catalog">CATALOG № 221</span>
+</div>
+
+<div class="awning"><div class="scallop-alt"></div></div>
+
 <header class="hero wrap">
   <div class="stamp rev d4" data-i18n="hero.stamp">DOES<br>EVERYTHING</div>
-  <div class="rev d1"><span class="faucet">🚰</span><div class="drip"></div></div>
+  <div class="faucetmark rev d1">
+    <svg viewBox="0 0 190 150" aria-hidden="true">
+      <path d="M95 60 v-22 a26 26 0 0 1 26 -26 h10 a26 26 0 0 1 26 26 v18" fill="none" stroke="var(--ink)" stroke-width="12" stroke-linecap="round"></path>
+      <path d="M95 60 v-22 a26 26 0 0 1 26 -26 h10 a26 26 0 0 1 26 26 v18" fill="none" stroke="var(--paper-deep)" stroke-width="6" stroke-linecap="round"></path>
+      <rect x="149" y="56" width="16" height="9" rx="2" fill="var(--paper-deep)" stroke="var(--ink)" stroke-width="3"></rect>
+      <rect x="66" y="116" width="58" height="12" rx="6" fill="var(--paper-deep)" stroke="var(--ink)" stroke-width="3"></rect>
+      <rect x="86" y="58" width="18" height="60" rx="4" fill="var(--paper-deep)" stroke="var(--ink)" stroke-width="3"></rect>
+      <rect x="58" y="101" width="30" height="11" rx="5.5" fill="var(--copper)" stroke="var(--ink)" stroke-width="3"></rect>
+      <rect x="102" y="101" width="30" height="11" rx="5.5" fill="var(--copper)" stroke="var(--ink)" stroke-width="3"></rect>
+      <path class="drop" d="M157 76 c-4 6-4 9 0 12 c4-3 4-6 0-12 z" fill="var(--copper-bright)"></path>
+    </svg>
+    <span class="faucet-hint" data-i18n="hero.drip">still dripping</span>
+  </div>
   <div class="catalog-no rev d2" data-i18n="hero.catno">Model Context Protocol · Server for Microsoft Word</div>
-  <h1 class="rev d2">Kitchen&shy;Sink<span class="four">4</span>Word</h1><p class="edition-badge rev d2" data-i18n="hero.edition">Community Edition</p><p class="platform-label" data-i18n="platform.hero">Windows only</p><p class="platform-hero-note"><a href="#family" data-i18n="platform.heroNote">Mac user? Our Excel, PowerPoint and Web tools support Mac.</a></p>
+  <h1 class="rev d2">Kitchen&shy;Sink<span class="four">4</span>Word</h1>
+  <div class="ed-banner rev d2" role="note">
+  <p class="ed-banner-title">The Community editions</p>
+  <p class="ed-banner-sub">Free and open source under the AGPL</p>
+  <p class="ed-banner-cta"><a class="ed-banner-btn" href="https://kitchensink4.ai/products/business/">Business Editions and commercial Fixtures? Click here</a></p>
+  </div>
+  <p class="edition-badge rev d2" data-i18n="hero.edition">Community Edition</p><p class="platform-label" data-i18n="platform.hero">Windows only</p><p class="platform-hero-note"><a href="#family" data-i18n="platform.heroNote">Mac user? Our Excel, PowerPoint and Web tools support Mac.</a></p>
   <p class="tagline rev d3" data-i18n="hero.tagline">Everything <em>plus</em> the kitchen sink for Microsoft&nbsp;Word: the most complete .docx&nbsp;MCP&nbsp;server ever plumbed.</p>
   <p class="idiom-note rev d3" data-i18n="hero.idiom"></p>
   <div class="specs-strip rev d4">
@@ -760,7 +922,7 @@ footer .row>span{min-width:0;overflow-wrap:anywhere}
   <div class="wrap" style="text-align:center;padding:8px 0 2px;opacity:.4;font-size:11px">
     <img src="https://visitor-badge.laobi.icu/badge?page_id=nometalalchemist.KitchenSink4Word&left_color=%231e3550&right_color=%233f5878&left_text=views" alt="views" height="18" style="vertical-align:middle">
   </div>
-<nav class="footer-links" aria-label="Contact, privacy, and sale terms"><a href="https://kitchensink4.ai/contact/" data-i18n="f.contact">Contact</a> · <a href="https://kitchensink4.ai/privacy/" data-i18n="f.privacy">Privacy</a> · <a href="https://kitchensink4.ai/terms-of-sale/" data-i18n="f.terms">Terms of sale</a> · <a href="https://kitchensink4.ai/refunds/" data-i18n="f.refunds">Refunds</a> · <a href="https://kitchensink4.ai/company/" data-i18n="f.company">Company</a></nav>
+<nav class="footer-links" aria-label="Contact, privacy, and sale terms"><a href="#service" data-i18n="m.service">SERVICE</a> · <a href="https://pypi.org/project/kitchensink4word/">PYPI</a> · <a href="https://kitchensink4.ai/contact/" data-i18n="f.contact">Contact</a> · <a href="https://kitchensink4.ai/privacy/" data-i18n="f.privacy">Privacy</a> · <a href="https://kitchensink4.ai/terms-of-sale/" data-i18n="f.terms">Terms of sale</a> · <a href="https://kitchensink4.ai/refunds/" data-i18n="f.refunds">Refunds</a> · <a href="https://kitchensink4.ai/company/" data-i18n="f.company">Company</a></nav>
 </footer>
 
 <script>
@@ -773,9 +935,8 @@ en: {
 "pageTitle": "KitchenSink4Word Community Edition: Everything plus the kitchen sink for Microsoft Word",
 "f.privacy": "Privacy",
 "f.contact": "Contact",
-"m.company": "COMPANY",
-"sw.here": "(you are here)",
-"sw.store": "The storefront",
+"sw.store": "The Works",
+"hero.drip": "still dripping",
 "h2.new": "New in this version",
 "new.label": "JUST IN",
 "new.sub": "The whole list, no release notes required.",
@@ -797,7 +958,6 @@ en: {
 "m.left": "<b>EST. 2026</b> · FINE INSTRUMENTS FOR DOCUMENT PLUMBING",
 "m.catalog": "CATALOG № 221",
 "m.service": "SERVICE",
-"m.family": "FAMILY",
 "hero.stamp": "DOES<br>EVERYTHING",
 "hero.catno": "Model Context Protocol · Server for Microsoft Word",
 "hero.edition": "Community Edition",
@@ -914,9 +1074,8 @@ ko: {
 "pageTitle": "KitchenSink4Word Community Edition: Microsoft Word 도구라면 없는 게 없는 MCP 서버",
 "f.privacy": "개인정보",
 "f.contact": "문의",
-"m.company": "회사",
-"sw.here": "(현재 페이지)",
-"sw.store": "스토어",
+"sw.store": "전체 매장",
+"hero.drip": "아직 물이 떨어집니다",
 "h2.new": "이번 버전의 새 기능",
 "new.label": "신규 입고",
 "new.sub": "릴리스 노트를 읽을 필요 없이, 이게 전부입니다.",
@@ -938,7 +1097,6 @@ ko: {
 "m.left": "<b>EST. 2026</b> · 문서 배관을 위한 정밀 기구점",
 "m.catalog": "카탈로그 № 221",
 "m.service": "서비스",
-"m.family": "제품군",
 "hero.stamp": "안 되는 게<br>없음",
 "hero.catno": "Model Context Protocol · Microsoft Word용 서버",
 "hero.edition": "Community Edition",
@@ -1055,9 +1213,8 @@ ja: {
 "pageTitle": "KitchenSink4Word Community Edition: Microsoft Word のための、何でも揃う MCP サーバー",
 "f.privacy": "プライバシー",
 "f.contact": "お問い合わせ",
-"m.company": "会社",
-"sw.here": "(現在のページ)",
-"sw.store": "ストアトップ",
+"sw.store": "ストア全体",
+"hero.drip": "まだ滴っています",
 "h2.new": "このバージョンの新機能",
 "new.label": "新入荷",
 "new.sub": "リリースノートを読まなくても、これで全部です。",
@@ -1079,7 +1236,6 @@ ja: {
 "m.left": "<b>EST. 2026</b> · 文書配管のための精密器具",
 "m.catalog": "カタログ № 221",
 "m.service": "サービス",
-"m.family": "ファミリー",
 "hero.stamp": "全部<br>入り",
 "hero.catno": "Model Context Protocol · Microsoft Word 用サーバー",
 "hero.edition": "Community Edition",
@@ -1196,9 +1352,8 @@ zh: {
 "pageTitle": "KitchenSink4Word Community Edition: 为 Microsoft Word 而备，应有尽有的 MCP 服务器",
 "f.privacy": "隐私",
 "f.contact": "联系",
-"m.company": "公司",
-"sw.here": "(当前页面)",
-"sw.store": "商店首页",
+"sw.store": "整个商店",
+"hero.drip": "还在滴水",
 "h2.new": "本版本新增",
 "new.label": "新到货",
 "new.sub": "不用翻发布说明,就这些。",
@@ -1220,7 +1375,6 @@ zh: {
 "m.left": "<b>EST. 2026</b> · 文档管道精密器具行",
 "m.catalog": "目录 № 221",
 "m.service": "服务",
-"m.family": "家族",
 "hero.stamp": "无所<br>不能",
 "hero.catno": "Model Context Protocol · Microsoft Word 专用服务器",
 "hero.edition": "Community Edition",
@@ -1337,9 +1491,8 @@ de: {
 "pageTitle": "KitchenSink4Word Community Edition: Microsoft Word mit allem Drum und Dran",
 "f.privacy": "Datenschutz",
 "f.contact": "Kontakt",
-"m.company": "UNTERNEHMEN",
-"sw.here": "(Sie sind hier)",
-"sw.store": "Zum Laden",
+"sw.store": "Der ganze Laden",
+"hero.drip": "tropft immer noch",
 "h2.new": "Neu in dieser Version",
 "new.label": "NEU EINGETROFFEN",
 "new.sub": "Die ganze Liste, ganz ohne Release Notes.",
@@ -1361,7 +1514,6 @@ de: {
 "m.left": "<b>GEGR. 2026</b> · FEINE INSTRUMENTE FÜR DOKUMENTEN-KLEMPNEREI",
 "m.catalog": "KATALOG № 221",
 "m.service": "SERVICE",
-"m.family": "FAMILIE",
 "hero.stamp": "KANN<br>ALLES",
 "hero.catno": "Model Context Protocol · Server für Microsoft Word",
 "hero.edition": "Community Edition",
@@ -1478,9 +1630,8 @@ fr: {
 "pageTitle": "KitchenSink4Word Community Edition : absolument tout pour Microsoft Word, jusqu'au moindre détail",
 "f.privacy": "Confidentialité",
 "f.contact": "Contact",
-"m.company": "ENTREPRISE",
-"sw.here": "(vous êtes ici)",
-"sw.store": "La boutique",
+"sw.store": "Toute la boutique",
+"hero.drip": "ça goutte encore",
 "h2.new": "Nouveautés de cette version",
 "new.label": "ARRIVAGE",
 "new.sub": "La liste complète, sans passer par les notes de version.",
@@ -1502,7 +1653,6 @@ fr: {
 "m.left": "<b>FONDÉ EN 2026</b> · INSTRUMENTS DE PRÉCISION POUR PLOMBERIE DOCUMENTAIRE",
 "m.catalog": "CATALOGUE № 221",
 "m.service": "SERVICE",
-"m.family": "FAMILLE",
 "hero.stamp": "FAIT<br>TOUT",
 "hero.catno": "Model Context Protocol · Serveur pour Microsoft Word",
 "hero.edition": "Community Edition",
@@ -1619,9 +1769,8 @@ es: {
 "pageTitle": "KitchenSink4Word Community Edition: de todo para Microsoft Word, hasta lo que no imaginas",
 "f.privacy": "Privacidad",
 "f.contact": "Contacto",
-"m.company": "EMPRESA",
-"sw.here": "(está aquí)",
-"sw.store": "La tienda",
+"sw.store": "Toda la tienda",
+"hero.drip": "sigue goteando",
 "h2.new": "Novedades de esta versión",
 "new.label": "RECIÉN LLEGADO",
 "new.sub": "La lista entera, sin tener que leer las notas de la versión.",
@@ -1643,7 +1792,6 @@ es: {
 "m.left": "<b>EST. 2026</b> · INSTRUMENTOS FINOS PARA FONTANERÍA DOCUMENTAL",
 "m.catalog": "CATÁLOGO № 221",
 "m.service": "SERVICIO",
-"m.family": "FAMILIA",
 "hero.stamp": "LO HACE<br>TODO",
 "hero.catno": "Model Context Protocol · Servidor para Microsoft Word",
 "hero.edition": "Community Edition",
@@ -1757,7 +1905,7 @@ es: {
 }
 };
 /*I18N-END*/
-var LANGS = [["en","EN"],["ko","한국어"],["ja","日本語"],["zh","中文"],["de","DE"],["fr","FR"],["es","ES"]];
+var LANGS = [["en","EN","English"],["ko","KO","한국어"],["ja","JA","日本語"],["zh","ZH","中文"],["de","DE","Deutsch"],["fr","FR","Français"],["es","ES","Español"]];
 var HTML_LANG = {en:"en", ko:"ko", ja:"ja", zh:"zh-CN", de:"de", fr:"fr", es:"es"};
 function apply(lang){
   if (window.ks4InstallCapture) window.ks4InstallCapture();
@@ -1777,18 +1925,26 @@ function apply(lang){
   for (var j = 0; j < btns.length; j++){
     btns[j].setAttribute("aria-pressed", String(btns[j].getAttribute("data-lang") === lang));
   }
+  /* the rail's compact control shows the code for the language now in force */
+  var code = document.getElementById("langCode");
+  if (code){
+    for (var c = 0; c < LANGS.length; c++){ if (LANGS[c][0] === lang) code.textContent = LANGS[c][1]; }
+  }
   try { localStorage.setItem("ks4-lang", lang); } catch(e){}
 }
 var nav = document.getElementById("langToggle");
 if (nav){
-  LANGS.forEach(function(pair, idx){
-    if (idx){ var s = document.createElement("span"); s.className = "sep"; s.textContent = "·"; nav.appendChild(s); }
+  LANGS.forEach(function(pair){
     var b = document.createElement("button");
     b.type = "button";
     b.setAttribute("data-lang", pair[0]);
     b.setAttribute("aria-pressed", "false");
-    b.textContent = pair[1];
-    b.addEventListener("click", function(){ apply(pair[0]); });
+    b.textContent = pair[2];
+    b.addEventListener("click", function(){
+      apply(pair[0]);
+      var menu = b.closest ? b.closest("details") : null;
+      if (menu) menu.open = false;
+    });
     nav.appendChild(b);
   });
 }
@@ -1849,6 +2005,38 @@ document.addEventListener('click',async function(event){
 window.ks4InstallRefresh();
 })();
 
+</script>
+<script>
+/* The three <details> menus in the rail close on an outside tap and on Escape,
+   and the row of sink tabs starts with the current sink in view when it has to
+   scroll. Same two behaviours as nav.js on the corporate pages; kept inline
+   here so a product page carries no cross-repository script dependency. */
+(function(){
+"use strict";
+function open_(){ return Array.prototype.slice.call(document.querySelectorAll("details.nav-menu[open]")); }
+document.addEventListener("pointerdown", function(event){
+  open_().forEach(function(menu){ if (!menu.contains(event.target)) menu.open = false; });
+}, true);
+document.addEventListener("keydown", function(event){
+  if (event.key !== "Escape") return;
+  open_().forEach(function(menu){
+    menu.open = false;
+    var summary = menu.querySelector("summary");
+    if (summary) summary.focus();
+  });
+});
+document.addEventListener("click", function(event){
+  var link = event.target.closest ? event.target.closest(".nav-pop a") : null;
+  if (!link) return;
+  var menu = link.closest("details.nav-menu");
+  if (menu) menu.open = false;
+});
+var here = document.querySelector(".sinkrow .sink.is-here");
+var row = here && here.closest ? here.closest(".sinkrow") : null;
+if (row && row.scrollWidth > row.clientWidth){
+  row.scrollLeft = Math.max(0, here.offsetLeft - (row.clientWidth - here.offsetWidth) / 2);
+}
+})();
 </script>
 </body>
 </html>
