@@ -398,52 +398,6 @@ footer .row>span{min-width:0;overflow-wrap:anywhere}
 @supports (color:color-mix(in srgb,red 50%,blue)){
   .edition-badge{--edition-fill:color-mix(in srgb,var(--edition-accent) 80%,var(--ink))}
 }
-/* The Community editions banner, the same tab the storefront carries, cut in
-   this page's own finish. It sits above the hero so the edition is read before
-   the name. --banner-accent walks the same fallback chain as .edition-badge, so
-   one block serves four palettes; --banner-ink is that accent deepened 70/30
-   toward the page ink, which is what carries the small type past WCAG AA on
-   both grounds it prints on, the banner's paper-deep and the sub-line's paper. */
-.ed-banner{--banner-accent:var(--copper,var(--brass,var(--patina,var(--ink))));
-  --banner-ink:var(--banner-accent);
-  position:relative;margin:26px 0 0;padding:20px 20px 16px;
-  border:3px solid var(--ink);background:var(--paper-deep);box-shadow:var(--shadow);
-  text-align:center;min-width:0;
-  display:grid;grid-template-columns:minmax(0,1fr);justify-items:center;align-items:center;gap:8px}
-.ed-banner:before{content:"";position:absolute;left:0;right:0;top:0;height:10px;
-  background:repeating-linear-gradient(90deg,var(--ink) 0 22px,var(--paper-deep) 22px 44px)}
-.ed-banner-title{font-family:'Fraunces',Georgia,serif;
-  font-size:clamp(19px,2.3vw,27px);font-weight:800;line-height:1.2;letter-spacing:-.01em;
-  margin:0;color:var(--ink);overflow-wrap:anywhere;text-wrap:balance}
-.ed-banner-sub{display:table;margin:0;padding:5px 14px;
-  border:2px solid var(--banner-ink);color:var(--banner-ink);background:var(--paper);
-  font-family:'IBM Plex Mono',ui-monospace,monospace;
-  font-size:11px;letter-spacing:.14em;text-transform:uppercase;line-height:1.6;
-  max-width:100%;overflow-wrap:anywhere}
-.ed-banner-cta{margin:0;font-size:12px;line-height:1.6}
-/* The Business link is a real button, cut to the same shape as the page's
-   primary button and filled with the deepened accent the sub-line already
-   uses, so the paper-coloured label clears WCAG AA on every finish, the
-   evening coats included. One block, four palettes, as above. */
-.ed-banner-cta .ed-banner-btn{display:inline-block;max-width:100%;overflow-wrap:anywhere;
-  padding:12px 22px;border:2px solid var(--banner-ink);
-  background:var(--banner-ink);color:var(--paper);text-decoration:none;
-  font-size:13px;font-weight:700;letter-spacing:.04em;line-height:1.4;
-  box-shadow:3px 3px 0 var(--ink);transition:all .15s}
-.ed-banner-cta .ed-banner-btn:hover{transform:translate(-2px,-2px);box-shadow:5px 5px 0 var(--ink)}
-.ed-banner-cta .ed-banner-btn:focus-visible{outline:3px solid var(--ink);outline-offset:4px}
-@media(min-width:1000px){
-  .ed-banner{grid-template-columns:minmax(0,1fr) auto;column-gap:22px;row-gap:5px;
-    justify-items:start;align-items:center;text-align:left;padding:18px 22px 16px}
-  .ed-banner-title{grid-column:1;grid-row:1}
-  .ed-banner-sub{grid-column:1;grid-row:2}
-  .ed-banner-cta{grid-column:2;grid-row:1/span 2;justify-self:end;align-self:center}
-}
-@media(max-width:560px){.ed-banner-cta .ed-banner-btn{padding:11px 16px;font-size:13px;letter-spacing:.02em}}
-@supports (color:color-mix(in srgb,red 50%,blue)){
-  .ed-banner{--banner-ink:color-mix(in srgb,var(--banner-accent) 70%,var(--ink))}
-}
-@media(max-width:560px){.ed-banner{padding:18px 14px 14px;gap:7px}.ed-banner-sub{letter-spacing:.1em}}
 .platform-label,.hero .platform-label{display:table;margin:16px auto 10px;padding:8px 15px;border:2px solid var(--ink);background:var(--paper-deep);color:var(--ink);font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:700;letter-spacing:.04em;line-height:1.5;max-width:100%}
 .platform-hero-note,.hero .platform-hero-note{font-family:inherit;font-size:12px;line-height:1.6;margin:8px auto 18px;max-width:640px}
 
@@ -513,7 +467,9 @@ details.nav-menu>summary:focus-visible{outline:2px solid var(--ink);outline-offs
 .nav-pop a:hover,.nav-pop button:hover,.nav-pop a:focus-visible,.nav-pop button:focus-visible{
   background:var(--paper-deep);color:var(--ink);text-decoration:none}
 .mast-tools .nav-pop{left:auto;right:0}
-.lang-menu>summary{height:32px;padding:0 10px;border:1.5px solid var(--ink);color:var(--ink)}
+details.nav-menu.lang-menu>summary{height:32px;padding:0 10px;
+  border:1.5px solid var(--ink);color:var(--ink);
+  font-size:11px;font-weight:700;letter-spacing:.08em}
 .lang-pop{min-width:150px}
 .lang-pop button{text-transform:none;letter-spacing:.02em;font-size:12px;font-weight:400}
 .lang-pop button[aria-pressed="true"]{border-left-color:var(--ink);font-weight:700}
@@ -562,6 +518,7 @@ details.nav-menu>summary:focus-visible{outline:2px solid var(--ink);outline-offs
   .mast .wordmark{font-size:20px}
   nav.top,.mast-gh,.sink-install{display:none}
   .burger-menu{display:block}
+  details.nav-menu.lang-menu>summary{height:44px}
   .sinkbar-in{display:block;height:auto;padding:0}
   .sinkrow{overflow-x:auto;scroll-snap-type:x mandatory;background:var(--paper-deep);
     padding:0 8px;scrollbar-width:none}
@@ -570,27 +527,33 @@ details.nav-menu>summary:focus-visible{outline:2px solid var(--ink);outline-offs
   .deptline{font-size:9px;letter-spacing:.14em;gap:8px}
 }
 
-/* ---------- the Community editions banner, now under the H1 (#846) ---------- */
-.hero .ed-banner{max-width:620px;margin:16px auto 0;padding:11px 12px 8px;border-width:2px;
-  gap:4px;text-align:center}
-.hero .ed-banner:before{height:6px;
-  background:repeating-linear-gradient(90deg,var(--ink) 0 14px,var(--paper-deep) 14px 28px)}
-.hero .ed-banner-title{font-size:13px;line-height:1.2}
-.hero .ed-banner-sub{margin:0;padding:2px 7px;border-width:1.5px;font-size:7.5px;
-  letter-spacing:.12em;line-height:1.5}
-.hero .ed-banner-cta{margin:0}
-.hero .ed-banner-cta .ed-banner-btn{padding:6px 11px;font-size:10px;letter-spacing:.02em;
-  line-height:1.35;box-shadow:2px 2px 0 var(--ink)}
-.hero .ed-banner-cta .ed-banner-btn:hover{box-shadow:4px 4px 0 var(--ink)}
-.hero .ed-banner.solo{max-width:420px;justify-items:center;text-align:center}
-@media(min-width:700px){
-  .hero .ed-banner{grid-template-columns:minmax(0,1fr) auto;column-gap:12px;row-gap:2px;
-    justify-items:start;align-items:center;text-align:left;padding:11px 12px 8px}
-  .hero .ed-banner-title{grid-column:1;grid-row:1}
-  .hero .ed-banner-sub{grid-column:1;grid-row:2}
-  .hero .ed-banner-cta{grid-column:2;grid-row:1/span 2;justify-self:end;align-self:center}
-  .hero .ed-banner.solo{grid-template-columns:minmax(0,1fr);justify-items:center;text-align:center}
+/* ---------- the edition roundel, then the Business box under the tile ------
+   The roundel now reads before the name, so its own top margin is dropped and
+   the catalogue box's 28px carries the gap above it. The Business link keeps
+   the words the banner carried and the shape of the page's primary button,
+   filled with the accent deepened toward the ink so the paper-coloured label
+   clears WCAG AA on every finish, the evening coats included. --biz-accent
+   walks the same fallback chain .edition-badge does, so one block serves the
+   four palettes. */
+.hero .edition-badge{margin:0 auto 10px}
+.hero .platform-hero-note{margin-bottom:0}
+.hero-biz{margin:14px auto 0;text-align:center}
+.hero-biz-btn{--biz-accent:var(--copper,var(--brass,var(--patina,var(--ink))));
+  --biz-ink:var(--biz-accent);
+  display:inline-flex;align-items:center;justify-content:center;
+  min-height:44px;max-width:100%;padding:11px 20px;
+  border:2px solid var(--biz-ink);background:var(--biz-ink);color:var(--paper);
+  font-family:'IBM Plex Mono',"Plex Mono Fallback",ui-monospace,monospace;
+  font-size:12px;font-weight:700;letter-spacing:.04em;line-height:1.4;
+  text-decoration:none;overflow-wrap:anywhere;
+  box-shadow:3px 3px 0 var(--ink);transition:all .15s}
+.hero-biz-btn:hover{transform:translate(-2px,-2px);box-shadow:5px 5px 0 var(--ink);
+  color:var(--paper);text-decoration:none}
+.hero-biz-btn:focus-visible{outline:3px solid var(--ink);outline-offset:4px}
+@supports (color:color-mix(in srgb,red 50%,blue)){
+  .hero-biz-btn{--biz-ink:color-mix(in srgb,var(--biz-accent) 70%,var(--ink))}
 }
+@media(max-width:560px){.hero-biz-btn{padding:11px 14px;font-size:11px;letter-spacing:.02em}}
 
 /* ---------- the awning, unrolled under the department line ---------- */
 .awning{height:44px;margin:0 0 17px;position:relative;
@@ -686,13 +649,10 @@ details.nav-menu>summary:focus-visible{outline:2px solid var(--ink);outline-offs
     <span class="faucet-hint" data-i18n="hero.drip">still dripping</span>
   </div>
   <div class="catalog-no rev d2" data-i18n="hero.catno">Model Context Protocol · Server for Microsoft Word</div>
+  <p class="edition-badge rev d2" data-i18n="hero.edition">Community Edition</p>
   <h1 class="rev d2">Kitchen&shy;Sink<span class="four">4</span>Word</h1>
-  <div class="ed-banner rev d2" role="note">
-  <p class="ed-banner-title">The Community editions</p>
-  <p class="ed-banner-sub">Free and open source under the AGPL</p>
-  <p class="ed-banner-cta"><a class="ed-banner-btn" href="https://kitchensink4.ai/products/business/">Business Editions and commercial Fixtures? Click here</a></p>
-  </div>
-  <p class="edition-badge rev d2" data-i18n="hero.edition">Community Edition</p><p class="platform-label" data-i18n="platform.hero">Windows only</p><p class="platform-hero-note"><a href="#family" data-i18n="platform.heroNote">Mac user? Our Excel, PowerPoint and Web tools support Mac.</a></p>
+  <p class="platform-label" data-i18n="platform.hero">Windows only</p><p class="platform-hero-note"><a href="#family" data-i18n="platform.heroNote">Mac user? Our Excel, PowerPoint and Web tools support Mac.</a></p>
+  <p class="hero-biz rev d2"><a class="hero-biz-btn" href="https://kitchensink4.ai/products/business/">Business Editions and commercial Fixtures? Click here</a></p>
   <p class="tagline rev d3" data-i18n="hero.tagline">Everything <em>plus</em> the kitchen sink for Microsoft&nbsp;Word: the most complete .docx&nbsp;MCP&nbsp;server ever plumbed.</p>
   <p class="idiom-note rev d3" data-i18n="hero.idiom"></p>
   <div class="specs-strip rev d4">
