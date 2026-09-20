@@ -792,9 +792,13 @@ _REASON_NO_BUILTIN = (
     "written explicitly"
 )
 _REASON_STRUCTURAL = (
-    "outline level is document structure (heading level and TOC "
-    "membership), not appearance; baking it would change the merged "
-    "document's outline"
+    "the carried heading keeps the TARGET style's outline level, so its "
+    "level in the table of contents and its position in the navigation "
+    "pane follow the target, not the source. Outline level is structure "
+    "rather than appearance: writing the source's level would put two "
+    "competing heading hierarchies in one outline. Set it deliberately "
+    "with set_paragraph_format(outline_level=...) if the source's level "
+    "is the one you want."
 )
 _REASON_NUMBERED = (
     "the paragraph's indent comes from its numbering level, and a direct "
