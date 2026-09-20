@@ -2793,3 +2793,143 @@ def test_m10_identical_themes_leave_the_border_a_live_reference(tmp_path):
     assert ppr is None or ppr.find(qn("w:pBdr")) is None, (
         "an identical themed border was baked onto the carried paragraph"
     )
+
+
+# ==================================================================
+# ROUND 4 - m11: w:clrSchemeMapping. text1/text2/background1/background2
+# are not slots, they are indirections through settings.xml. A dark-mode
+# source maps t1 to light1 and bg1 to dark1, so it resolves themeColor=
+# "text1" to the opposite end of the same colour scheme the target uses.
+# The mapping does not travel any more than the theme part does.
+# ==================================================================
+
+
+def _set_mapping(path, **kv):
+    pkg = DocxPackage(path)
+    root = pkg.root("word/settings.xml")
+    el = root.find(qn("w:clrSchemeMapping"))
+    if el is None:
+        el = etree.Element(qn("w:clrSchemeMapping"))
+        root.insert(0, el)
+    for k, v in kv.items():
+        el.set(qn(f"w:{k}"), v)
+    pkg.mark_dirty("word/settings.xml")
+    pkg.save(do_backup=False)
+
+
+def _dark_mode_pair(tmp_path, *, style_rpr=None, direct=None):
+    """Identical colour SCHEMES on both sides; only the mapping differs,
+    so nothing but the mapping can explain a colour change."""
+    source = _build(tmp_path / "src.docx", ("Dark mode body.",))
+    target = _build(tmp_path / "tgt.docx", ("T1",))
+    if style_rpr:
+        for path in (source, target):
+            pkg = DocxPackage(path)
+            _style(pkg, "Normal", "Normal", rpr=style_rpr)
+            pkg.save(do_backup=False)
+    if direct:
+        pkg = DocxPackage(source)
+        p = [el for k, _i, el in rd.body_items(pkg) if k == "paragraph"][0]
+        r = p.find(qn("w:r"))
+        r.insert(0, etree.fromstring(
+            f'<w:rPr xmlns:w="{_W}">{direct}</w:rPr>'.encode()
+        ))
+        pkg.mark_dirty()
+        pkg.save(do_backup=False)
+    _set_theme(source, **_BASE_SLOTS)
+    _set_theme(target, **_BASE_SLOTS)
+    _set_mapping(source, bg1="dark1", t1="light1", bg2="dark2", t2="light2")
+    _set_mapping(target, bg1="light1", t1="dark1", bg2="light2", t2="dark2")
+    return source, target
+
+
+def test_m11_the_mapping_sends_text1_to_different_slots(tmp_path):
+    """The unit of the thing: the same name, two slots, two colours."""
+    from word_mcp.ops.assembly import _ThemeColors
+
+    source, target = _dark_mode_pair(tmp_path)
+    src_t = _ThemeColors(DocxPackage(source))
+    tgt_t = _ThemeColors(DocxPackage(target))
+    assert src_t.slot_for("text1") == "lt1"
+    assert tgt_t.slot_for("text1") == "dk1"
+    assert src_t.resolve("text1", None, None) == "FFFFFF"
+    assert tgt_t.resolve("text1", None, None) == "000000"
+    # the colour SCHEMES are identical, so slot comparison says nothing
+    assert src_t.differing_slots(tgt_t) == []
+    assert src_t.differing_mappings(tgt_t) == [
+        "background1", "background2", "text1", "text2",
+    ]
+
+
+def test_m11_a_direct_mapped_reference_is_frozen(tmp_path):
+    """Direct formatting: themeColor="text1" is white in the source and
+    would turn black in the target, so it is frozen at white."""
+    source, target = _dark_mode_pair(
+        tmp_path,
+        direct='<w:color w:val="000000" w:themeColor="text1"/>',
+    )
+    out = srv.insert_document(str(target), str(source))
+    assert out["theme_colors"]["references_frozen"] == 1
+    assert "text1" in out["theme_colors"]["differing_mappings"]
+    paras, _pkg = _body_paras(target)
+    color = _rpr_of(paras[-1]).find(qn("w:color"))
+    assert color.get(qn("w:val")) == "FFFFFF"
+    assert qn("w:themeColor") not in color.attrib
+
+
+def test_m11_an_inherited_mapped_reference_is_baked(tmp_path):
+    """The style path: both files define the same Normal, and the mapping
+    alone makes it resolve to opposite colours."""
+    source, target = _dark_mode_pair(
+        tmp_path,
+        style_rpr='<w:color w:val="000000" w:themeColor="text1"/>',
+    )
+    out = srv.insert_document(str(target), str(source))
+    assert out["theme_colors"]["resolved_from_styles"] == 1
+    assert "rPr.color.val(theme)" in (
+        out["document_defaults"]["differing_properties"]
+    )
+    paras, _pkg = _body_paras(target)
+    color = _rpr_of(paras[-1]).find(qn("w:color"))
+    assert color.get(qn("w:val")) == "FFFFFF"
+
+
+def test_m11_the_report_names_the_mapping_not_only_the_slots(tmp_path):
+    """The block used to say 'these colour slots differ' and then list
+    none, which reads as a contradiction when the schemes are identical."""
+    source, target = _dark_mode_pair(
+        tmp_path,
+        direct='<w:color w:val="000000" w:themeColor="text1"/>',
+    )
+    out = srv.insert_document(str(target), str(source))
+    block = out["theme_colors"]
+    assert block["differing_slots"] == []
+    assert block["differing_mappings"] == [
+        "background1", "background2", "text1", "text2",
+    ]
+    assert "clrSchemeMapping" in block["note"]
+
+
+def test_m11_the_same_mapping_on_both_sides_changes_nothing(tmp_path):
+    """No mapping difference, no scheme difference, nothing frozen."""
+    source = _build(tmp_path / "src.docx", ("Body.",))
+    target = _build(tmp_path / "tgt.docx", ("T1",))
+    pkg = DocxPackage(source)
+    p = [el for k, _i, el in rd.body_items(pkg) if k == "paragraph"][0]
+    p.find(qn("w:r")).insert(0, etree.fromstring(
+        f'<w:rPr xmlns:w="{_W}"><w:color w:val="000000" '
+        'w:themeColor="text1"/></w:rPr>'.encode()
+    ))
+    pkg.mark_dirty()
+    pkg.save(do_backup=False)
+    for path in (source, target):
+        _set_theme(path, **_BASE_SLOTS)
+        _set_mapping(path, bg1="dark1", t1="light1")
+
+    out = srv.insert_document(str(target), str(source))
+    assert "theme_colors" not in out
+    paras, _pkg = _body_paras(target)
+    color = _rpr_of(paras[-1]).find(qn("w:color"))
+    assert color.get(qn("w:themeColor")) == "text1", (
+        "the reference should still follow the merged document's theme"
+    )
