@@ -925,7 +925,10 @@ def list_styles(pkg: DocxPackage) -> list[dict]:
             "id": style.get(qn("w:styleId")),
             "type": style.get(qn("w:type")),
             "name": name_el.get(qn("w:val")) if name_el is not None else None,
-            "based_on": based_el.get(qn("w:val")) if based_el is not None else None,
+            # "" (not None) for a style with no parent: define_style reads
+            # None as "leave alone / Normal on create" and "" as "no parent",
+            # so the read-one-define-one round trip stays faithful.
+            "based_on": based_el.get(qn("w:val")) if based_el is not None else "",
         }
         pf = _style_paragraph_formatting(style.find(qn("w:pPr")))
         if pf:
