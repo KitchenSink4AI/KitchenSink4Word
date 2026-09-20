@@ -2646,3 +2646,150 @@ def test_m7_the_baked_value_is_what_word_draws(tmp_path, base, tint, shade):
         f"{base} tint={tint} shade={shade}: Word drew {drawn}, "
         f"the tool bakes {baked}"
     )
+
+
+# ==================================================================
+# ROUND 4 - m10: theme colours inside whole-element properties. A
+# w:pBdr bottom rule, a carried table's w:tcBorders and w:tblBorders
+# and w:pgBorders all carry w:themeColor on CT_Border children, which
+# no aspect table names, so they passed through untouched and silently
+# re-themed. Whole-element properties were compared byte for byte, so
+# two identical w:pBdr elements were equal even when the two themes
+# paint them different colours.
+# ==================================================================
+
+_PBDR_THEMED = (
+    '<w:pBdr><w:bottom w:val="single" w:sz="12" w:space="1" '
+    'w:color="4472C4" w:themeColor="accent1"/></w:pBdr>'
+)
+
+
+def _themed_docs(tmp_path, src_accent, tgt_accent, texts=("Ruled body.",)):
+    source = _build(tmp_path / "src.docx", texts)
+    target = _build(tmp_path / "tgt.docx", ("T1",))
+    _set_theme(source, **{**_BASE_SLOTS, "accent1": src_accent})
+    _set_theme(target, **{**_BASE_SLOTS, "accent1": tgt_accent})
+    return source, target
+
+
+def _bottom_of(ppr):
+    return ppr.find(f"{qn('w:pBdr')}/{qn('w:bottom')}")
+
+
+def test_m10_a_themed_paragraph_border_is_frozen(tmp_path):
+    """The verifier's case: a themed bottom rule under a heading used to
+    produce theme_colors: false and nothing at all."""
+    source = _build(tmp_path / "src.docx", ("Ruled body.",))
+    pkg = DocxPackage(source)
+    p = [el for k, _i, el in rd.body_items(pkg) if k == "paragraph"][0]
+    p.insert(0, etree.fromstring(
+        f'<w:pPr xmlns:w="{_W}">{_PBDR_THEMED}</w:pPr>'.encode()
+    ))
+    pkg.mark_dirty()
+    pkg.save(do_backup=False)
+    _set_theme(source, **{**_BASE_SLOTS, "accent1": "C00000"})
+    target = _build(tmp_path / "tgt.docx", ("T1",))
+    _set_theme(target, **{**_BASE_SLOTS, "accent1": "00B050"})
+
+    out = srv.insert_document(str(target), str(source))
+    assert out["theme_colors"]["references_frozen"] >= 1
+    assert "accent1" in out["theme_colors"]["differing_slots"]
+    paras, _pkg = _body_paras(target)
+    bottom = _bottom_of(paras[-1].find(qn("w:pPr")))
+    assert bottom.get(qn("w:color")) == "C00000"
+    assert qn("w:themeColor") not in bottom.attrib
+
+
+def test_m10_a_themed_border_with_a_tint_freezes_through_the_tint(tmp_path):
+    """The two round-4 fixes meet here: a tinted themed rule must bake the
+    HSL-tinted colour, not the raw slot and not an RGB blend."""
+    source = _build(tmp_path / "src.docx", ("Ruled body.",))
+    pkg = DocxPackage(source)
+    p = [el for k, _i, el in rd.body_items(pkg) if k == "paragraph"][0]
+    p.insert(0, etree.fromstring(
+        f'<w:pPr xmlns:w="{_W}"><w:pBdr><w:bottom w:val="single" '
+        'w:sz="12" w:color="4472C4" w:themeColor="accent1" '
+        'w:themeTint="99"/></w:pBdr></w:pPr>'.encode()
+    ))
+    pkg.mark_dirty()
+    pkg.save(do_backup=False)
+    _set_theme(source, **{**_BASE_SLOTS, "accent1": "C00000"})
+    target = _build(tmp_path / "tgt.docx", ("T1",))
+    _set_theme(target, **{**_BASE_SLOTS, "accent1": "00B050"})
+
+    srv.insert_document(str(target), str(source))
+    paras, _pkg = _body_paras(target)
+    bottom = _bottom_of(paras[-1].find(qn("w:pPr")))
+    assert bottom.get(qn("w:color")) == "FF4040"
+    assert qn("w:themeTint") not in bottom.attrib
+
+
+def test_m10_table_cell_borders_and_shading_are_frozen(tmp_path):
+    """Borders inside a carried table go through the same descent."""
+    source = _build(tmp_path / "src.docx", ("Lead.",))
+    d = Document(str(source))
+    t = d.add_table(rows=1, cols=1)
+    t.cell(0, 0).text = "cell"
+    d.save(str(source))
+    pkg = DocxPackage(source)
+    tc = pkg.root("word/document.xml").find(
+        f".//{qn('w:tbl')}/{qn('w:tr')}/{qn('w:tc')}"
+    )
+    tc.find(qn("w:tcPr")).append(etree.fromstring(
+        f'<w:tcBorders xmlns:w="{_W}"><w:top w:val="single" w:sz="8" '
+        'w:color="4472C4" w:themeColor="accent1"/></w:tcBorders>'.encode()
+    ))
+    pkg.mark_dirty()
+    pkg.save(do_backup=False)
+    _set_theme(source, **{**_BASE_SLOTS, "accent1": "C00000"})
+    target = _build(tmp_path / "tgt.docx", ("T1",))
+    _set_theme(target, **{**_BASE_SLOTS, "accent1": "00B050"})
+
+    out = srv.insert_document(str(target), str(source))
+    assert out["theme_colors"]["references_frozen"] >= 1
+    pkg = DocxPackage(target)
+    top = pkg.root("word/document.xml").find(
+        f".//{qn('w:tcBorders')}/{qn('w:top')}"
+    )
+    assert top.get(qn("w:color")) == "C00000"
+    assert qn("w:themeColor") not in top.attrib
+
+
+def test_m10_an_inherited_themed_border_is_no_longer_equal_to_itself(
+    tmp_path,
+):
+    """Both files define the SAME style with the SAME pBdr xml, and the two
+    themes paint it different colours. Byte comparison called them equal."""
+    source, target = _themed_docs(tmp_path, "C00000", "00B050")
+    for path in (source, target):
+        pkg = DocxPackage(path)
+        _style(pkg, "Normal", "Normal", ppr=_PBDR_THEMED)
+        pkg.save(do_backup=False)
+
+    out = srv.insert_document(str(target), str(source))
+    assert "pPr.pBdr" in (out["document_defaults"] or {})[
+        "differing_properties"
+    ]
+    paras, _pkg = _body_paras(target)
+    bottom = _bottom_of(paras[-1].find(qn("w:pPr")))
+    assert bottom is not None, "the source's rule was not baked on"
+    assert bottom.get(qn("w:color")) == "C00000"
+    assert qn("w:themeColor") not in bottom.attrib
+
+
+def test_m10_identical_themes_leave_the_border_a_live_reference(tmp_path):
+    """No slot differs, so nothing is frozen and nothing is baked: the rule
+    still follows the merged document's own theme."""
+    source, target = _themed_docs(tmp_path, "4472C4", "4472C4")
+    for path in (source, target):
+        pkg = DocxPackage(path)
+        _style(pkg, "Normal", "Normal", ppr=_PBDR_THEMED)
+        pkg.save(do_backup=False)
+
+    out = srv.insert_document(str(target), str(source))
+    assert "theme_colors" not in out
+    paras, _pkg = _body_paras(target)
+    ppr = paras[-1].find(qn("w:pPr"))
+    assert ppr is None or ppr.find(qn("w:pBdr")) is None, (
+        "an identical themed border was baked onto the carried paragraph"
+    )
