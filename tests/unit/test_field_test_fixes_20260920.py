@@ -423,3 +423,79 @@ def test_com_refresh_fields_updates_every_section_header(tmp_path):
     assert _header_texts(path, "word/header2.xml") == ["Fresh Title"], (
         "section two's header field was never updated"
     )
+
+
+# ==================================================================
+# #865: first_line_indent_pt must not leave a residual w:hanging
+# ==================================================================
+
+
+def _ind_of(p):
+    ind = p.find(f"{qn('w:pPr')}/{qn('w:ind')}")
+    if ind is None:
+        return None
+    return {
+        "left": ind.get(qn("w:left")),
+        "firstLine": ind.get(qn("w:firstLine")),
+        "hanging": ind.get(qn("w:hanging")),
+    }
+
+
+def test_first_line_indent_zero_clears_a_hanging_indent(tmp_path):
+    """A heading that inherited left=720 hanging=720 from a reference-list
+    style came out left=0 hanging=720 firstLine=0: a half-inch negative
+    first line on a centred heading."""
+    from word_mcp.ops import text as tx
+
+    path = _build(tmp_path / "d.docx", ("References",))
+    pkg = DocxPackage(path)
+    tx.set_paragraph_format(
+        pkg, [0], {"indent_left_pt": 36, "first_line_indent_pt": -36}
+    )
+    live = [el for k, _i, el in rd.body_items(pkg) if k == "paragraph"][0]
+    assert _ind_of(live)["hanging"] == "720"
+    tx.set_paragraph_format(
+        pkg, [0], {"indent_left_pt": 0, "first_line_indent_pt": 0}
+    )
+    pkg.save(do_backup=False)
+
+    ind = _ind_of(_body_paras(path)[0][0])
+    assert ind["firstLine"] == "0"
+    assert ind["hanging"] is None, "residual hanging indent left in place"
+
+
+def test_negative_first_line_indent_clears_a_first_line_indent(tmp_path):
+    """The mirror: switching to a hanging indent must drop firstLine."""
+    from word_mcp.ops import text as tx
+
+    path = _build(tmp_path / "d.docx", ("Entry",))
+    pkg = DocxPackage(path)
+    tx.set_paragraph_format(pkg, [0], {"first_line_indent_pt": 18})
+    tx.set_paragraph_format(pkg, [0], {"first_line_indent_pt": -36})
+    pkg.save(do_backup=False)
+    ind = _ind_of(_body_paras(path)[0][0])
+    assert ind["hanging"] == "720"
+    assert ind["firstLine"] is None
+
+
+def test_define_style_first_line_indent_clears_hanging(tmp_path):
+    """Same writer, style edition: redefining a hanging-indent style with a
+    positive first line must not keep the hanging attribute."""
+    from word_mcp.ops import structure as sx
+
+    path = _build(tmp_path / "d.docx", ("Body.",))
+    pkg = DocxPackage(path)
+    sx.define_style(
+        pkg, style_id="RefEntry", name="Ref Entry",
+        paragraph_formatting={"indent_left_pt": 36, "first_line_indent_pt": -36},
+    )
+    sx.define_style(
+        pkg, style_id="RefEntry", name="Ref Entry",
+        paragraph_formatting={"first_line_indent_pt": 0},
+    )
+    pkg.save(do_backup=False)
+    s = _style_el(DocxPackage(path), "RefEntry")
+    ind = s.find(f"{qn('w:pPr')}/{qn('w:ind')}")
+    assert ind.get(qn("w:firstLine")) == "0"
+    assert ind.get(qn("w:hanging")) in (None, "0"), "hanging indent survived"
+    assert ind.get(qn("w:left")) == "720", "the left indent was not addressed"
