@@ -757,6 +757,14 @@ _ATTR_RPR: dict[str, dict[str, str]] = {
     "effect": {"val": "none"},
     "shd": {"val": "clear", "color": "auto", "fill": "auto"},
     "lang": {"val": "", "eastAsia": "", "bidi": ""},
+    # A visible box around text used to vanish in silence (round-2 review).
+    "bdr": {"val": "none", "sz": "", "space": "", "color": "auto",
+            "frame": "", "shadow": ""},
+    "fitText": {"val": "", "id": ""},
+    "eastAsianLayout": {
+        "id": "", "combine": "", "combineBrackets": "", "vert": "",
+        "vertCompress": "",
+    },
 }
 _TOGGLE_PPR: dict[str, str] = {
     "keepNext": "0", "keepLines": "0", "pageBreakBefore": "0",
@@ -780,11 +788,14 @@ _ATTR_PPR: dict[str, dict[str, str]] = {
     # Detected but never baked: outlineLvl is structure (TOC membership),
     # not appearance, so a difference is reported instead of written.
     "outlineLvl": {"val": ""},
+    # Table conditional-formatting marker: meaningless outside a table and
+    # carried with the cell anyway, so it is reported, never written.
+    "cnfStyle": {"val": ""},
 }
-_NEVER_BAKE_PPR = {("outlineLvl", "val")}
+_NEVER_BAKE_PPR = {("outlineLvl", "val"), ("cnfStyle", "val")}
 # Multi-child properties compared and carried as whole elements (an
 # attribute-wise diff is meaningless for them).
-_COMPLEX_PPR = ("pBdr", "tabs")
+_COMPLEX_PPR = ("pBdr", "tabs", "framePr")
 
 _REASON_NO_BUILTIN = (
     "the source defines no value anywhere in its chain, so its rendered "
@@ -807,6 +818,10 @@ _REASON_NUMBERED = (
 _REASON_COMPLEX = (
     "the target defines this multi-part property and the source does not; "
     "writing an empty one to cancel it is not safe"
+)
+_REASON_CONDITIONAL = (
+    "a table conditional-formatting marker has no meaning outside the "
+    "table it belongs to, and the carried cells keep their own"
 )
 
 _RPR_ORDER = [
@@ -1471,7 +1486,11 @@ class _DefaultsBaker:
             self.differing.add((which, key))
             self._attribute(key, which, styles)
             if which == "pPr" and key in _NEVER_BAKE_PPR:
-                self.not_baked.setdefault((which, key), _REASON_STRUCTURAL)
+                self.not_baked.setdefault(
+                    (which, key),
+                    _REASON_CONDITIONAL if key[0] == "cnfStyle"
+                    else _REASON_STRUCTURAL,
+                )
                 continue
             if key[1] == "_xml":
                 if sv is None:
