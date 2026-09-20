@@ -414,10 +414,18 @@ def _style_child(s: etree._Element, local: str) -> etree._Element:
 _ATTRWISE_MERGE = {"rFonts", "spacing", "ind", "lang"}
 
 
-def _merge_props(existing: etree._Element, new: etree._Element, order: list) -> None:
+def _merge_props(
+    existing: etree._Element,
+    new: etree._Element,
+    order: list,
+    drop: dict[str, set[str]] | None = None,
+) -> None:
     """Merge a freshly built pPr/rPr into an existing one: a property the
     call addressed replaces its counterpart, everything else survives
-    (field test 2026-09-20, punchlist #861)."""
+    (field test 2026-09-20, punchlist #861). drop names attributes the call
+    addressed by REMOVING them (w:hanging when a first-line indent is set:
+    an explicit zero still counts as specified and suppresses firstLine,
+    ECMA-376 17.3.1.12)."""
     for child in list(new):
         local = etree.QName(child).localname
         cur = existing.find(child.tag)
@@ -432,11 +440,15 @@ def _merge_props(existing: etree._Element, new: etree._Element, order: list) -> 
                     break
             if not placed:
                 existing.append(child)
+            cur = child
         elif local in _ATTRWISE_MERGE:
             for k, v in child.attrib.items():
                 cur.set(k, v)
         else:
             existing.replace(cur, child)
+            cur = child
+        for attr in (drop or {}).get(local, ()):
+            cur.attrib.pop(qn(f"w:{attr}"), None)
 
 
 def define_style(
@@ -445,7 +457,7 @@ def define_style(
     style_id: str,
     name: str,
     style_type: str = "paragraph",
-    based_on: str | None = "Normal",
+    based_on: str | None = None,
     next_style: str | None = None,
     character_formatting: dict | None = None,
     paragraph_formatting: dict | None = None,
@@ -454,7 +466,12 @@ def define_style(
     character_formatting takes the format_text keys; paragraph_formatting
     takes alignment / spacing / indent keys from set_paragraph_format.
     On an existing style, attributes and children the call does not address
-    (w:default, rsid, uiPriority, unaddressed formatting) are kept."""
+    (w:default, rsid, uiPriority, unaddressed formatting) are kept.
+
+    based_on: omitted (None) means "Normal" when CREATING and "leave the
+    existing parent alone" when updating; "" clears the parent (adversarial
+    review 2026-09-20, M1: a non-None default silently re-parented every
+    update call that did not mention it)."""
     import re
 
     if style_type not in ("paragraph", "character"):
@@ -472,6 +489,7 @@ def define_style(
             break
 
     result: dict = {"style_defined": style_id, "type": style_type}
+    before = None
     if existing is not None:
         old_type = existing.get(qn("w:type"))
         if old_type and old_type != style_type:
@@ -481,26 +499,29 @@ def define_style(
                 "it would break). Use a different style_id."
             )
         s = existing
-        result["replaced"] = True
+        before = etree.tostring(existing)
     else:
         s = etree.SubElement(root, qn("w:style"))
         s.set(qn("w:type"), style_type)
         s.set(qn("w:styleId"), style_id)
-        result["replaced"] = False
     _style_child(s, "name").set(qn("w:val"), name)
-    if based_on == style_id:
-        # based_on defaults to "Normal", so redefining Normal itself would
-        # write a self-referential basedOn (punchlist #861).
+    parent = "Normal" if (based_on is None and existing is None) else based_on
+    if parent == style_id:
+        # A style cannot be based on itself (redefining Normal with the old
+        # "Normal" default used to write exactly that): punchlist #861.
         result["based_on_self_skipped"] = True
-    elif based_on:
-        _style_child(s, "basedOn").set(qn("w:val"), based_on)
-    elif existing is not None:
+    elif parent:
+        _style_child(s, "basedOn").set(qn("w:val"), parent)
+    elif parent == "":
         bo = s.find(qn("w:basedOn"))
         if bo is not None:
             s.remove(bo)
     if next_style and style_type == "paragraph":
         _style_child(s, "next").set(qn("w:val"), next_style)
-    _style_child(s, "qFormat")
+    if existing is None:
+        # Adding qFormat to an EXISTING style promotes a deliberately
+        # non-quick style into Word's gallery (adversarial review, m1).
+        _style_child(s, "qFormat")
 
     if paragraph_formatting:
         from .text import _PARA_FMT_KEYS, _check_keys
@@ -534,6 +555,7 @@ def define_style(
             if "line_spacing" in pf:
                 sp.set(qn("w:line"), str(int(pf["line_spacing"] * 240)))
                 sp.set(qn("w:lineRule"), "auto")
+        drop: dict[str, set[str]] = {}
         if any(k in pf for k in ("indent_left_pt", "indent_right_pt", "first_line_indent_pt")):
             ind = etree.SubElement(ppr, qn("w:ind"))
             if "indent_left_pt" in pf:
@@ -542,24 +564,42 @@ def define_style(
                 ind.set(qn("w:right"), str(int(pf["indent_right_pt"] * 20)))
             if "first_line_indent_pt" in pf:
                 v = pf["first_line_indent_pt"]
-                # hanging wins over firstLine, so one clears the other (#865).
+                # hanging suppresses firstLine even at "0" (ECMA-376
+                # 17.3.1.12), so the counterpart is REMOVED, never zeroed
+                # (adversarial review 2026-09-20, B1).
                 if v >= 0:
                     ind.set(qn("w:firstLine"), str(int(v * 20)))
-                    ind.set(qn("w:hanging"), "0")
+                    drop["ind"] = {"hanging"}
                 else:
                     ind.set(qn("w:hanging"), str(int(-v * 20)))
-                    ind.set(qn("w:firstLine"), "0")
+                    drop["ind"] = {"firstLine"}
         from .text import _PPR_ORDER
 
-        _merge_props(_style_child(s, "pPr"), ppr, _PPR_ORDER)
+        _merge_props(_style_child(s, "pPr"), ppr, _PPR_ORDER, drop)
 
     if character_formatting:
         from .text import _RPR_ORDER, _make_rpr
 
+        # explicit_off: a style must STATE that a toggle is off, or the
+        # existing definition (and the parent style) keeps it on -- "turn
+        # bold off" was a silent no-op (adversarial review, M2).
         _merge_props(
-            _style_child(s, "rPr"), _make_rpr(character_formatting), _RPR_ORDER
+            _style_child(s, "rPr"),
+            _make_rpr(character_formatting, explicit_off=True),
+            _RPR_ORDER,
         )
 
+    for holder in ("pPr", "rPr"):
+        el = s.find(qn(f"w:{holder}"))
+        if el is not None and len(el) == 0:
+            s.remove(el)
+    if before is not None:
+        changed = etree.tostring(s) != before
+        result["replaced"] = changed
+        if not changed:
+            result["unchanged"] = True
+    else:
+        result["replaced"] = False
     pkg.mark_dirty("word/styles.xml")
     return result
 

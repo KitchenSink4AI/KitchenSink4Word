@@ -771,17 +771,25 @@ def _check_keys(fmt: dict, allowed: set, what: str) -> None:
         )
 
 
-def _make_rpr(fmt: dict) -> etree._Element:
+def _make_rpr(fmt: dict, *, explicit_off: bool = False) -> etree._Element:
     rpr = etree.Element(qn("w:rPr"))
-    _apply_fmt(rpr, fmt)
+    _apply_fmt(rpr, fmt, explicit_off=explicit_off)
     return rpr
 
 
-def _apply_fmt(rpr: etree._Element, fmt: dict) -> None:
+def _apply_fmt(
+    rpr: etree._Element, fmt: dict, *, explicit_off: bool = False
+) -> None:
     """Apply formatting keys to an rPr. Children are created in CT_RPr
     schema order, and an rPr that is already out of order is sorted on the
     way in (punchlist #866): Word tolerates any order, strict OOXML
-    validators and other consumers do not."""
+    validators and other consumers do not.
+
+    explicit_off writes the off form of a toggle (w:val="0", w:u val="none")
+    instead of removing the element. Direct run formatting removes, so the
+    run falls back to its style; a STYLE definition must state the off, or
+    it inherits the property from its parent and the call is a silent no-op
+    (adversarial review 2026-09-20, M2)."""
     _check_keys(fmt, _CHAR_FMT_KEYS, "character-formatting")
     _sort_rpr(rpr)
     for key, tag in _TOGGLES.items():
@@ -794,6 +802,10 @@ def _apply_fmt(rpr: etree._Element, fmt: dict) -> None:
                     el.set(qn("w:val"), "single")
                 else:
                     el.attrib.pop(qn("w:val"), None)
+            elif explicit_off:
+                if el is None:
+                    el = _rpr_get_or_add(rpr, tag[2:])
+                el.set(qn("w:val"), "none" if key == "underline" else "0")
             elif el is not None:
                 rpr.remove(el)
     if "font" in fmt:
@@ -826,9 +838,15 @@ def _apply_fmt(rpr: etree._Element, fmt: dict) -> None:
     ):
         if key in fmt:
             el = rpr.find(qn(tag))
-            if fmt[key] and el is None:
-                _rpr_get_or_add(rpr, tag[2:])
-            elif not fmt[key] and el is not None:
+            if fmt[key]:
+                if el is None:
+                    el = _rpr_get_or_add(rpr, tag[2:])
+                el.attrib.pop(qn("w:val"), None)
+            elif explicit_off:
+                if el is None:
+                    el = _rpr_get_or_add(rpr, tag[2:])
+                el.set(qn("w:val"), "0")
+            elif el is not None:
                 rpr.remove(el)
     if "char_spacing_pt" in fmt:
         el = rpr.find(qn("w:spacing"))

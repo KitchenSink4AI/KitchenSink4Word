@@ -2432,7 +2432,7 @@ def define_style(
     style_id: str,
     name: str,
     style_type: str = "paragraph",
-    based_on: str | None = "Normal",
+    based_on: str | None = None,
     next_style: str | None = None,
     character_formatting: dict | None = None,
     paragraph_formatting: dict | None = None,
@@ -2440,12 +2440,12 @@ def define_style(
 ) -> dict:
     """Create a custom style (paragraph or character), or update one in
     place: addressed properties are replaced, the rest of the style
-    (w:default, rsid, other formatting) is kept. character_formatting takes
-    the format_text keys, paragraph_formatting the set_paragraph_format
-    keys. get_styles returns definitions in this exact input shape, so
-    cloning is one read plus one define. Auto-backup: prev/anchor slots in
-    .ks4w-backups (backup=False skips rotation only); atomic validated
-    save. Refuses documents open in Word.
+    (w:default, rsid, other formatting) is kept. based_on omitted means
+    "Normal" on create and "leave the parent alone" on update; "" clears
+    it. bold: false writes an explicit off. character_formatting takes the
+    format_text keys, paragraph_formatting the set_paragraph_format keys.
+    get_styles returns this input shape, so cloning is one read plus one
+    define. Auto-backup; atomic validated save.
     """
     return _edit(
         file_path,

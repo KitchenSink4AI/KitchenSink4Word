@@ -251,14 +251,19 @@ def test_define_style_preserves_default_rsid_and_eastasia(tmp_path):
 
 
 def test_define_style_never_writes_self_referential_based_on(tmp_path):
-    """based_on defaults to 'Normal'; redefining Normal itself must not
-    produce <w:basedOn w:val='Normal'/> on Normal."""
+    """Redefining Normal itself must not produce a basedOn on Normal,
+    whether based_on is omitted (round 2: omitted leaves the parent alone)
+    or passed explicitly as its own id."""
     from word_mcp.ops import structure as sx
 
     path = _build(tmp_path / "d.docx", ("Body.",))
     pkg = DocxPackage(path)
-    out = sx.define_style(
+    sx.define_style(
         pkg, style_id="Normal", name="Normal",
+        character_formatting={"size_pt": 12},
+    )
+    out = sx.define_style(
+        pkg, style_id="Normal", name="Normal", based_on="Normal",
         character_formatting={"size_pt": 12},
     )
     pkg.save(do_backup=False)
@@ -1073,3 +1078,223 @@ def test_outline_heuristic_finds_a_centered_unbolded_title(tmp_path):
     by_text = {h["text"]: h for h in outline}
     assert "Chapter Five" in by_text
     assert by_text["Chapter Five"]["confidence"] == "low"
+
+
+# ==================================================================
+# ROUND 2 - adversarial review of PR #29 (2026-09-20)
+# B1: define_style wrote w:hanging="0" next to a firstLine indent, and
+# an explicit zero still suppresses firstLine (ECMA-376 17.3.1.12), so
+# the style rendered no indent at all.
+# ==================================================================
+
+
+def test_define_style_first_line_indent_removes_hanging_attribute(tmp_path):
+    from word_mcp.ops import structure as sx
+
+    path = _build(tmp_path / "d.docx", ("Body.",))
+    pkg = DocxPackage(path)
+    sx.define_style(
+        pkg, style_id="RefEntry", name="Ref Entry",
+        paragraph_formatting={"indent_left_pt": 36, "first_line_indent_pt": -36},
+    )
+    sx.define_style(
+        pkg, style_id="RefEntry", name="Ref Entry",
+        paragraph_formatting={"first_line_indent_pt": 36},
+    )
+    pkg.save(do_backup=False)
+    ind = _style_el(DocxPackage(path), "RefEntry").find(
+        f"{qn('w:pPr')}/{qn('w:ind')}"
+    )
+    assert ind.get(qn("w:firstLine")) == "720"
+    assert qn("w:hanging") not in ind.attrib, (
+        "w:hanging suppresses firstLine even at 0; it must be REMOVED"
+    )
+    assert ind.get(qn("w:left")) == "720"
+
+
+def test_define_style_hanging_indent_removes_first_line_attribute(tmp_path):
+    from word_mcp.ops import structure as sx
+
+    path = _build(tmp_path / "d.docx", ("Body.",))
+    pkg = DocxPackage(path)
+    sx.define_style(
+        pkg, style_id="RefEntry", name="Ref Entry",
+        paragraph_formatting={"first_line_indent_pt": 18},
+    )
+    sx.define_style(
+        pkg, style_id="RefEntry", name="Ref Entry",
+        paragraph_formatting={"first_line_indent_pt": -36},
+    )
+    pkg.save(do_backup=False)
+    ind = _style_el(DocxPackage(path), "RefEntry").find(
+        f"{qn('w:pPr')}/{qn('w:ind')}"
+    )
+    assert ind.get(qn("w:hanging")) == "720"
+    assert qn("w:firstLine") not in ind.attrib
+
+
+def test_define_style_indent_is_what_word_reports(tmp_path):
+    """COM: Word itself must report the first-line indent the call asked
+    for. The XML-only assertion passed on the broken output too."""
+    import pytest
+
+    if not _word_available():
+        pytest.skip("Word/pywin32 not available on this machine")
+    from word_mcp.ops import structure as sx
+    from word_mcp.ops import text as tx
+
+    path = _build(tmp_path / "fli.docx", ("A wrapping paragraph. " * 12,))
+    pkg = DocxPackage(path)
+    sx.define_style(
+        pkg, style_id="FLI", name="First Line Indent", based_on="",
+        paragraph_formatting={"first_line_indent_pt": 36},
+    )
+    tx.apply_style(pkg, [0], "FLI")
+    pkg.save(do_backup=False)
+
+    import pythoncom
+    import win32com.client
+
+    pythoncom.CoInitialize()
+    app = win32com.client.DispatchEx("Word.Application")
+    app.Visible = False
+    app.DisplayAlerts = 0
+    try:
+        doc = app.Documents.Open(str(path.resolve()), False, True, False)
+        try:
+            first_line = float(doc.Paragraphs(1).FirstLineIndent)
+        finally:
+            doc.Close(0)
+    finally:
+        app.Quit()
+        pythoncom.CoUninitialize()
+    assert abs(first_line - 36.0) < 0.5, (
+        f"Word reports FirstLineIndent={first_line}, expected 36"
+    )
+
+
+# ==================================================================
+# M1: based_on defaulted to "Normal", so every update that did not
+# mention it silently re-parented the style.
+# ==================================================================
+
+
+def test_define_style_update_keeps_the_existing_parent(tmp_path):
+    from word_mcp.ops import structure as sx
+
+    path = _build(tmp_path / "d.docx", ("Body.",))
+    pkg = DocxPackage(path)
+    sx.define_style(pkg, style_id="Quote", name="Quote")
+    sx.define_style(pkg, style_id="MyQuote", name="My Quote", based_on="Quote")
+    sx.define_style(
+        pkg, style_id="MyQuote", name="My Quote",
+        character_formatting={"bold": True},
+    )
+    pkg.save(do_backup=False)
+    s = _style_el(DocxPackage(path), "MyQuote")
+    assert s.find(qn("w:basedOn")).get(qn("w:val")) == "Quote", (
+        "an update that never mentioned based_on re-parented the style"
+    )
+
+
+def test_define_style_create_defaults_to_normal_and_empty_clears(tmp_path):
+    from word_mcp.ops import structure as sx
+
+    path = _build(tmp_path / "d.docx", ("Body.",))
+    pkg = DocxPackage(path)
+    sx.define_style(pkg, style_id="Fresh", name="Fresh")
+    assert _style_el(pkg, "Fresh").find(qn("w:basedOn")).get(
+        qn("w:val")
+    ) == "Normal"
+    sx.define_style(pkg, style_id="Fresh", name="Fresh", based_on="")
+    pkg.save(do_backup=False)
+    assert _style_el(DocxPackage(path), "Fresh").find(qn("w:basedOn")) is None
+
+
+def test_define_style_does_not_add_qformat_to_an_existing_style(tmp_path):
+    """Adding qFormat to a deliberately non-quick style promotes it into
+    Word's gallery (review m1)."""
+    from word_mcp.ops import structure as sx
+
+    path = _build(tmp_path / "d.docx", ("Body.",))
+    pkg = DocxPackage(path)
+    s = _style_el(pkg, "Normal")
+    q = s.find(qn("w:qFormat"))
+    if q is not None:
+        s.remove(q)
+    _ordered_sub(s, "semiHidden", _STYLE_ORDER)
+    pkg.mark_dirty("word/styles.xml")
+    sx.define_style(
+        pkg, style_id="Normal", name="Normal",
+        character_formatting={"size_pt": 12},
+    )
+    pkg.save(do_backup=False)
+    s = _style_el(DocxPackage(path), "Normal")
+    assert s.find(qn("w:qFormat")) is None
+    assert s.find(qn("w:semiHidden")) is not None
+
+
+# ==================================================================
+# M2: a falsy toggle could no longer clear a style property, and the
+# result claimed replaced=True for a no-op.
+# ==================================================================
+
+
+def test_define_style_can_turn_a_toggle_off_again(tmp_path):
+    from word_mcp.ops import structure as sx
+
+    path = _build(tmp_path / "d.docx", ("Body.",))
+    pkg = DocxPackage(path)
+    sx.define_style(
+        pkg, style_id="Emph", name="Emph", style_type="character",
+        character_formatting={"bold": True, "italic": True},
+    )
+    out = sx.define_style(
+        pkg, style_id="Emph", name="Emph", style_type="character",
+        character_formatting={"bold": False},
+    )
+    pkg.save(do_backup=False)
+    rpr = _style_el(DocxPackage(path), "Emph").find(qn("w:rPr"))
+    b = rpr.find(qn("w:b"))
+    assert b is not None and b.get(qn("w:val")) in ("0", "false", "off"), (
+        "bold: false left the defined bold in place"
+    )
+    i = rpr.find(qn("w:i"))
+    assert i is not None and qn("w:val") not in i.attrib, "italic was lost"
+    assert out["replaced"] is True
+
+
+def test_define_style_underline_false_writes_none(tmp_path):
+    from word_mcp.ops import structure as sx
+
+    path = _build(tmp_path / "d.docx", ("Body.",))
+    pkg = DocxPackage(path)
+    sx.define_style(
+        pkg, style_id="U", name="U", style_type="character",
+        character_formatting={"underline": True},
+    )
+    sx.define_style(
+        pkg, style_id="U", name="U", style_type="character",
+        character_formatting={"underline": False},
+    )
+    pkg.save(do_backup=False)
+    u = _style_el(DocxPackage(path), "U").find(f"{qn('w:rPr')}/{qn('w:u')}")
+    assert u is not None and u.get(qn("w:val")) == "none"
+
+
+def test_define_style_no_op_does_not_claim_replaced(tmp_path):
+    from word_mcp.ops import structure as sx
+
+    path = _build(tmp_path / "d.docx", ("Body.",))
+    pkg = DocxPackage(path)
+    sx.define_style(
+        pkg, style_id="Same", name="Same",
+        character_formatting={"size_pt": 12},
+    )
+    out = sx.define_style(
+        pkg, style_id="Same", name="Same",
+        character_formatting={"size_pt": 12},
+    )
+    pkg.save(do_backup=False)
+    assert out["replaced"] is False
+    assert out.get("unchanged") is True
