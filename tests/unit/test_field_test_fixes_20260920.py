@@ -499,3 +499,101 @@ def test_define_style_first_line_indent_clears_hanging(tmp_path):
     assert ind.get(qn("w:firstLine")) == "0"
     assert ind.get(qn("w:hanging")) in (None, "0"), "hanging indent survived"
     assert ind.get(qn("w:left")) == "720", "the left indent was not addressed"
+
+
+# ==================================================================
+# #866: rPr children must be written in CT_RPr schema order
+# ==================================================================
+
+
+def _rpr_children(p, run_index=0):
+    runs = [r for r in p.iter(qn("w:r"))]
+    rpr = runs[run_index].find(qn("w:rPr"))
+    return [etree.QName(c).localname for c in rpr]
+
+
+def _in_schema_order(names):
+    from word_mcp.ops.text import _RPR_ORDER
+
+    ranks = [_RPR_ORDER.index(n) for n in names if n in _RPR_ORDER]
+    return ranks == sorted(ranks)
+
+
+def test_insert_paragraphs_writes_rpr_in_schema_order(tmp_path):
+    """The blue-insertion run produced <w:u/><w:color/>, which is backwards:
+    CT_RPr sequences color before u."""
+    path = _build(tmp_path / "d.docx", ("Anchor",))
+    srv.insert_paragraphs(
+        str(path),
+        [{
+            "text": "Inserted blue underlined text",
+            "formatting": {"underline": True, "color": "0000FF"},
+        }],
+        location={"paragraph": 0},
+    )
+    paras, _pkg = _body_paras(path)
+    names = _rpr_children(paras[1])
+    assert set(names) >= {"u", "color"}
+    assert _in_schema_order(names), names
+
+
+def test_format_text_keeps_rpr_in_schema_order(tmp_path):
+    """Adding emphasis to an existing rPr appended b and i after u, which
+    is also invalid: b and i come first."""
+    path = _build(tmp_path / "d.docx", ("Anchor",))
+    srv.insert_paragraphs(
+        str(path),
+        [{
+            "text": "Inserted blue underlined text",
+            "formatting": {"underline": True, "color": "0000FF"},
+        }],
+        location={"paragraph": 0},
+    )
+    srv.format_text(
+        str(path),
+        find="Inserted blue underlined text",
+        formatting={"bold": True, "italic": True},
+    )
+    paras, _pkg = _body_paras(path)
+    names = _rpr_children(paras[1])
+    assert set(names) >= {"b", "i", "u", "color"}
+    assert _in_schema_order(names), names
+
+
+def test_format_text_repairs_an_out_of_order_rpr(tmp_path):
+    """A run whose rPr an older version wrote out of order is sorted when
+    the tool next touches it."""
+    from word_mcp.ops import text as tx
+
+    path = _build(tmp_path / "d.docx", ("Target text",))
+    pkg = DocxPackage(path)
+    p = [el for k, _i, el in rd.body_items(pkg) if k == "paragraph"][0]
+    r = p.find(qn("w:r"))
+    rpr = etree.Element(qn("w:rPr"))
+    r.insert(0, rpr)
+    etree.SubElement(rpr, qn("w:u")).set(qn("w:val"), "single")
+    etree.SubElement(rpr, qn("w:color")).set(qn("w:val"), "0000FF")
+    tx.format_text(pkg, find="Target text", formatting={"bold": True})
+    pkg.save(do_backup=False)
+    paras, _pkg = _body_paras(path)
+    names = _rpr_children(paras[0])
+    assert _in_schema_order(names), names
+
+
+def test_define_style_rpr_is_in_schema_order(tmp_path):
+    """The same writer feeds style definitions."""
+    from word_mcp.ops import structure as sx
+
+    path = _build(tmp_path / "d.docx", ("Body.",))
+    pkg = DocxPackage(path)
+    sx.define_style(
+        pkg, style_id="Blue", name="Blue",
+        character_formatting={
+            "underline": True, "color": "0000FF", "bold": True,
+            "size_pt": 12, "font": "Times New Roman",
+        },
+    )
+    pkg.save(do_backup=False)
+    s = _style_el(DocxPackage(path), "Blue")
+    names = [etree.QName(c).localname for c in s.find(qn("w:rPr"))]
+    assert _in_schema_order(names), names
