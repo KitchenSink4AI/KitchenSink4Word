@@ -1113,6 +1113,21 @@ class _ThemeColors:
             if self.slots.get(slot) != other.slots.get(slot)
         )
 
+    def differing_mappings(self, other: "_ThemeColors") -> list[str]:
+        """The ST_ThemeColor names that the two packages send to DIFFERENT
+        slots. text1/text2/background1/background2 go through
+        settings.xml's w:clrSchemeMapping, which does not travel either, so
+        a dark-mode source and a light-mode target resolve text1 to
+        opposite ends of the same colour scheme. Reported separately
+        because the two colour schemes can be identical while the rendered
+        colour still changes (round-3 review, m11)."""
+        if not self.defined or not other.defined:
+            return []
+        return sorted(
+            name for name in _MAPPED_NAMES
+            if self.slot_for(name) != other.slot_for(name)
+        )
+
 
 # The two theme trios, by the attribute that names the slot. Every
 # colour-bearing WordprocessingML element uses one or both of them, so a
@@ -2293,9 +2308,11 @@ def _transplant(
     # part never travels and the target's colours would take over (M6).
     theme_refs_frozen = 0
     theme_slots_differ: list[str] = []
+    theme_mappings_differ: list[str] = []
     if formatting == "source":
         src_theme, tgt_theme = _ThemeColors(src), _ThemeColors(pkg)
         theme_slots_differ = src_theme.differing_slots(tgt_theme)
+        theme_mappings_differ = src_theme.differing_mappings(tgt_theme)
         theme_refs_frozen = _freeze_theme_colors(
             remap_targets, src_theme, tgt_theme
         )
@@ -2656,16 +2673,23 @@ def _transplant(
     ):
         result["theme_colors"] = {
             "differing_slots": theme_slots_differ,
+            **(
+                {"differing_mappings": theme_mappings_differ}
+                if theme_mappings_differ
+                else {}
+            ),
             "references_frozen": theme_refs_frozen,
             "resolved_from_styles": (
                 dd_baker.theme_colors_baked if dd_baker is not None else 0
             ),
             "note": (
-                "the two files' themes define these colour slots "
-                "differently and the theme part does not travel, so theme "
-                "colour references in the carried content were resolved "
-                "against the SOURCE theme and written as plain values; "
-                "they will not follow the target's theme from here on"
+                "the two files resolve these theme colours differently "
+                "(a different colour scheme in the theme part, a different "
+                "clrSchemeMapping in settings.xml, or both) and neither the "
+                "theme part nor the mapping travels, so theme colour "
+                "references in the carried content were resolved against "
+                "the SOURCE theme and written as plain values; they will "
+                "not follow the target's theme from here on"
             ),
         }
     if formatting != "source":
