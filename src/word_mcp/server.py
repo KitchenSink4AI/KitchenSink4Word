@@ -963,11 +963,11 @@ def get_outline(
     """List every heading with its paragraph index and level. Detects
     Heading styles AND w:outlineLvl overrides (direct or style-inherited);
     detected_via names which. detect_formatted=True adds a heuristic scan
-    for direct-formatted headings (short bold/centered paragraphs). When
-    nothing is detected, returns a note plus flat structure counts, not an
-    empty list. The indices feed the location object's paragraph and
-    outline selectors. Open documents are read live. Read-only. TOC
-    generation and heading surgery: academic pack.
+    for direct-formatted headings (short bold, italic or centered;
+    numbered captions excluded): CANDIDATES with an INFERRED level and a
+    confidence. Detecting nothing returns a note plus flat structure
+    counts. The indices feed the location object's paragraph and outline
+    selectors. Read-only. TOC building: academic pack.
     """
     from .com import live_ops as _lo
 

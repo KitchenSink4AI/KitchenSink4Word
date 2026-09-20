@@ -8,6 +8,8 @@ body-level paragraphs and tables are numbered in document order, separately.
 
 from __future__ import annotations
 
+import re
+
 from lxml import etree
 
 from ..core.package import NSMAP, DocxPackage, qn
@@ -215,10 +217,54 @@ def _toggle_on(rpr: etree._Element | None, tag: str) -> bool:
     return el.get(qn("w:val"), "1") not in ("0", "false", "none")
 
 
-def _formatted_heading_level(p: etree._Element) -> int | None:
-    """Heuristic heading level for a direct-formatted paragraph (the
-    academic-template pattern: Normal style + bold/centered runs). Level 1
-    for centered bold, 2 for bold, 3 for italic-only short paragraphs."""
+_CAPTION_LEAD = re.compile(
+    r"^(table|figure|fig\.|chart|exhibit|map|plate|appendix table)\s+"
+    r"[\dIVXivx]+[.:)]?\s+\S",
+    re.I,
+)
+
+
+def _style_props(pkg: DocxPackage, style_id: str | None, which: str) -> dict:
+    """Merged pPr or rPr of a style's basedOn chain (ancestors first)."""
+    if not style_id or not pkg.has_part("word/styles.xml"):
+        return {}
+    defs: dict[str, etree._Element] = {}
+    based: dict[str, str] = {}
+    for s in pkg.root("word/styles.xml").findall(qn("w:style")):
+        sid = s.get(qn("w:styleId"))
+        if not sid:
+            continue
+        defs[sid] = s
+        b = s.find(qn("w:basedOn"))
+        if b is not None and b.get(qn("w:val")):
+            based[sid] = b.get(qn("w:val"))
+    chain: list[str] = []
+    cur: str | None = style_id
+    seen: set[str] = set()
+    while cur and cur in defs and cur not in seen:
+        seen.add(cur)
+        chain.append(cur)
+        cur = based.get(cur)
+    out: dict[str, etree._Element] = {}
+    for sid in reversed(chain):
+        holder = defs[sid].find(qn(f"w:{which}"))
+        if holder is None:
+            continue
+        for child in holder:
+            out[etree.QName(child).localname] = child
+    return out
+
+
+def _formatted_heading_level(
+    p: etree._Element, pkg: DocxPackage | None = None
+) -> tuple[int, str] | None:
+    """Heuristic heading level and confidence for a direct-formatted
+    paragraph (the academic-template pattern: Normal style plus bold or
+    centered runs). Centered bold is level 1 (high), bold level 2
+    (medium), italic-only level 3 (medium), centered-only level 1 (low).
+    Bold and centering are resolved through the paragraph's STYLE chain as
+    well as its direct formatting, and numbered captions ("Table 3. ...")
+    are not headings (field test 2026-09-20, punchlist #868)."""
     ppr = p.find(qn("w:pPr"))
     if ppr is not None and ppr.find(qn("w:numPr")) is not None:
         return None  # list item, not a heading
@@ -227,23 +273,49 @@ def _formatted_heading_level(p: etree._Element) -> int | None:
         return None
     if text[-1] in ".,;":
         return None  # sentence-final punctuation: body prose
+    if _CAPTION_LEAD.match(text):
+        return None  # a numbered caption, not a heading
     runs = [
         r for r in p.iter(qn("w:r"))
         if run_text(r).strip()
     ]
     if not runs:
         return None
-    all_bold = all(_toggle_on(r.find(qn("w:rPr")), "w:b") for r in runs)
-    all_italic = all(_toggle_on(r.find(qn("w:rPr")), "w:i") for r in runs)
-    if not all_bold and not all_italic:
-        return None
-    centered = False
+    style_id = None
     if ppr is not None:
-        jc = ppr.find(qn("w:jc"))
-        centered = jc is not None and jc.get(qn("w:val")) == "center"
+        ps = ppr.find(qn("w:pStyle"))
+        if ps is not None:
+            style_id = ps.get(qn("w:val"))
+    style_rpr = _style_props(pkg, style_id, "rPr") if pkg is not None else {}
+    style_ppr = _style_props(pkg, style_id, "pPr") if pkg is not None else {}
+
+    def toggled(tag: str) -> bool:
+        el = style_rpr.get(tag[2:])
+        return el is not None and el.get(qn("w:val"), "1") not in (
+            "0", "false", "none"
+        )
+
+    all_bold = all(
+        _toggle_on(r.find(qn("w:rPr")), "w:b") or toggled("w:b")
+        for r in runs
+    )
+    all_italic = all(
+        _toggle_on(r.find(qn("w:rPr")), "w:i") or toggled("w:i")
+        for r in runs
+    )
+    centered = False
+    jc = ppr.find(qn("w:jc")) if ppr is not None else None
+    if jc is None:
+        jc = style_ppr.get("jc")
+    if jc is not None:
+        centered = jc.get(qn("w:val")) == "center"
     if all_bold:
-        return 1 if centered else 2
-    return 3
+        return (1, "high") if centered else (2, "medium")
+    if all_italic:
+        return 3, "medium"
+    if centered and len(text.split()) <= 12:
+        return 1, "low"
+    return None
 
 
 def get_outline(
@@ -254,28 +326,36 @@ def get_outline(
     through the style's basedOn chain — the pattern academic templates use
     on Normal-styled paragraphs, which Word's navigation pane honors).
     detected_via per entry: "heading_style" | "outline_level" |
-    "formatting_heuristic" (with detect_formatted=True, short bold or
-    italic direct-formatted paragraphs join the outline)."""
+    "formatting_heuristic" (with detect_formatted=True, short bold,
+    italic or centered direct-formatted paragraphs join the outline).
+    Heuristic entries are CANDIDATES: they carry a confidence (high for
+    centered bold, medium for bold or italic, low for centered only) and
+    their level is inferred from that formatting, not declared by the
+    document."""
     style_outline = _style_outline_map(pkg)
     out = []
     for kind, idx, el in body_items(pkg):
         if kind != "paragraph":
             continue
         level, via = _outline_level_detected(el, style_outline)
+        confidence = None
         if level is None and detect_formatted:
-            level = _formatted_heading_level(el)
-            via = "formatting_heuristic" if level is not None else None
+            guess = _formatted_heading_level(el, pkg)
+            if guess is not None:
+                level, confidence = guess
+                via = "formatting_heuristic"
         if level is not None:
             text = paragraph_text(el).strip()
             if text:
-                out.append(
-                    {
-                        "paragraph_index": idx,
-                        "level": level,
-                        "text": text,
-                        "detected_via": via,
-                    }
-                )
+                entry = {
+                    "paragraph_index": idx,
+                    "level": level,
+                    "text": text,
+                    "detected_via": via,
+                }
+                if confidence is not None:
+                    entry["confidence"] = confidence
+                out.append(entry)
     return out
 
 
