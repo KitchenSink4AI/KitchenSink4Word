@@ -208,3 +208,105 @@ def test_insert_document_cloned_style_is_not_baked(tmp_path):
     paras, _pkg = _body_paras(target)
     sp = _spacing_of(paras[-1])
     assert sp is None or sp["line"] != "300", "cloned style needs no baking"
+
+
+# ==================================================================
+# #861: define_style on an existing style must not strip attributes
+# and children the call does not address (w:default, rsid, eastAsia)
+# ==================================================================
+
+
+def test_define_style_preserves_default_rsid_and_eastasia(tmp_path):
+    """Redefining Normal is the documented read-one-define-one round trip.
+    It must not drop w:default='1' (Word's document-default marker), the
+    rsid, or the eastAsia font slot the call never mentioned."""
+    from word_mcp.ops import structure as sx
+
+    path = _build(tmp_path / "d.docx", ("Body.",))
+    pkg = DocxPackage(path)
+    s = _style_el(pkg, "Normal")
+    rpr = _ordered_sub(s, "rPr", _STYLE_ORDER)
+    rf = etree.SubElement(rpr, qn("w:rFonts"))
+    rf.set(qn("w:ascii"), "Batang")
+    rf.set(qn("w:eastAsia"), "Batang")
+    pkg.mark_dirty("word/styles.xml")
+    pkg.save(do_backup=False)
+
+    pkg = DocxPackage(path)
+    sx.define_style(
+        pkg, style_id="Normal", name="Normal", style_type="paragraph",
+        based_on=None,
+        character_formatting={"font": "Times New Roman", "size_pt": 12},
+    )
+    pkg.save(do_backup=False)
+
+    s = _style_el(DocxPackage(path), "Normal")
+    assert s.get(qn("w:default")) == "1", "lost the document-default marker"
+    assert s.find(qn("w:rsid")) is not None, "lost the rsid"
+    rf = s.find(f"{qn('w:rPr')}/{qn('w:rFonts')}")
+    assert rf.get(qn("w:ascii")) == "Times New Roman"
+    assert rf.get(qn("w:eastAsia")) == "Batang", "lost the eastAsia slot"
+    sz = s.find(f"{qn('w:rPr')}/{qn('w:sz')}")
+    assert sz.get(qn("w:val")) == "24"
+
+
+def test_define_style_never_writes_self_referential_based_on(tmp_path):
+    """based_on defaults to 'Normal'; redefining Normal itself must not
+    produce <w:basedOn w:val='Normal'/> on Normal."""
+    from word_mcp.ops import structure as sx
+
+    path = _build(tmp_path / "d.docx", ("Body.",))
+    pkg = DocxPackage(path)
+    out = sx.define_style(
+        pkg, style_id="Normal", name="Normal",
+        character_formatting={"size_pt": 12},
+    )
+    pkg.save(do_backup=False)
+    s = _style_el(DocxPackage(path), "Normal")
+    assert s.find(qn("w:basedOn")) is None
+    assert out.get("based_on_self_skipped") is True
+
+
+def test_define_style_keeps_unaddressed_children_and_reports(tmp_path):
+    """Redefining a style addressing only character formatting keeps the
+    paragraph formatting, uiPriority and next-style it already had."""
+    from word_mcp.ops import structure as sx
+
+    path = _build(tmp_path / "d.docx", ("Body.",))
+    pkg = DocxPackage(path)
+    sx.define_style(
+        pkg, style_id="Body", name="Body Copy", style_type="paragraph",
+        paragraph_formatting={"line_spacing": 2.0, "space_after_pt": 0},
+        character_formatting={"size_pt": 12},
+    )
+    s = _style_el(pkg, "Body")
+    _ordered_sub(s, "uiPriority", _STYLE_ORDER).set(qn("w:val"), "9")
+    pkg.save(do_backup=False)
+
+    pkg = DocxPackage(path)
+    out = sx.define_style(
+        pkg, style_id="Body", name="Body Copy", style_type="paragraph",
+        character_formatting={"bold": True},
+    )
+    pkg.save(do_backup=False)
+    assert out["replaced"] is True
+    s = _style_el(DocxPackage(path), "Body")
+    assert s.find(qn("w:uiPriority")).get(qn("w:val")) == "9"
+    sp = s.find(f"{qn('w:pPr')}/{qn('w:spacing')}")
+    assert sp is not None and sp.get(qn("w:line")) == "480"
+    assert s.find(f"{qn('w:rPr')}/{qn('w:b')}") is not None
+    # the size the earlier call set is still there (not addressed now)
+    assert s.find(f"{qn('w:rPr')}/{qn('w:sz')}").get(qn("w:val")) == "24"
+
+
+def test_define_style_refuses_changing_an_existing_style_type(tmp_path):
+    from word_mcp.ops import structure as sx
+    from word_mcp.core.errors import WordMcpError
+    import pytest
+
+    path = _build(tmp_path / "d.docx", ("Body.",))
+    pkg = DocxPackage(path)
+    with pytest.raises(WordMcpError, match="type"):
+        sx.define_style(
+            pkg, style_id="Normal", name="Normal", style_type="character",
+        )

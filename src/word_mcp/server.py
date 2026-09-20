@@ -2427,13 +2427,14 @@ def define_style(
     paragraph_formatting: dict | None = None,
     backup: bool = True,
 ) -> dict:
-    """Create or replace a custom style (paragraph or character) with full
-    formatting control; character_formatting takes the format_text keys,
-    paragraph_formatting the set_paragraph_format keys. get_styles returns
-    definitions in this exact input shape, so cloning is one read plus one
-    define. Auto-backup: prev/anchor slots in .ks4w-backups (backup=False
-    skips rotation only); atomic validated save. Refuses documents open in
-    Word.
+    """Create a custom style (paragraph or character), or update one in
+    place: addressed properties are replaced, the rest of the style
+    (w:default, rsid, other formatting) is kept. character_formatting takes
+    the format_text keys, paragraph_formatting the set_paragraph_format
+    keys. get_styles returns definitions in this exact input shape, so
+    cloning is one read plus one define. Auto-backup: prev/anchor slots in
+    .ks4w-backups (backup=False skips rotation only); atomic validated
+    save. Refuses documents open in Word.
     """
     return _edit(
         file_path,
