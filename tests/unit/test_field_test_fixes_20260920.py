@@ -1466,3 +1466,543 @@ def test_citation_author_phrase_stops_at_a_paragraph_boundary(tmp_path):
     flagged = r["missing_references"] + r["missing_references_unparsed"]
     assert flagged, "the missing citation must still be flagged"
     assert not any("\n" in f or "Introduction" in f for f in flagged), flagged
+
+
+# ==================================================================
+# B2 / B3 / M3 / M4 / m2 / m3: the adversarial #860 collision matrix.
+# Every case from the review is here, including the ones that passed.
+# ==================================================================
+
+
+def _style(pkg, style_id, name, *, stype="paragraph", rpr=None, ppr=None,
+           based_on=None, table_cell_rpr=None):
+    """Define a style by hand (the tools normalise too much for a matrix)."""
+    root = pkg.root("word/styles.xml")
+    keep_attrs = {}
+    for s in root.findall(qn("w:style")):
+        if s.get(qn("w:styleId")) == style_id:
+            keep_attrs = dict(s.attrib)
+            root.remove(s)
+    st = etree.SubElement(root, qn("w:style"))
+    for k, v in keep_attrs.items():
+        st.set(k, v)
+    st.set(qn("w:type"), stype)
+    st.set(qn("w:styleId"), style_id)
+    etree.SubElement(st, qn("w:name")).set(qn("w:val"), name)
+    if based_on:
+        etree.SubElement(st, qn("w:basedOn")).set(qn("w:val"), based_on)
+    if ppr:
+        st.append(etree.fromstring(
+            f'<w:pPr xmlns:w="{_W}">{ppr}</w:pPr>'.encode()
+        ))
+    if rpr:
+        st.append(etree.fromstring(
+            f'<w:rPr xmlns:w="{_W}">{rpr}</w:rPr>'.encode()
+        ))
+    if table_cell_rpr:
+        st.append(etree.fromstring(
+            f'<w:tblStylePr xmlns:w="{_W}" w:type="firstRow">'
+            f"<w:rPr>{table_cell_rpr}</w:rPr></w:tblStylePr>".encode()
+        ))
+    pkg.mark_dirty("word/styles.xml")
+    return st
+
+
+_W = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+
+
+def _apply_pstyle(pkg, index, style_id):
+    p = [el for k, _i, el in rd.body_items(pkg) if k == "paragraph"][index]
+    ppr = p.find(qn("w:pPr"))
+    if ppr is None:
+        ppr = etree.Element(qn("w:pPr"))
+        p.insert(0, ppr)
+    etree.SubElement(ppr, qn("w:pStyle")).set(qn("w:val"), style_id)
+    pkg.mark_dirty()
+    return p
+
+
+def _rpr_of(p, run=0):
+    runs = [r for r in p.iter(qn("w:r")) if r.getparent().tag != qn("w:pPr")]
+    return runs[run].find(qn("w:rPr")) if runs else None
+
+
+def _val(holder, tag):
+    if holder is None:
+        return None
+    el = holder.find(qn(f"w:{tag}"))
+    if el is None:
+        return None
+    return el.get(qn("w:val"), "1")
+
+
+def test_c01_same_named_heading_differs_in_bold_italic_colour(tmp_path):
+    """The ordinary collision: two chapter files both define 'heading 1'.
+    Round 1 tracked six attributes, so bold, italic and colour changed
+    with nothing baked and nothing reported (review B3)."""
+    source = _build(tmp_path / "src.docx", ("Chapter Five",))
+    pkg = DocxPackage(source)
+    _style(pkg, "Heading1", "heading 1",
+           rpr='<w:b/><w:i w:val="0"/><w:color w:val="1F4E79"/>'
+               '<w:sz w:val="32"/>')
+    _apply_pstyle(pkg, 0, "Heading1")
+    pkg.save(do_backup=False)
+
+    target = _build(tmp_path / "tgt.docx", ("T1",))
+    pkg = DocxPackage(target)
+    _style(pkg, "Heading1", "heading 1",
+           rpr='<w:b w:val="0"/><w:i/><w:color w:val="auto"/>'
+               '<w:sz w:val="32"/>')
+    pkg.save(do_backup=False)
+
+    out = srv.insert_document(str(target), str(source))
+    dd = out["document_defaults"]
+    for prop in ("rPr.b.val", "rPr.i.val", "rPr.color.val"):
+        assert prop in dd["differing_properties"], dd["differing_properties"]
+    paras, _pkg = _body_paras(target)
+    rpr = _rpr_of(paras[-1])
+    assert _val(rpr, "b") == "1", "the heading lost its bold"
+    assert _val(rpr, "i") == "0", "the heading gained the target's italic"
+    assert _val(rpr, "color") == "1F4E79", "the heading lost its colour"
+
+
+def test_c07_character_style_collision_carries_bold(tmp_path):
+    source = _build(tmp_path / "src.docx", ("Emphatic text here.",))
+    pkg = DocxPackage(source)
+    _style(pkg, "MyEmph", "My Emphasis", stype="character",
+           rpr='<w:b/><w:sz w:val="28"/>')
+    p = [el for k, _i, el in rd.body_items(pkg) if k == "paragraph"][0]
+    r = p.find(qn("w:r"))
+    rpr = etree.Element(qn("w:rPr"))
+    r.insert(0, rpr)
+    etree.SubElement(rpr, qn("w:rStyle")).set(qn("w:val"), "MyEmph")
+    pkg.mark_dirty()
+    pkg.save(do_backup=False)
+
+    target = _build(tmp_path / "tgt.docx", ("T1",))
+    pkg = DocxPackage(target)
+    _style(pkg, "MyEmph", "My Emphasis", stype="character",
+           rpr='<w:b w:val="0"/><w:sz w:val="20"/>')
+    pkg.save(do_backup=False)
+
+    srv.insert_document(str(target), str(source))
+    paras, _pkg = _body_paras(target)
+    rpr = _rpr_of(paras[-1])
+    assert _val(rpr, "b") == "1"
+    assert _val(rpr, "sz") == "28"
+
+
+def test_c03_empty_paragraph_keeps_its_mark_size(tmp_path):
+    """An empty paragraph is rendered entirely by its mark, so a spacer
+    took the target's line height (review M4)."""
+    source = _build(tmp_path / "src.docx", ("Body.", ""))
+    _stamp_normal_style(source, size_pt=24)
+    target = _build(tmp_path / "tgt.docx", ("T1",))
+    _stamp_normal_style(target, size_pt=8)
+
+    out = srv.insert_document(str(target), str(source))
+    assert out["document_defaults"]["paragraph_marks_baked"] >= 1
+    paras, _pkg = _body_paras(target)
+    spacer = paras[-1]
+    mark = spacer.find(f"{qn('w:pPr')}/{qn('w:rPr')}")
+    assert mark is not None, "the paragraph mark was never baked"
+    assert _val(mark, "sz") == "48"
+
+
+def _numbered_source(path, *, num_id="3", left="1080", hanging="360"):
+    """A source whose list paragraphs get their indent from numbering.xml,
+    which is where a list's geometry actually lives."""
+    pkg = DocxPackage(path)
+    numbering = (
+        f'<w:numbering xmlns:w="{_W}">'
+        f'<w:abstractNum w:abstractNumId="7"><w:nsid w:val="1A2B3C4D"/>'
+        f'<w:multiLevelType w:val="hybridMultilevel"/>'
+        f'<w:lvl w:ilvl="0"><w:start w:val="1"/>'
+        f'<w:numFmt w:val="bullet"/><w:lvlText w:val="-"/>'
+        f'<w:lvlJc w:val="left"/><w:pPr><w:ind w:left="{left}" '
+        f'w:hanging="{hanging}"/></w:pPr></w:lvl></w:abstractNum>'
+        f'<w:num w:numId="{num_id}"><w:abstractNumId w:val="7"/></w:num>'
+        f"</w:numbering>"
+    )
+    pkg.set_raw_part(
+        "word/numbering.xml",
+        b'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        + numbering.encode(),
+    )
+    for i in (0, 1):
+        p = [el for k, _j, el in rd.body_items(pkg) if k == "paragraph"][i]
+        ppr = p.find(qn("w:pPr"))
+        if ppr is None:
+            ppr = etree.Element(qn("w:pPr"))
+            p.insert(0, ppr)
+        numpr = etree.SubElement(ppr, qn("w:numPr"))
+        etree.SubElement(numpr, qn("w:ilvl")).set(qn("w:val"), "0")
+        etree.SubElement(numpr, qn("w:numId")).set(qn("w:val"), num_id)
+    pkg.mark_dirty()
+    pkg.save(do_backup=False)
+
+
+def test_c15_numbered_paragraphs_keep_their_list_indent(tmp_path):
+    """B2 (regression): the baker wrote the style chain's ind onto list
+    paragraphs, overriding the numbering level and hanging the bullet at
+    -360 twips, out in the left margin."""
+    source = _build(tmp_path / "src.docx", ("List item one", "List item two"))
+    _numbered_source(source)
+    pkg = DocxPackage(source)
+    s = _style_el(pkg, "Normal")
+    ppr = _ordered_sub(s, "pPr", _STYLE_ORDER)
+    etree.SubElement(ppr, qn("w:ind")).set(qn("w:left"), "0")
+    pkg.mark_dirty("word/styles.xml")
+    pkg.save(do_backup=False)
+
+    target = _build(tmp_path / "tgt.docx", ("T1",))
+    pkg = DocxPackage(target)
+    s = _style_el(pkg, "Normal")
+    ppr = _ordered_sub(s, "pPr", _STYLE_ORDER)
+    etree.SubElement(ppr, qn("w:ind")).set(qn("w:left"), "720")
+    pkg.mark_dirty("word/styles.xml")
+    pkg.save(do_backup=False)
+
+    srv.insert_document(str(target), str(source))
+    paras, _pkg = _body_paras(target)
+    for p in paras[1:]:
+        assert p.find(f"{qn('w:pPr')}/{qn('w:numPr')}") is not None
+        ind = p.find(f"{qn('w:pPr')}/{qn('w:ind')}")
+        assert ind is None, (
+            "a direct indent was baked onto a numbered paragraph; its "
+            "bullet now hangs outside the text block"
+        )
+
+
+def test_numbered_paragraph_still_bakes_non_indent_differences(tmp_path):
+    """The numbering guard must not swallow everything else."""
+    source = _build(tmp_path / "src.docx", ("List item one", "List item two"))
+    _numbered_source(source)
+    _stamp_normal_style(source, size_pt=12, line=480)
+    target = _build(tmp_path / "tgt.docx", ("T1",))
+    _stamp_normal_style(target, size_pt=8, line=240)
+
+    srv.insert_document(str(target), str(source))
+    paras, _pkg = _body_paras(target)
+    assert _spacing_of(paras[-1])["line"] == "480"
+    assert _run_sizes(paras[-1]) == ["24"]
+    assert paras[-1].find(f"{qn('w:pPr')}/{qn('w:ind')}") is None
+
+
+def test_numbering_ids_are_remapped_and_the_list_is_not_merged(tmp_path):
+    """The carried list gets its own numId/abstractNumId, and a shared
+    w:nsid (two files from one template) does not merge the two lists."""
+    source = _build(tmp_path / "src.docx", ("List item one", "List item two"))
+    _numbered_source(source, num_id="3")
+    target = _build(tmp_path / "tgt.docx", ("T1", "T2"))
+    _numbered_source(target, num_id="3")
+
+    srv.insert_document(str(target), str(source))
+    pkg = DocxPackage(target)
+    root = pkg.root("word/numbering.xml")
+    num_ids = [n.get(qn("w:numId")) for n in root.findall(qn("w:num"))]
+    assert len(num_ids) == len(set(num_ids)) == 2, num_ids
+    abs_ids = [
+        a.get(qn("w:abstractNumId")) for a in root.findall(qn("w:abstractNum"))
+    ]
+    assert len(abs_ids) == len(set(abs_ids)) == 2, abs_ids
+    nsids = [
+        n.get(qn("w:val"))
+        for a in root.findall(qn("w:abstractNum"))
+        for n in a.findall(qn("w:nsid"))
+    ]
+    assert len(nsids) == len(set(nsids)), "two lists kept one nsid"
+    carried = [
+        p.find(f"{qn('w:pPr')}/{qn('w:numPr')}/{qn('w:numId')}").get(qn("w:val"))
+        for k, _i, p in rd.body_items(pkg) if k == "paragraph"
+    ]
+    assert carried[0] == carried[1] != carried[2] == carried[3], carried
+
+
+def _table_source(path, style_id="TableGrid", name="Table Grid"):
+    from docx import Document as _D
+
+    d = _D()
+    d.add_paragraph("Before the table.")
+    t = d.add_table(rows=2, cols=2)
+    for r, row in enumerate(t.rows):
+        for c, cell in enumerate(row.cells):
+            cell.text = f"r{r}c{c}"
+    d.save(str(path))
+    pkg = DocxPackage(path)
+    tbl = [el for k, _i, el in rd.body_items(pkg) if k == "table"][0]
+    tblpr = tbl.find(qn("w:tblPr"))
+    if tblpr is None:
+        tblpr = etree.Element(qn("w:tblPr"))
+        tbl.insert(0, tblpr)
+    st = tblpr.find(qn("w:tblStyle"))
+    if st is None:
+        st = etree.Element(qn("w:tblStyle"))
+        tblpr.insert(0, st)
+    st.set(qn("w:val"), style_id)
+    pkg.mark_dirty()
+    pkg.save(do_backup=False)
+    return pkg
+
+
+def test_c14_table_style_collision_is_imported_and_reported(tmp_path):
+    """A same-named table style with a different definition cannot be
+    baked (its formatting is conditional by region), so it is imported
+    under a new name and the carried table is re-pointed (review M3)."""
+    source = tmp_path / "src.docx"
+    _table_source(source)
+    pkg = DocxPackage(source)
+    _style(pkg, "TableGrid", "Table Grid", stype="table",
+           rpr='<w:sz w:val="16"/><w:color w:val="FF0000"/>')
+    pkg.save(do_backup=False)
+
+    target = tmp_path / "tgt.docx"
+    _table_source(target)
+    pkg = DocxPackage(target)
+    _style(pkg, "TableGrid", "Table Grid", stype="table",
+           rpr='<w:sz w:val="44"/><w:color w:val="0000FF"/>')
+    pkg.save(do_backup=False)
+
+    out = srv.insert_document(str(target), str(source))
+    imported = out["styles"]["imported_renamed"]
+    assert imported and imported[0]["source_name"] == "Table Grid"
+    new_id = imported[0]["style_id"]
+    pkg = DocxPackage(target)
+    tables = [el for k, _i, el in rd.body_items(pkg) if k == "table"]
+    refs = [
+        t.find(f"{qn('w:tblPr')}/{qn('w:tblStyle')}").get(qn("w:val"))
+        for t in tables
+    ]
+    assert refs[0] == "TableGrid", "the target's own table was re-pointed"
+    assert refs[1] == new_id, "the carried table kept the target's look"
+    imported_def = _style_el(pkg, new_id)
+    assert imported_def.find(f"{qn('w:rPr')}/{qn('w:sz')}").get(
+        qn("w:val")
+    ) == "16"
+    assert imported_def.find(qn("w:name")).get(
+        qn("w:val")
+    ) not in ("Table Grid",)
+
+
+def test_identical_table_style_is_not_duplicated(tmp_path):
+    """Same definition on both sides: by-name matching, no import."""
+    source = tmp_path / "src.docx"
+    _table_source(source)
+    pkg = DocxPackage(source)
+    _style(pkg, "TableGrid", "Table Grid", stype="table",
+           rpr='<w:sz w:val="16"/>')
+    pkg.save(do_backup=False)
+    target = tmp_path / "tgt.docx"
+    _table_source(target)
+    pkg = DocxPackage(target)
+    _style(pkg, "TableGrid", "Table Grid", stype="table",
+           rpr='<w:sz w:val="16"/>')
+    pkg.save(do_backup=False)
+
+    out = srv.insert_document(str(target), str(source))
+    assert "imported_renamed" not in out["styles"]
+    pkg = DocxPackage(target)
+    names = [
+        s.find(qn("w:name")).get(qn("w:val"))
+        for s in pkg.root("word/styles.xml").findall(qn("w:style"))
+        if s.get(qn("w:type")) == "table"
+    ]
+    assert names.count("Table Grid") == 1
+
+
+def test_paragraph_styles_are_never_renamed_on_collision(tmp_path):
+    """The import trick must NOT touch paragraph styles: a renamed
+    'heading 1' would drop the carried headings out of the TOC."""
+    source = _build(tmp_path / "src.docx", ("Chapter Five",))
+    pkg = DocxPackage(source)
+    _style(pkg, "Heading1", "heading 1", rpr='<w:b/><w:sz w:val="32"/>')
+    _apply_pstyle(pkg, 0, "Heading1")
+    pkg.save(do_backup=False)
+    target = _build(tmp_path / "tgt.docx", ("T1",))
+    pkg = DocxPackage(target)
+    _style(pkg, "Heading1", "heading 1", rpr='<w:i/><w:sz w:val="20"/>')
+    pkg.save(do_backup=False)
+
+    out = srv.insert_document(str(target), str(source))
+    assert "imported_renamed" not in out["styles"]
+    pkg = DocxPackage(target)
+    paras = [el for k, _i, el in rd.body_items(pkg) if k == "paragraph"]
+    assert paras[-1].find(f"{qn('w:pPr')}/{qn('w:pStyle')}").get(
+        qn("w:val")
+    ) == "Heading1"
+
+
+def test_c04_same_id_different_name_reports_no_false_difference(tmp_path):
+    """m2: the source style's NAME is unmatched but its ID collides, so
+    it is cloned under a fresh id and its definition survives. The report
+    must not list properties that do not in fact differ."""
+    source = _build(tmp_path / "src.docx", ("Styled line.",))
+    pkg = DocxPackage(source)
+    _style(pkg, "Custom1", "Source Special", rpr='<w:b/><w:sz w:val="30"/>')
+    _apply_pstyle(pkg, 0, "Custom1")
+    pkg.save(do_backup=False)
+    target = _build(tmp_path / "tgt.docx", ("T1",))
+    pkg = DocxPackage(target)
+    _style(pkg, "Custom1", "Target Special", rpr='<w:i/><w:sz w:val="18"/>')
+    pkg.save(do_backup=False)
+
+    out = srv.insert_document(str(target), str(source))
+    dd = out.get("document_defaults")
+    if dd is not None:
+        assert "rPr.sz.val" not in dd["differing_properties"], (
+            "a cloned style was diffed against the target's same-id style"
+        )
+    pkg = DocxPackage(target)
+    paras = [el for k, _i, el in rd.body_items(pkg) if k == "paragraph"]
+    new_sid = paras[-1].find(f"{qn('w:pPr')}/{qn('w:pStyle')}").get(qn("w:val"))
+    assert new_sid != "Custom1"
+    assert _style_el(pkg, new_sid).find(
+        f"{qn('w:rPr')}/{qn('w:sz')}"
+    ).get(qn("w:val")) == "30"
+
+
+def test_c06_theme_fonts_are_reported_not_guessed(tmp_path):
+    """m3: the source uses a theme font and the target an explicit one.
+    Nothing can be written explicitly, so it goes in not_baked WITH a
+    reason, and the note must not claim the source look was kept."""
+    source = _build(tmp_path / "src.docx", ("Themed body.",))
+    pkg = DocxPackage(source)
+    _style(pkg, "Normal", "Normal",
+           rpr='<w:rFonts w:asciiTheme="minorHAnsi"/>')
+    pkg.save(do_backup=False)
+    target = _build(tmp_path / "tgt.docx", ("T1",))
+    pkg = DocxPackage(target)
+    _style(pkg, "Normal", "Normal", rpr='<w:rFonts w:ascii="Courier New"/>')
+    pkg.save(do_backup=False)
+
+    out = srv.insert_document(str(target), str(source))
+    dd = out["document_defaults"]
+    assert "rPr.rFonts.ascii" in dd["not_baked"], dd
+    assert dd["not_baked_reasons"]
+    assert "keep the source appearance" not in dd["note"], dd["note"]
+
+
+def test_note_claims_preservation_only_when_everything_was_baked(tmp_path):
+    source = _build(tmp_path / "src.docx", ("Body.",))
+    _stamp_normal_style(source, size_pt=12, line=480)
+    target = _build(tmp_path / "tgt.docx", ("T1",))
+    _stamp_normal_style(target, size_pt=8, line=240)
+    out = srv.insert_document(str(target), str(source))
+    dd = out["document_defaults"]
+    assert "not_baked" not in dd
+    assert "keep the source appearance" in dd["note"]
+
+
+def test_outline_level_difference_is_reported_but_never_baked(tmp_path):
+    """Outline level is structure, not appearance: baking it would move
+    carried paragraphs in or out of the merged document's TOC."""
+    source = _build(tmp_path / "src.docx", ("A line.",))
+    pkg = DocxPackage(source)
+    _style(pkg, "Shared", "Shared Style", ppr="")
+    _apply_pstyle(pkg, 0, "Shared")
+    pkg.save(do_backup=False)
+    target = _build(tmp_path / "tgt.docx", ("T1",))
+    pkg = DocxPackage(target)
+    _style(pkg, "Shared", "Shared Style",
+           ppr='<w:outlineLvl w:val="0"/>')
+    pkg.save(do_backup=False)
+
+    out = srv.insert_document(str(target), str(source))
+    dd = out["document_defaults"]
+    assert "pPr.outlineLvl.val" in dd["not_baked"]
+    paras, _pkg = _body_paras(target)
+    assert paras[-1].find(f"{qn('w:pPr')}/{qn('w:outlineLvl')}") is None
+
+
+def test_identical_same_id_styles_bake_nothing(tmp_path):
+    """Both files define Heading1 identically: the resolver must compare
+    the TARGET's own chain, not its post-transplant cycle guard, or every
+    property looks different and gets baked."""
+    source = _build(tmp_path / "src.docx", ("Chapter Five",))
+    target = _build(tmp_path / "tgt.docx", ("T1",))
+    for path in (source, target):
+        pkg = DocxPackage(path)
+        _style(pkg, "Heading1", "heading 1",
+               rpr='<w:b/><w:sz w:val="32"/>',
+               ppr='<w:spacing w:before="240" w:after="60"/>')
+        pkg.save(do_backup=False)
+    pkg = DocxPackage(source)
+    _apply_pstyle(pkg, 0, "Heading1")
+    pkg.save(do_backup=False)
+
+    out = srv.insert_document(str(target), str(source))
+    assert "document_defaults" not in out, out.get("document_defaults")
+    paras, _pkg = _body_paras(target)
+    assert _rpr_of(paras[-1]) is None, "identical styles were baked over"
+
+
+def test_paragraph_mark_carries_east_asian_font(tmp_path):
+    """Cases c08-c11: the mark's rFonts eastAsia went Batang -> Malgun
+    Gothic, which resizes every CJK spacer line."""
+    source = _build(tmp_path / "src.docx", ("Body.", ""))
+    pkg = DocxPackage(source)
+    _style(pkg, "Normal", "Normal",
+           rpr='<w:rFonts w:ascii="Times New Roman" w:eastAsia="Batang"/>')
+    pkg.save(do_backup=False)
+    target = _build(tmp_path / "tgt.docx", ("T1",))
+    pkg = DocxPackage(target)
+    _style(pkg, "Normal", "Normal",
+           rpr='<w:rFonts w:ascii="Arial" w:eastAsia="Malgun Gothic"/>')
+    pkg.save(do_backup=False)
+
+    srv.insert_document(str(target), str(source))
+    paras, _pkg = _body_paras(target)
+    mark = paras[-1].find(f"{qn('w:pPr')}/{qn('w:rPr')}")
+    rfonts = mark.find(qn("w:rFonts"))
+    assert rfonts.get(qn("w:eastAsia")) == "Batang"
+    assert rfonts.get(qn("w:ascii")) == "Times New Roman"
+
+
+def test_every_tracked_property_family_survives_a_collision(tmp_path):
+    """One pass over the property families round 1 did not track: each
+    must either be carried explicitly or be named in not_baked."""
+    src_rpr = (
+        '<w:u w:val="single"/><w:highlight w:val="yellow"/><w:caps/>'
+        '<w:smallCaps w:val="0"/><w:strike/><w:vertAlign w:val="superscript"/>'
+        '<w:position w:val="6"/><w:spacing w:val="20"/><w:w w:val="90"/>'
+    )
+    tgt_rpr = (
+        '<w:u w:val="none"/><w:highlight w:val="none"/>'
+        '<w:caps w:val="0"/><w:smallCaps/><w:strike w:val="0"/>'
+        '<w:vertAlign w:val="baseline"/><w:position w:val="0"/>'
+        '<w:spacing w:val="0"/><w:w w:val="100"/>'
+    )
+    src_ppr = '<w:keepNext/><w:contextualSpacing/><w:jc w:val="center"/>'
+    tgt_ppr = (
+        '<w:keepNext w:val="0"/><w:contextualSpacing w:val="0"/>'
+        '<w:jc w:val="both"/>'
+    )
+    source = _build(tmp_path / "src.docx", ("Styled body text.",))
+    pkg = DocxPackage(source)
+    _style(pkg, "Shared", "Shared Style", rpr=src_rpr, ppr=src_ppr)
+    _apply_pstyle(pkg, 0, "Shared")
+    pkg.save(do_backup=False)
+    target = _build(tmp_path / "tgt.docx", ("T1",))
+    pkg = DocxPackage(target)
+    _style(pkg, "Shared", "Shared Style", rpr=tgt_rpr, ppr=tgt_ppr)
+    pkg.save(do_backup=False)
+
+    out = srv.insert_document(str(target), str(source))
+    dd = out["document_defaults"]
+    paras, _pkg = _body_paras(target)
+    p = paras[-1]
+    rpr = _rpr_of(p)
+    assert _val(rpr, "u") == "single"
+    assert _val(rpr, "highlight") == "yellow"
+    assert _val(rpr, "caps") == "1"
+    assert _val(rpr, "smallCaps") == "0"
+    assert _val(rpr, "strike") == "1"
+    assert _val(rpr, "vertAlign") == "superscript"
+    assert _val(rpr, "position") == "6"
+    assert _val(rpr, "w") == "90"
+    ppr = p.find(qn("w:pPr"))
+    assert _val(ppr, "keepNext") == "1"
+    assert _val(ppr, "contextualSpacing") == "1"
+    assert _val(ppr, "jc") == "center"
+    for prop in ("rPr.u.val", "rPr.caps.val", "pPr.keepNext.val"):
+        assert prop in dd["differing_properties"]
