@@ -61,7 +61,9 @@ and refusal classes as insert_document.
 
 from __future__ import annotations
 
+import colorsys
 import copy
+import math
 import posixpath
 import re
 
@@ -964,25 +966,56 @@ _THEME_KEY = "_theme:"
 
 
 def _apply_tint_shade(hex_rgb: str, tint: str | None, shade: str | None) -> str:
-    """Word's themeTint/themeShade: a hex byte applied per channel. Shade
-    multiplies toward black; tint mixes toward white."""
+    """Word's themeTint/themeShade, applied to HSL LUMINANCE.
+
+    A per-channel RGB blend toward white is the obvious reading and it is
+    wrong: Word converts the theme colour to HSL, scales the luminance and
+    converts back, so the hue and the saturation survive the tint. The
+    difference is invisible on a fully saturated hue and large everywhere
+    else (adversarial review round 3, M7). Measured against Word's own
+    rendering: accent1 = C00000 with themeFillTint="99" renders as
+    (255, 64, 64), not the (217, 102, 102) an RGB blend produces.
+
+    With the hex byte read as f = value / 255:
+
+        themeTint   L' = L * f + (1 - f)     lighter as f falls
+        themeShade  L' = L * f               darker as f falls
+
+    ECMA-376 is self-contradictory here: the w:color subclause (17.3.2.6)
+    describes a per-channel blend while w:u, w:bdr and w:shd describe the
+    HSL conversion. [MS-OI29500] 2.1.72 names that as a defect and states
+    that Word uses the HSL luminance algorithm for w:color too, which is
+    what the measurements show.
+
+    When both attributes are present Word renders the TINT and ignores the
+    shade: [MS-OI29500] 2.1.72 and 2.1.144 both say "the standard does not
+    state which setting is applied when both the themeShade and the
+    themeTint attributes are present. Word applies the themeTint setting",
+    and 12 of 12 measured fixtures agree.
+
+    Rounding is round-half-away-from-zero on the way back to 8-bit RGB,
+    which makes f = 1.0 an exact identity; every measured value agrees
+    with Word's render to within the 2-unit tolerance the PDF rasteriser
+    itself carries on an untinted control.
+    """
     try:
-        r, g, b = (int(hex_rgb[i:i + 2], 16) for i in (0, 2, 4))
+        rgb = tuple(int(hex_rgb[i:i + 2], 16) / 255.0 for i in (0, 2, 4))
     except (ValueError, IndexError):
         return hex_rgb
-    if shade:
-        try:
-            f = int(shade, 16) / 255.0
-        except ValueError:
-            return hex_rgb
-        r, g, b = (round(c * f) for c in (r, g, b))
-    elif tint:
-        try:
-            f = int(tint, 16) / 255.0
-        except ValueError:
-            return hex_rgb
-        r, g, b = (round(c * f + 255 * (1 - f)) for c in (r, g, b))
-    return "".join(f"{max(0, min(255, c)):02X}" for c in (r, g, b))
+    attr = tint or shade
+    if not attr:
+        return hex_rgb.upper()
+    try:
+        f = int(attr, 16) / 255.0
+    except ValueError:
+        return hex_rgb
+    h, lum, sat = colorsys.rgb_to_hls(*rgb)
+    lum = lum * f + (1.0 - f) if tint else lum * f
+    out = colorsys.hls_to_rgb(h, max(0.0, min(1.0, lum)), sat)
+    return "".join(
+        f"{max(0, min(255, int(math.floor(c * 255.0 + 0.5)))):02X}"
+        for c in out
+    )
 
 
 class _ThemeColors:
