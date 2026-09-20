@@ -2006,3 +2006,200 @@ def test_every_tracked_property_family_survives_a_collision(tmp_path):
     assert _val(ppr, "jc") == "center"
     for prop in ("rPr.u.val", "rPr.caps.val", "pPr.keepNext.val"):
         assert prop in dd["differing_properties"]
+
+
+# ==================================================================
+# ROUND 3 - M6: theme COLOURS across differing themes. Two files can
+# carry byte-identical <w:color w:val=".." w:themeColor="accent1"/> and
+# render different colours, because theme1.xml differs and the theme
+# part never travels.
+# ==================================================================
+
+_A_NS = "http://schemas.openxmlformats.org/drawingml/2006/main"
+
+
+def _set_theme(path, **slots):
+    """Patch the template's own theme1.xml colour slots. Patching rather
+    than replacing keeps the fontScheme and fmtScheme Word requires."""
+    pkg = DocxPackage(path)
+    scheme = pkg.root("word/theme/theme1.xml").find(
+        f"{{{_A_NS}}}themeElements/{{{_A_NS}}}clrScheme"
+    )
+    for slot, hexval in slots.items():
+        el = scheme.find(f"{{{_A_NS}}}{slot}")
+        if el is None:
+            el = etree.SubElement(scheme, f"{{{_A_NS}}}{slot}")
+        for child in list(el):
+            el.remove(child)
+        etree.SubElement(el, f"{{{_A_NS}}}srgbClr").set("val", hexval)
+    pkg.mark_dirty("word/theme/theme1.xml")
+    pkg.save(do_backup=False)
+
+
+_BASE_SLOTS = {
+    "dk1": "000000", "lt1": "FFFFFF", "dk2": "44546A", "lt2": "E7E6E6",
+    "accent1": "4472C4", "accent2": "ED7D31", "accent3": "A5A5A5",
+    "accent4": "FFC000", "accent5": "5B9BD5", "accent6": "70AD47",
+    "hlink": "0563C1", "folHlink": "954F72",
+}
+
+
+def _themed_pair(tmp_path, *, src_accent, tgt_accent, style_rpr,
+                 texts=("Themed body.",)):
+    source = _build(tmp_path / "src.docx", texts)
+    pkg = DocxPackage(source)
+    _style(pkg, "Normal", "Normal", rpr=style_rpr)
+    pkg.save(do_backup=False)
+    _set_theme(source, **{**_BASE_SLOTS, "accent1": src_accent})
+    target = _build(tmp_path / "tgt.docx", ("T1",))
+    pkg = DocxPackage(target)
+    _style(pkg, "Normal", "Normal", rpr=style_rpr)
+    pkg.save(do_backup=False)
+    _set_theme(target, **{**_BASE_SLOTS, "accent1": tgt_accent})
+    return source, target
+
+
+def test_m6_theme_color_from_a_shared_style_is_resolved(tmp_path):
+    """The verifier's case: identical Normal rPr in both files, source
+    accent1 red, target accent1 green. Round 2 reported nothing at all."""
+    source, target = _themed_pair(
+        tmp_path, src_accent="C00000", tgt_accent="00B050",
+        style_rpr='<w:color w:val="C00000" w:themeColor="accent1"/>',
+    )
+    out = srv.insert_document(str(target), str(source))
+    assert "accent1" in out["theme_colors"]["differing_slots"]
+    paras, _pkg = _body_paras(target)
+    color = _rpr_of(paras[-1]).find(qn("w:color"))
+    assert color.get(qn("w:val")) == "C00000"
+    assert qn("w:themeColor") not in color.attrib, (
+        "the reference can still re-resolve against the target theme"
+    )
+
+
+def test_m6_direct_theme_color_is_resolved(tmp_path):
+    """Direct formatting takes the same route: the reference is frozen."""
+    source = _build(tmp_path / "src.docx", ("Themed body.",))
+    pkg = DocxPackage(source)
+    p = [el for k, _i, el in rd.body_items(pkg) if k == "paragraph"][0]
+    r = p.find(qn("w:r"))
+    rpr = etree.Element(qn("w:rPr"))
+    r.insert(0, rpr)
+    c = etree.SubElement(rpr, qn("w:color"))
+    c.set(qn("w:val"), "4472C4")
+    c.set(qn("w:themeColor"), "accent1")
+    pkg.mark_dirty()
+    pkg.save(do_backup=False)
+    _set_theme(source, **{**_BASE_SLOTS, "accent1": "C00000"})
+    target = _build(tmp_path / "tgt.docx", ("T1",))
+    _set_theme(target, **{**_BASE_SLOTS, "accent1": "00B050"})
+
+    out = srv.insert_document(str(target), str(source))
+    assert out["theme_colors"]["references_frozen"] >= 1
+    paras, _pkg = _body_paras(target)
+    color = _rpr_of(paras[-1]).find(qn("w:color"))
+    assert color.get(qn("w:val")) == "C00000"
+    assert qn("w:themeColor") not in color.attrib
+
+
+def test_m6_tinted_theme_color_resolves_through_the_tint(tmp_path):
+    """themeTint mixes the slot toward white; the baked value must be the
+    tinted colour, not the raw slot."""
+    source, target = _themed_pair(
+        tmp_path, src_accent="C00000", tgt_accent="00B050",
+        style_rpr='<w:color w:val="C00000" w:themeColor="accent1" '
+                  'w:themeTint="99"/>',
+    )
+    srv.insert_document(str(target), str(source))
+    paras, _pkg = _body_paras(target)
+    color = _rpr_of(paras[-1]).find(qn("w:color"))
+    assert color.get(qn("w:val")) == "D96666"
+    assert qn("w:themeTint") not in color.attrib
+
+
+def test_m6_themed_shading_and_underline_colour_are_resolved(tmp_path):
+    """Every colour-bearing aspect, not just w:color: shading fill and
+    underline colour carry their own theme attributes."""
+    source = _build(tmp_path / "src.docx", ("Shaded body.",))
+    pkg = DocxPackage(source)
+    p = [el for k, _i, el in rd.body_items(pkg) if k == "paragraph"][0]
+    r = p.find(qn("w:r"))
+    rpr = etree.Element(qn("w:rPr"))
+    r.insert(0, rpr)
+    u = etree.SubElement(rpr, qn("w:u"))
+    u.set(qn("w:val"), "single")
+    u.set(qn("w:color"), "4472C4")
+    u.set(qn("w:themeColor"), "accent1")
+    shd = etree.SubElement(rpr, qn("w:shd"))
+    shd.set(qn("w:val"), "clear")
+    shd.set(qn("w:fill"), "4472C4")
+    shd.set(qn("w:themeFill"), "accent1")
+    pkg.mark_dirty()
+    pkg.save(do_backup=False)
+    _set_theme(source, **{**_BASE_SLOTS, "accent1": "C00000"})
+    target = _build(tmp_path / "tgt.docx", ("T1",))
+    _set_theme(target, **{**_BASE_SLOTS, "accent1": "00B050"})
+
+    srv.insert_document(str(target), str(source))
+    paras, _pkg = _body_paras(target)
+    rpr = _rpr_of(paras[-1])
+    u = rpr.find(qn("w:u"))
+    assert u.get(qn("w:color")) == "C00000"
+    assert qn("w:themeColor") not in u.attrib
+    shd = rpr.find(qn("w:shd"))
+    assert shd.get(qn("w:fill")) == "C00000"
+    assert qn("w:themeFill") not in shd.attrib
+
+
+def test_m6_hyperlink_style_colour_travels_with_the_import(tmp_path):
+    """A cloned style definition carries theme references too; they must
+    be frozen or the imported style takes the target's hyperlink colour."""
+    source = _build(tmp_path / "src.docx", ("Link text.",))
+    pkg = DocxPackage(source)
+    _style(pkg, "SrcLink", "Source Link", stype="character",
+           rpr='<w:color w:val="0563C1" w:themeColor="hyperlink"/>'
+               '<w:u w:val="single"/>')
+    p = [el for k, _i, el in rd.body_items(pkg) if k == "paragraph"][0]
+    r = p.find(qn("w:r"))
+    rpr = etree.Element(qn("w:rPr"))
+    r.insert(0, rpr)
+    etree.SubElement(rpr, qn("w:rStyle")).set(qn("w:val"), "SrcLink")
+    pkg.mark_dirty()
+    pkg.save(do_backup=False)
+    _set_theme(source, **{**_BASE_SLOTS, "hlink": "C00000"})
+    target = _build(tmp_path / "tgt.docx", ("T1",))
+    _set_theme(target, **{**_BASE_SLOTS, "hlink": "00B050"})
+
+    out = srv.insert_document(str(target), str(source))
+    assert out["theme_colors"]["references_frozen"] >= 1
+    pkg = DocxPackage(target)
+    color = _style_el(pkg, "SrcLink").find(f"{qn('w:rPr')}/{qn('w:color')}")
+    assert color.get(qn("w:val")) == "C00000"
+    assert qn("w:themeColor") not in color.attrib
+
+
+def test_m6_identical_themes_bake_nothing(tmp_path):
+    """No theme difference, no rewriting, no bloat: the reference stays a
+    reference so the merged document still follows its own theme."""
+    source, target = _themed_pair(
+        tmp_path, src_accent="4472C4", tgt_accent="4472C4",
+        style_rpr='<w:color w:val="4472C4" w:themeColor="accent1"/>',
+    )
+    pkg = DocxPackage(source)
+    p = [el for k, _i, el in rd.body_items(pkg) if k == "paragraph"][0]
+    r = p.find(qn("w:r"))
+    rpr = etree.Element(qn("w:rPr"))
+    r.insert(0, rpr)
+    c = etree.SubElement(rpr, qn("w:color"))
+    c.set(qn("w:val"), "4472C4")
+    c.set(qn("w:themeColor"), "accent1")
+    pkg.mark_dirty()
+    pkg.save(do_backup=False)
+
+    out = srv.insert_document(str(target), str(source))
+    assert "theme_colors" not in out
+    assert "document_defaults" not in out
+    paras, _pkg = _body_paras(target)
+    color = _rpr_of(paras[-1]).find(qn("w:color"))
+    assert color.get(qn("w:themeColor")) == "accent1", (
+        "an identical theme must leave the reference alone"
+    )
