@@ -920,3 +920,156 @@ def test_apply_edits_move_is_serialized_as_one_element(tmp_path):
     )
     paras, _pkg = _body_paras(path)
     assert _et.tostring(paras[-1]) == before
+
+
+# ==================================================================
+# #868: discovery -- assembly recipes, outline candidates, per-field
+# TOC caches
+# ==================================================================
+
+
+def test_workflows_cover_multi_file_assembly():
+    from word_mcp.ops import workflows as wf
+
+    tasks = {t["task"] for t in wf.get_workflows()["tasks"]}
+    assert {
+        "merge-chapters",
+        "build-lists-without-heading-styles",
+        "merge-reference-lists",
+    } <= tasks
+    out = wf.get_workflows("merge-chapters")
+    tools = [s["tool"] for s in out["steps"]]
+    assert tools[0] == "copy_document"
+    assert "insert_document" in tools
+    assert "com_refresh_fields" in tools
+    for step in out["steps"]:
+        assert step["why"]
+    assert any("back to front" in n for n in out["notes"])
+
+
+def test_toc_fields_report_their_own_cached_entries(tmp_path):
+    """Two TOC-family fields in one body (no content control): each must
+    report ITS OWN cache, not every TOC-styled paragraph in the file."""
+    from word_mcp.ops import toc as tc
+
+    path = _build(tmp_path / "d.docx", ("Body one.",))
+    pkg = DocxPackage(path)
+    body = pkg.body()
+
+    def field(instr, entries, entry_style):
+        fp = etree.SubElement(body, qn("w:p"))
+        r1 = etree.SubElement(fp, qn("w:r"))
+        etree.SubElement(r1, qn("w:fldChar")).set(
+            qn("w:fldCharType"), "begin"
+        )
+        r2 = etree.SubElement(fp, qn("w:r"))
+        it = etree.SubElement(r2, qn("w:instrText"))
+        it.text = instr
+        r3 = etree.SubElement(fp, qn("w:r"))
+        etree.SubElement(r3, qn("w:fldChar")).set(
+            qn("w:fldCharType"), "separate"
+        )
+        for text in entries:
+            ep = etree.SubElement(body, qn("w:p"))
+            ppr = etree.SubElement(ep, qn("w:pPr"))
+            etree.SubElement(ppr, qn("w:pStyle")).set(
+                qn("w:val"), entry_style
+            )
+            run = etree.SubElement(ep, qn("w:r"))
+            etree.SubElement(run, qn("w:t")).text = text
+        lastp = etree.SubElement(body, qn("w:p"))
+        r5 = etree.SubElement(lastp, qn("w:r"))
+        etree.SubElement(r5, qn("w:fldChar")).set(qn("w:fldCharType"), "end")
+
+    field(r' TOC \o "1-3" \h ', ["Chapter One\t1", "Chapter Two\t20"],
+          "TOC1")
+    etree.SubElement(body, qn("w:p"))  # a plain paragraph between them
+    field(r' TOC \h \z \c "Table" ', ["No entries found."],
+          "TableofFigures")
+    pkg.mark_dirty()
+    pkg.save(do_backup=False)
+
+    out = tc.read_toc(DocxPackage(path))
+    assert len(out["tocs"]) == 2
+    main, captions = out["tocs"]
+    assert main["kind"] == "main"
+    assert [e["text"] for e in main["cached_entries"]] == [
+        "Chapter One\t1", "Chapter Two\t20",
+    ]
+    assert captions["kind"] == "caption_list"
+    assert [e["text"] for e in captions["cached_entries"]] == [
+        "No entries found."
+    ], "the caption list reported the main TOC's cache"
+    assert "note" in out
+
+
+def test_outline_heuristic_ranks_candidates(tmp_path):
+    """Centered bold is the chapter title (level 1, high confidence), a
+    bold flush-left line is level 2, a numbered table caption is not a
+    heading at all, and a centered-not-bold title is still found."""
+    from word_mcp.ops import read as rdm
+    from word_mcp.ops import text as tx
+
+    path = _build(
+        tmp_path / "ch.docx",
+        (
+            "Chapter Four",
+            "Historical Background",
+            "Table 3. Alliance events by year",
+            "Ordinary body prose that runs on for a while and ends.",
+        ),
+    )
+    pkg = DocxPackage(path)
+    tx.format_paragraphs(pkg, [0, 1, 2], {"bold": True})
+    tx.set_paragraph_format(pkg, [0], {"alignment": "center"})
+    pkg.save(do_backup=False)
+
+    outline = rdm.get_outline(DocxPackage(path), detect_formatted=True)
+    by_text = {h["text"]: h for h in outline}
+    assert by_text["Chapter Four"]["level"] == 1
+    assert by_text["Chapter Four"]["confidence"] == "high"
+    assert by_text["Historical Background"]["level"] == 2
+    assert "Table 3. Alliance events by year" not in by_text, (
+        "a numbered caption was reported as a heading"
+    )
+    assert "Ordinary body prose that runs on for a while and ends." not in by_text
+
+
+def test_outline_heuristic_sees_style_inherited_centering(tmp_path):
+    """The chapter title centered by its STYLE, not by direct pPr, came
+    back at level 2 with the old direct-only check."""
+    from word_mcp.ops import read as rdm
+    from word_mcp.ops import structure as sx
+    from word_mcp.ops import text as tx
+
+    path = _build(tmp_path / "ch.docx", ("Chapter Five", "Body prose here."))
+    pkg = DocxPackage(path)
+    sx.define_style(
+        pkg, style_id="ChapterTitle", name="Chapter Title",
+        paragraph_formatting={"alignment": "center"},
+        character_formatting={"bold": True},
+    )
+    tx.apply_style(pkg, [0], "ChapterTitle")
+    pkg.save(do_backup=False)
+
+    outline = rdm.get_outline(DocxPackage(path), detect_formatted=True)
+    by_text = {h["text"]: h for h in outline}
+    assert by_text["Chapter Five"]["level"] == 1
+    assert by_text["Chapter Five"]["confidence"] == "high"
+
+
+def test_outline_heuristic_finds_a_centered_unbolded_title(tmp_path):
+    """Chapter 5's title was centered but not bold, so the bold-only
+    heuristic missed it entirely."""
+    from word_mcp.ops import read as rdm
+    from word_mcp.ops import text as tx
+
+    path = _build(tmp_path / "ch5.docx", ("Chapter Five", "Body prose here."))
+    pkg = DocxPackage(path)
+    tx.set_paragraph_format(pkg, [0], {"alignment": "center"})
+    pkg.save(do_backup=False)
+
+    outline = rdm.get_outline(DocxPackage(path), detect_formatted=True)
+    by_text = {h["text"]: h for h in outline}
+    assert "Chapter Five" in by_text
+    assert by_text["Chapter Five"]["confidence"] == "low"

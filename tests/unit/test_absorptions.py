@@ -80,6 +80,10 @@ def test_workflows_listing_names_all_tasks():
         "comment-partner",
         "migrate-from-v1",
         "bulk-edit",
+        # multi-file academic assembly (punchlist #868)
+        "merge-chapters",
+        "build-lists-without-heading-styles",
+        "merge-reference-lists",
     }
     for t in out["tasks"]:
         assert t["summary"]
