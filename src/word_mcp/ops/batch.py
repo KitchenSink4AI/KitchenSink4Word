@@ -752,8 +752,11 @@ def _apply_one(pkg: DocxPackage, edit: dict, plan: dict, i: int) -> dict:
     if op == "set_style":
         return _tx.apply_style(pkg, [idx], edit["style"])
     if op == "format":
+        if edit.get("find") is None:
+            # whole paragraph, paragraph mark included (punchlist #864)
+            return _tx.format_paragraphs(pkg, [idx], edit["formatting"])
         return _tx.format_text(
-            pkg, paragraph_index=idx, find=edit.get("find"),
+            pkg, paragraph_index=idx, find=edit["find"],
             occurrence=edit.get("occurrence") or 1,
             formatting=edit["formatting"],
         )

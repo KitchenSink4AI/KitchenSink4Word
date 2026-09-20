@@ -698,3 +698,107 @@ def test_prose_lead_words_are_not_read_as_authors(tmp_path):
     r = citecheck.check_citation_parity(DocxPackage(path))
     assert r["parity_ok"] is True
     assert r["unique_cited_works"] == 1, "'As Muller' counted as its own work"
+
+
+# ==================================================================
+# #864: whole-paragraph character formatting by index / anchor
+# ==================================================================
+
+
+def _italic_state(p):
+    """(run italics, paragraph-mark italic) for one paragraph."""
+    ppr = p.find(qn("w:pPr"))
+    runs = []
+    for r in p.iter(qn("w:r")):
+        if r.getparent() is ppr:
+            continue
+        runs.append(r.find(f"{qn('w:rPr')}/{qn('w:i')}") is not None)
+    mark = ppr is not None and ppr.find(
+        f"{qn('w:rPr')}/{qn('w:i')}"
+    ) is not None
+    return runs, mark
+
+
+def _make_italic(pkg, indices):
+    from word_mcp.ops import text as tx
+
+    tx.format_paragraphs(pkg, indices, {"italic": True})
+
+
+def test_format_text_range_deitalicises_whole_paragraphs(tmp_path):
+    """De-italicising 19 headings whose text also occurs in running prose:
+    a find string cannot target them, and the old range form took one
+    paragraph at a time."""
+    path = _build(
+        tmp_path / "d.docx",
+        (
+            "The Combined Forces Command",
+            "The Combined Forces Command was established in 1978.",
+            "The Combined Forces Command",
+        ),
+    )
+    pkg = DocxPackage(path)
+    _make_italic(pkg, [0, 2])
+    pkg.save(do_backup=False)
+    paras, _pkg = _body_paras(path)
+    assert _italic_state(paras[0]) == ([True], True)
+
+    srv.format_text(
+        str(path), range={"start": 0, "end": 0}, formatting={"italic": False}
+    )
+    srv.format_text(
+        str(path), range={"start": 2, "end": 2}, formatting={"italic": False}
+    )
+    paras, _pkg = _body_paras(path)
+    assert _italic_state(paras[0]) == ([False], False), "paragraph mark kept"
+    assert _italic_state(paras[2]) == ([False], False)
+    # the body sentence, which shares the heading's text, is untouched
+    assert _italic_state(paras[1]) == ([False], False)
+
+
+def test_format_text_multi_paragraph_range(tmp_path):
+    """A range of paragraphs formats in ONE call."""
+    path = _build(tmp_path / "d.docx", ("H1", "H2", "H3", "Body"))
+    pkg = DocxPackage(path)
+    _make_italic(pkg, [0, 1, 2])
+    pkg.save(do_backup=False)
+
+    out = srv.format_text(
+        str(path), range={"start": 0, "end": 2}, formatting={"italic": False}
+    )
+    assert out["formatted_paragraphs"] == [0, 1, 2]
+    paras, _pkg = _body_paras(path)
+    for p in paras[:3]:
+        assert _italic_state(p) == ([False], False)
+
+
+def test_format_text_multi_paragraph_range_refuses_find(tmp_path):
+    import pytest
+    from word_mcp.core.errors import WordMcpError
+
+    path = _build(tmp_path / "d.docx", ("Alpha", "Bravo"))
+    with pytest.raises(WordMcpError, match="find"):
+        srv.format_text(
+            str(path), range={"start": 0, "end": 1}, find="Alpha",
+            formatting={"bold": True},
+        )
+
+
+def test_apply_edits_format_op_covers_the_paragraph_mark(tmp_path):
+    """The anchor-addressed route gets the same whole-paragraph semantics."""
+    path = _build(tmp_path / "d.docx", ("Chapter Four", "Body text."))
+    pkg = DocxPackage(path)
+    _make_italic(pkg, [0])
+    pkg.save(do_backup=False)
+
+    view = srv.get_document_view(str(path))
+    line = next(
+        ln for ln in view["view"].splitlines() if "Chapter Four" in ln
+    )
+    anchor = line.split("]")[0].lstrip("[")
+    srv.apply_edits(
+        str(path),
+        [{"op": "format", "anchor": anchor, "formatting": {"italic": False}}],
+    )
+    paras, _pkg = _body_paras(path)
+    assert _italic_state(paras[0]) == ([False], False)
