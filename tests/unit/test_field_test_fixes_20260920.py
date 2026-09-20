@@ -2933,3 +2933,46 @@ def test_m11_the_same_mapping_on_both_sides_changes_nothing(tmp_path):
     assert color.get(qn("w:themeColor")) == "text1", (
         "the reference should still follow the merged document's theme"
     )
+
+
+# ==================================================================
+# ROUND 4 - m13: a reused table-style import must be visible in the
+# result. Round 3 added styles.reused_imports; the round-3 review looked
+# for a key called "imported_reused" and reported reuse as silent. These
+# tests pin the key, the style NAMES in it, and the note that says what
+# happened to the caller's tables.
+# ==================================================================
+
+
+def test_m13_reuse_names_the_style_it_reused(tmp_path):
+    source, target = _styled_table_pair(tmp_path, 16, 44)
+    first = srv.insert_document(str(target), str(source))
+    second = srv.insert_document(str(target), str(source))
+
+    assert "reused_imports" not in first["styles"], (
+        "the first insert imports, it does not reuse"
+    )
+    reused = second["styles"]["reused_imports"]
+    assert [r["name"] for r in reused] == ["Table Grid (imported)"]
+    assert reused[0]["source_id"] == "TableGrid"
+    assert reused[0]["target_id"] == "TableGridIns1"
+    assert "reused_import" not in reused[0], (
+        "the internal marker should not reach the caller"
+    )
+    assert "gallery" in second["styles"]["reused_imports_note"]
+
+
+def test_m13_the_carried_table_points_at_the_reused_style(tmp_path):
+    """The claim the note makes, checked against the file: insert 2's
+    table references the style insert 1 imported, not a second copy."""
+    source, target = _styled_table_pair(tmp_path, 16, 44)
+    srv.insert_document(str(target), str(source))
+    out = srv.insert_document(str(target), str(source))
+    reused_id = out["styles"]["reused_imports"][0]["target_id"]
+    pkg = DocxPackage(target)
+    refs = [
+        t.find(f"{qn('w:tblPr')}/{qn('w:tblStyle')}").get(qn("w:val"))
+        for k, _i, t in rd.body_items(pkg) if k == "table"
+    ]
+    assert refs.count(reused_id) == 2, refs
+    assert _table_style_names(target).count("Table Grid (imported)") == 1

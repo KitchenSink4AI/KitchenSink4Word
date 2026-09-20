@@ -2640,9 +2640,19 @@ def _transplant(
             "remapped_ids": dict(sorted(styles.remap.items())),
             "cloned": styles.cloned,
             **(
-                {"reused_imports": [
-                    m for m in styles.matched if m.get("reused_import")
-                ]}
+                {
+                    "reused_imports": [
+                        {k: v for k, v in m.items() if k != "reused_import"}
+                        for m in styles.matched if m.get("reused_import")
+                    ],
+                    "reused_imports_note": (
+                        "an earlier insert already imported this table "
+                        "style under a new name because the target defines "
+                        "a different style of the same name; the tables "
+                        "carried this time point at that existing copy "
+                        "rather than adding another one to the gallery"
+                    ),
+                }
                 if any(m.get("reused_import") for m in styles.matched)
                 else {}
             ),
