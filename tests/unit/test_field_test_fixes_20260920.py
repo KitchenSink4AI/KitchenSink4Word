@@ -1298,3 +1298,171 @@ def test_define_style_no_op_does_not_claim_replaced(tmp_path):
     pkg.save(do_backup=False)
     assert out["replaced"] is False
     assert out.get("unchanged") is True
+
+
+# ==================================================================
+# M5 + N1: moving a section break, and moving inside a document under
+# track changes
+# ==================================================================
+
+
+def _md5(path):
+    import hashlib
+
+    return hashlib.md5(open(path, "rb").read()).hexdigest()
+
+
+def _section_break_doc(tmp_path):
+    """Body: [Sec1 body, BREAK HOLDER(sectPr), Sec2 body]."""
+    path = _build(tmp_path / "sect.docx", ("Section one body.", "Holder.",
+                                           "Section two body."))
+    pkg = DocxPackage(path)
+    paras = [el for k, _i, el in rd.body_items(pkg) if k == "paragraph"]
+    body_sect = pkg.body().find(qn("w:sectPr"))
+    ppr = paras[1].find(qn("w:pPr"))
+    if ppr is None:
+        ppr = etree.Element(qn("w:pPr"))
+        paras[1].insert(0, ppr)
+    ppr.append(etree.fromstring(etree.tostring(body_sect)))
+    pkg.mark_dirty()
+    pkg.save(do_backup=False)
+    return path
+
+
+def test_move_refuses_a_paragraph_carrying_a_section_break(tmp_path):
+    import pytest
+    from word_mcp.core.errors import WordMcpError
+
+    path = _section_break_doc(tmp_path)
+    before = _md5(path)
+    anchors = _anchors(path)
+    with pytest.raises(WordMcpError, match="section break"):
+        srv.apply_edits(
+            str(path),
+            [{"op": "move", "anchor": anchors[1][0],
+              "location": {"paragraph": 2, "position": "after"}}],
+        )
+    assert _md5(path) == before, "the file changed on a refusal"
+
+
+def test_move_refuses_crossing_a_section_boundary(tmp_path):
+    import pytest
+    from word_mcp.core.errors import WordMcpError
+
+    path = _section_break_doc(tmp_path)
+    before = _md5(path)
+    anchors = _anchors(path)
+    with pytest.raises(WordMcpError, match="section boundary"):
+        srv.apply_edits(
+            str(path),
+            [{"op": "move", "anchor": anchors[0][0],
+              "location": {"paragraph": 2, "position": "after"}}],
+        )
+    assert _md5(path) == before
+
+
+def test_move_crossing_a_section_is_possible_with_the_opt_in(tmp_path):
+    path = _section_break_doc(tmp_path)
+    anchors = _anchors(path)
+    out = srv.apply_edits(
+        str(path),
+        [{"op": "move", "anchor": anchors[0][0], "allow_cross_section": True,
+          "location": {"paragraph": 2, "position": "after"}}],
+    )
+    assert _texts(path) == ["Holder.", "Section two body.",
+                            "Section one body."]
+    assert any("section boundary" in w for w in out["warnings"])
+
+
+def test_move_within_one_section_is_unaffected(tmp_path):
+    path = _build(tmp_path / "plain.docx", ("A", "B", "C"))
+    anchors = _anchors(path)
+    srv.apply_edits(
+        str(path),
+        [{"op": "move", "anchor": anchors[2][0],
+          "location": {"paragraph": 0, "position": "before"}}],
+    )
+    assert _texts(path) == ["C", "A", "B"]
+
+
+def _turn_on_track_changes(path):
+    pkg = DocxPackage(path)
+    root = pkg.root("word/settings.xml")
+    el = etree.Element(qn("w:trackChanges"))
+    root.insert(0, el)
+    pkg.mark_dirty("word/settings.xml")
+    pkg.save(do_backup=False)
+
+
+def test_move_warns_when_track_changes_is_on(tmp_path):
+    """The file-mode surface applies directly; a document under review
+    must not be told nothing (review N1)."""
+    path = _build(tmp_path / "tc.docx", ("A", "B", "C"))
+    _turn_on_track_changes(path)
+    anchors = _anchors(path)
+    out = srv.apply_edits(
+        str(path),
+        [{"op": "move", "anchor": anchors[2][0],
+          "location": {"paragraph": 0, "position": "before"}}],
+    )
+    assert _texts(path) == ["C", "A", "B"]
+    assert any("trackChanges" in w for w in out["warnings"]), out
+
+
+def test_delete_warns_when_track_changes_is_on(tmp_path):
+    path = _build(tmp_path / "tc.docx", ("A", "B", "C"))
+    _turn_on_track_changes(path)
+    anchors = _anchors(path)
+    out = srv.apply_edits(
+        str(path), [{"op": "delete", "anchor": anchors[1][0]}]
+    )
+    assert _texts(path) == ["A", "C"]
+    assert any("trackChanges" in w for w in out["warnings"]), out
+
+
+def test_no_track_changes_warning_on_an_ordinary_document(tmp_path):
+    path = _build(tmp_path / "plain.docx", ("A", "B", "C"))
+    anchors = _anchors(path)
+    out = srv.apply_edits(
+        str(path), [{"op": "delete", "anchor": anchors[1][0]}]
+    )
+    assert out["warnings"] == []
+
+
+# ==================================================================
+# m6 + m7: two reporting false notes found in review
+# ==================================================================
+
+
+def test_outline_heuristic_rejects_a_bold_colon_lead_in(tmp_path):
+    """'Dr. Smith said the following:' in bold is a lead-in, not a
+    heading (review m7)."""
+    from word_mcp.ops import read as rdm
+    from word_mcp.ops import text as tx
+
+    path = _build(
+        tmp_path / "d.docx",
+        ("Dr. Smith said the following:", "The quoted material follows here."),
+    )
+    pkg = DocxPackage(path)
+    tx.format_paragraphs(pkg, [0], {"bold": True})
+    pkg.save(do_backup=False)
+    outline = rdm.get_outline(DocxPackage(path), detect_formatted=True)
+    assert [h["text"] for h in outline] == []
+
+
+def test_citation_author_phrase_stops_at_a_paragraph_boundary(tmp_path):
+    """The author phrase swallowed the preceding paragraph, so the
+    unparsed citation was reported as 'Introduction\nBandura's (1977)'
+    (review m6)."""
+    from word_mcp.ops import citecheck
+
+    path = _parity_doc(
+        tmp_path,
+        ["Introduction", "Bandura's (1977) account is the origin."],
+        ["Smith, J. (2020). A title. Journal."],
+    )
+    r = citecheck.check_citation_parity(DocxPackage(path))
+    flagged = r["missing_references"] + r["missing_references_unparsed"]
+    assert flagged, "the missing citation must still be flagged"
+    assert not any("\n" in f or "Introduction" in f for f in flagged), flagged
