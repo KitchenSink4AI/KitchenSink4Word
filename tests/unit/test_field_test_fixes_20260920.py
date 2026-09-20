@@ -597,3 +597,104 @@ def test_define_style_rpr_is_in_schema_order(tmp_path):
     s = _style_el(DocxPackage(path), "Blue")
     names = [etree.QName(c).localname for c in s.find(qn("w:rPr"))]
     assert _in_schema_order(names), names
+
+
+# ==================================================================
+# #867: citation_parity must not drown a real bibliography in
+# organizational-author false positives
+# ==================================================================
+
+
+def _parity_doc(tmp_path, body, refs):
+    from docx import Document as _D
+
+    path = tmp_path / "parity.docx"
+    d = _D()
+    for para in body:
+        d.add_paragraph(para)
+    d.add_heading("References", 1)
+    for r in refs:
+        d.add_paragraph(r)
+    d.save(str(path))
+    return path
+
+
+def test_organizational_authors_are_matched_not_reported_missing(tmp_path):
+    """The reported false positives: 'Archives (2003)' for 'National
+    Archives. (2003).', 'War (2026)' for 'U.S. Department of War. (2026)',
+    'Assembly (1977a)', and a possessive read as a surname."""
+    from word_mcp.ops import citecheck
+
+    path = _parity_doc(
+        tmp_path,
+        [
+            "The National Archives (2003) holds the cable traffic.",
+            "See also the U.S. Department of War (2026, March) report, and "
+            "the National Assembly of the Republic of Korea (1977a).",
+            "Bandura's (1977) account of self-efficacy is the origin.",
+            "The dictionary entry is unambiguous (조선말 대사전, 1992).",
+        ],
+        [
+            "National Archives. (2003). Cable traffic of the period.",
+            "U.S. Department of War. (2026, March). Posture statement.",
+            "National Assembly of the Republic of Korea. (1977a, June). "
+            "Plenary record.",
+            "Bandura, A. (1977). Self-efficacy. Psychological Review.",
+            "조선말 대사전. (1992). 평양: 사회과학출판사.",
+        ],
+    )
+    r = citecheck.check_citation_parity(DocxPackage(path))
+    assert r["missing_references"] == [], r["missing_references"]
+    assert r["missing_references_unparsed"] == [], (
+        r["missing_references_unparsed"]
+    )
+    assert r["uncited_references"] == [], r["uncited_references"]
+    assert r["parity_ok"] is True
+
+
+def test_reference_entries_counts_every_entry(tmp_path):
+    """reference_entries reported 197 for a list of 217 because unparsed
+    entries were left out of the count."""
+    from word_mcp.ops import citecheck
+
+    path = _parity_doc(
+        tmp_path,
+        ["A claim (Smith, 2020)."],
+        [
+            "Smith, J. (2020). A title. Journal.",
+            "An entry with no year at all, which cannot be keyed.",
+        ],
+    )
+    r = citecheck.check_citation_parity(DocxPackage(path))
+    assert r["reference_entries"] == 2
+    assert r["reference_entries_parsed"] == 1
+    assert len(r["unparsed_reference_entries"]) == 1
+
+
+def test_a_genuinely_missing_surname_still_reports(tmp_path):
+    """The check must stay useful: a real gap is still flagged, and in the
+    confident list."""
+    from word_mcp.ops import citecheck
+
+    path = _parity_doc(
+        tmp_path,
+        ["Framed by Bordin (1979), extended later (Bordin, 1994)."],
+        ["Bordin, E. S. (1979). The generalizability of the concept."],
+    )
+    r = citecheck.check_citation_parity(DocxPackage(path))
+    assert r["missing_references"] == ["Bordin (1994)"]
+    assert r["parity_ok"] is False
+
+
+def test_prose_lead_words_are_not_read_as_authors(tmp_path):
+    """'As Muller (2019) shows' must key on Muller, not on 'As Muller'."""
+    from word_mcp.ops import citecheck
+
+    path = _parity_doc(
+        tmp_path,
+        ["As Muller (2019) shows, the claim holds."],
+        ["Muller, K. (2019). Der Titel. Zeitschrift."],
+    )
+    r = citecheck.check_citation_parity(DocxPackage(path))
+    assert r["parity_ok"] is True
+    assert r["unique_cited_works"] == 1, "'As Muller' counted as its own work"

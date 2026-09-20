@@ -41,28 +41,82 @@ _REF_HEADINGS = re.compile(
 _YEAR = r"(?:(?:1[89]\d\d|20\d\d)[a-z]?|n\.d\.)"
 # one author token: a capitalized Latin word (accents included — Müller,
 # García, Łukasz; \w continues with any Unicode letter) OR a hangul word
-_AUT = r"(?:[A-ZÀ-ÞĀ-Žƀ-Ƀ][\w'’\-]+|[가-힣]+)"
-# Narrative: Smith (2026) / Smith and Jones (2026) / Smith et al. (2026)
+_AUT = r"(?:[A-ZÀ-ÞĀ-Žƀ-Ƀ][\w'’\-.]*[\w'’.]|[가-힣]+)"
+# Organizational authors are multi-word ("National Archives", "U.S.
+# Department of War", "National Assembly of the Republic of Korea"), so an
+# author is a PHRASE: capitalized words plus the lowercase connectors that
+# hold them together (field test 2026-09-20, punchlist #867).
+_CONNECT = r"(?:of|the|for|and|de|del|la|van|von|der|di|du|el|los|las)"
+_PHRASE = rf"{_AUT}(?:\s+(?:{_AUT}|{_CONNECT}))*"
+# Narrative: Smith (2026) / Smith and Jones (2026) / Smith et al. (2026) /
+# National Archives (2003)
 _NARRATIVE = re.compile(
-    rf"(?<![\w가-힣])({_AUT})"
-    rf"(?:\s+(?:and|&|와|과)\s+{_AUT})*"
+    rf"(?<![\w가-힣])({_PHRASE})"
     rf"(?:\s+et al\.?)?"
-    rf"\s*\(({_YEAR})(?:,\s*(?:p{{1,2}}\.\s*[\d\-–, ]+))?\)"
+    # the parenthesis may carry a page locator or the rest of an APA date
+    rf"\s*\(({_YEAR})(?:,[^()]{{0,40}})?\)"
 )
-# Parenthetical content chunk: Smith, 2026 / Smith & Jones, 2026, p. 4 /
-# Smith et al., 2026
-_PAREN_CHUNK = re.compile(
-    rf"({_AUT})"
-    rf"(?:,?\s+(?:and|&|와|과)\s+{_AUT})*"
-    rf"(?:,?\s+et al\.?)?"
-    rf",\s*({_YEAR})"
-)
+# Parenthetical chunk: everything ahead of the year in one semicolon-
+# separated piece is the author field (Smith / Smith & Jones / Smith et
+# al. / Memorandum of conversation), normalized afterwards.
+_PAREN_CHUNK = re.compile(rf"^(.{{2,150}}?),\s*({_YEAR})")
 # Reference entries: Surname, I. (2026). | Carter, J. (1977a, July 21). |
-# Congressional Record, 122(Pt. 24), 30367 (1976, September 15).
-# Key = first capitalized word + the year from the first paren containing one
-# (full APA date forms and preceding non-year parens are tolerated).
-_REF_LEAD = re.compile(rf"^\s*({_AUT})")
+# National Archives. (2003). | 조선말 대사전. (1992).
+# The author field is everything ahead of the first paren holding a year.
 _REF_YEAR = re.compile(rf"\(({_YEAR})\b[^)]*\)")
+# "Surname, A. B." — the personal-name pattern, which is what makes a
+# last-token fallback safe to skip.
+_PERSONAL = re.compile(rf"^\s*{_AUT}\s*,\s*(?:[A-ZÀ-ÞĀ-Ž]\.\s*)+")
+_POSSESSIVE = re.compile(r"['’][sS]$")
+# Leading words that are prose, not part of the author's name.
+_LEAD_STOP = {
+    "as", "in", "by", "see", "also", "e.g.", "i.e.", "cf.", "per", "from",
+    "with", "and", "but", "however", "the", "a", "an", "for", "to", "of",
+    "at", "on", "after", "before", "while", "since", "though", "although",
+    "when", "where", "both", "either", "neither", "compare", "following",
+    "according", "note", "notes", "such", "like", "unlike", "via",
+}
+
+
+def _norm_token(tok: str) -> str:
+    tok = tok.strip(" .,;:()[]“”\"'’")
+    tok = _POSSESSIVE.sub("", tok)
+    return tok.lower()
+
+
+def _norm_phrase(phrase: str) -> list[str]:
+    """An author phrase as normalized tokens, with leading prose words
+    ('as Smith (2020)') dropped."""
+    toks = [t for t in (_norm_token(t) for t in phrase.split()) if t]
+    while len(toks) > 1 and toks[0] in _LEAD_STOP:
+        toks.pop(0)
+    return toks
+
+
+def _citation_keys(phrase: str, year: str) -> tuple[str, list[tuple[str, str]]]:
+    """The canonical key for counting, plus every key worth matching a
+    reference entry on: the whole phrase, its last word (organizational
+    authors whose entry was parsed on another token), and its first."""
+    toks = _norm_phrase(phrase)
+    if not toks:
+        return "", []
+    whole = " ".join(toks)
+    keys = [(whole, year)]
+    if len(toks) > 1:
+        keys.append((toks[-1], year))
+        keys.append((toks[0], year))
+    return whole, keys
+
+
+def _reference_keys(author_field: str, year: str) -> list[tuple[str, str]]:
+    toks = _norm_phrase(author_field)
+    if not toks:
+        return []
+    keys = [(" ".join(toks), year), (toks[0], year)]
+    if len(toks) > 1 and not _PERSONAL.match(author_field):
+        # Organizational: a citation may name it by its last word.
+        keys.append((toks[-1], year))
+    return keys
 
 
 def check_citation_parity(pkg: DocxPackage) -> dict:
@@ -105,52 +159,87 @@ def check_citation_parity(pkg: DocxPackage) -> dict:
         and p["text"].strip()
     ]
 
-    # ---- collect in-text citations
-    cited: dict[tuple[str, str], int] = {}
+    # ---- collect in-text citations: canonical key -> {count, keys}
+    cited: dict[tuple[str, str], dict] = {}
+
+    def record(phrase: str, year: str) -> None:
+        year = year.lower()
+        whole, keys = _citation_keys(phrase, year)
+        if not whole:
+            return
+        entry = cited.setdefault(
+            (whole, year), {"count": 0, "keys": keys, "phrase": phrase.strip()}
+        )
+        entry["count"] += 1
+
     for m in _NARRATIVE.finditer(body_text):
-        key = (m.group(1).lower(), m.group(2).lower())
-        cited[key] = cited.get(key, 0) + 1
+        record(m.group(1), m.group(2))
     for paren in re.finditer(r"\(([^()]{4,300}?)\)", body_text):
         inner = paren.group(1)
         if not re.search(_YEAR, inner):
             continue
-        for m in _PAREN_CHUNK.finditer(inner):
-            key = (m.group(1).lower(), m.group(2).lower())
-            cited[key] = cited.get(key, 0) + 1
+        for piece in inner.split(";"):
+            m = _PAREN_CHUNK.match(piece.strip())
+            if m:
+                record(m.group(1), m.group(2))
 
     # ---- collect reference entries
-    listed: dict[tuple[str, str], str] = {}
+    listed: dict[tuple[str, str], int] = {}  # key -> entry index
+    entries: list[dict] = []
     unparsed: list[str] = []
     for entry in ref_paras:
-        lead = _REF_LEAD.match(entry)
         year = _REF_YEAR.search(entry)
-        if lead and year:
-            listed[(lead.group(1).lower(), year.group(1).lower())] = entry[:120]
-        else:
+        if not year:
             unparsed.append(entry[:120])
+            continue
+        author_field = entry[: year.start()]
+        keys = _reference_keys(author_field, year.group(1).lower())
+        if not keys:
+            unparsed.append(entry[:120])
+            continue
+        idx = len(entries)
+        entries.append({"text": entry[:120], "cited": False})
+        for key in keys:
+            listed.setdefault(key, idx)
 
-    missing = sorted(
-        {
-            f"{surname.title()} ({year})"
-            for (surname, year) in cited
-            if (surname, year) not in listed
-        }
-    )
-    uncited = sorted(
-        listed[key] for key in listed if key not in cited
-    )
+    # ---- match, marking every entry a citation resolves to
+    missing: list[str] = []
+    missing_unparsed: list[str] = []
+    for (whole, year), info in cited.items():
+        hit = next((listed[k] for k in info["keys"] if k in listed), None)
+        if hit is not None:
+            entries[hit]["cited"] = True
+            continue
+        label = f"{info['phrase']} ({year})"
+        # A single-token author is the personal-surname case the heuristic
+        # handles well; a phrase is an organizational or unparsed author,
+        # kept apart so the actionable list stays actionable (#867).
+        if len(whole.split()) == 1:
+            missing.append(f"{whole.title()} ({year})")
+        else:
+            missing_unparsed.append(label)
+
+    uncited = sorted(e["text"] for e in entries if not e["cited"])
+    missing = sorted(set(missing))
+    missing_unparsed = sorted(set(missing_unparsed))
 
     return {
-        "in_text_citations": sum(cited.values()),
+        "in_text_citations": sum(i["count"] for i in cited.values()),
         "unique_cited_works": len(cited),
-        "reference_entries": len(listed),
-        "missing_references": missing,  # cited but not in the list — serious
+        "reference_entries": len(entries) + len(unparsed),
+        "reference_entries_parsed": len(entries),
+        "missing_references": missing,  # cited but not listed — serious
+        "missing_references_unparsed": missing_unparsed,  # author unclear
         "uncited_references": uncited,  # listed but never cited — review
-        "unparsed_reference_entries": unparsed,  # could not extract key
-        "parity_ok": not missing and not uncited,
+        "unparsed_reference_entries": unparsed,  # no year, no key
+        "parity_ok": not missing and not missing_unparsed and not uncited,
         "note": (
-            "Heuristic APA matching on (first-author surname, year). "
-            "Organizational authors and unusual formats may need manual "
-            "review; unparsed entries were not checked."
+            "Heuristic APA matching on (author, year), where the author is "
+            "a surname or an organizational name phrase. missing_references "
+            "holds single-surname citations with no entry; "
+            "missing_references_unparsed holds citations whose author the "
+            "heuristic could not resolve to an entry, which is where "
+            "organizational authors and unusual formats land. Unparsed "
+            "entries were not checked."
         ),
     }
