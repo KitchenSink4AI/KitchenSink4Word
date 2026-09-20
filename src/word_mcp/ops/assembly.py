@@ -795,6 +795,10 @@ def _direct_props(
             v = el.get(qn(f"w:{a}"))
             if v is not None:
                 props[(elem_name, a)] = v
+        for base, trio in _THEME_ASPECTS.get(elem_name, {}).items():
+            packed = _pack_theme_ref(el, base, trio)
+            if packed is not None:
+                props[(elem_name, _THEME_KEY + base)] = packed
     if which == "pPr":
         for name in _COMPLEX_PPR:
             el = holder.find(qn(f"w:{name}"))
@@ -830,6 +834,213 @@ def _builtin(key: tuple[str, str], which: str) -> str:
         return toggles[elem]
     table = _ATTR_PPR if which == "pPr" else _ATTR_RPR
     return table.get(elem, {}).get(attr, "")
+
+
+# ------------------------------------------------------------- theme colours
+#
+# Two packages can carry byte-identical <w:color w:val="4472C4"
+# w:themeColor="accent1"/> and still render different colours, because the
+# colour lives in word/theme/theme1.xml and the theme is never transplanted:
+# the carried text silently takes the TARGET's accent (adversarial review
+# round 2, M6). Two chapters from two Word templates is the ordinary case.
+#
+# So the two colour schemes are compared slot by slot, and wherever carried
+# content references a slot that resolves differently, the SOURCE's resolved
+# RGB is baked into w:val and the themeColor/themeTint/themeShade attributes
+# are dropped, so Word cannot re-resolve it against its own theme.
+
+_A = "http://schemas.openxmlformats.org/drawingml/2006/main"
+_THEME_SLOTS = (
+    "dk1", "lt1", "dk2", "lt2", "accent1", "accent2", "accent3",
+    "accent4", "accent5", "accent6", "hlink", "folHlink",
+)
+# ST_ThemeColor (w:themeColor) -> clrScheme slot. text1/text2/background1/
+# background2 go through settings.xml's w:clrSchemeMapping first.
+_THEME_NAME_TO_SLOT = {
+    "dark1": "dk1", "light1": "lt1", "dark2": "dk2", "light2": "lt2",
+    "accent1": "accent1", "accent2": "accent2", "accent3": "accent3",
+    "accent4": "accent4", "accent5": "accent5", "accent6": "accent6",
+    "hyperlink": "hlink", "followedHyperlink": "folHlink",
+}
+_MAPPED_NAMES = {
+    "text1": ("t1", "dk1"), "text2": ("t2", "dk2"),
+    "background1": ("bg1", "lt1"), "background2": ("bg2", "lt2"),
+}
+_SYS_COLOR_FALLBACK = {"windowText": "000000", "window": "FFFFFF"}
+
+# Colour-bearing aspects: element -> {base attribute: (theme, tint, shade)}.
+# Each one becomes its own tracked pseudo-property.
+_THEME_ASPECTS: dict[str, dict[str, tuple[str, str, str]]] = {
+    "color": {"val": ("themeColor", "themeTint", "themeShade")},
+    "u": {"color": ("themeColor", "themeTint", "themeShade")},
+    "bdr": {"color": ("themeColor", "themeTint", "themeShade")},
+    "shd": {
+        "fill": ("themeFill", "themeFillTint", "themeFillShade"),
+        "color": ("themeColor", "themeTint", "themeShade"),
+    },
+}
+_THEME_KEY = "_theme:"
+
+
+def _apply_tint_shade(hex_rgb: str, tint: str | None, shade: str | None) -> str:
+    """Word's themeTint/themeShade: a hex byte applied per channel. Shade
+    multiplies toward black; tint mixes toward white."""
+    try:
+        r, g, b = (int(hex_rgb[i:i + 2], 16) for i in (0, 2, 4))
+    except (ValueError, IndexError):
+        return hex_rgb
+    if shade:
+        try:
+            f = int(shade, 16) / 255.0
+        except ValueError:
+            return hex_rgb
+        r, g, b = (round(c * f) for c in (r, g, b))
+    elif tint:
+        try:
+            f = int(tint, 16) / 255.0
+        except ValueError:
+            return hex_rgb
+        r, g, b = (round(c * f + 255 * (1 - f)) for c in (r, g, b))
+    return "".join(f"{max(0, min(255, c)):02X}" for c in (r, g, b))
+
+
+class _ThemeColors:
+    """One package's theme colour scheme, with its settings.xml mapping."""
+
+    def __init__(self, pkg: DocxPackage):
+        self.slots: dict[str, str] = {}
+        self.mapping: dict[str, str] = {}
+        self.part: str | None = None
+        for name in pkg.part_names():
+            if re.fullmatch(r"word/theme/theme\d+\.xml", name):
+                self.part = name
+                break
+        if self.part:
+            scheme = pkg.root(self.part).find(
+                f"{{{_A}}}themeElements/{{{_A}}}clrScheme"
+            )
+            if scheme is not None:
+                for slot in _THEME_SLOTS:
+                    el = scheme.find(f"{{{_A}}}{slot}")
+                    if el is None:
+                        continue
+                    srgb = el.find(f"{{{_A}}}srgbClr")
+                    if srgb is not None and srgb.get("val"):
+                        self.slots[slot] = srgb.get("val").upper()
+                        continue
+                    sys_clr = el.find(f"{{{_A}}}sysClr")
+                    if sys_clr is not None:
+                        last = sys_clr.get("lastClr") or _SYS_COLOR_FALLBACK.get(
+                            sys_clr.get("val") or "", ""
+                        )
+                        if last:
+                            self.slots[slot] = last.upper()
+        if pkg.has_part("word/settings.xml"):
+            m = pkg.root("word/settings.xml").find(qn("w:clrSchemeMapping"))
+            if m is not None:
+                for key in ("t1", "t2", "bg1", "bg2"):
+                    v = m.get(qn(f"w:{key}"))
+                    if v:
+                        self.mapping[key] = v
+
+    @property
+    def defined(self) -> bool:
+        return bool(self.slots)
+
+    def slot_for(self, theme_color: str) -> str | None:
+        if theme_color in _MAPPED_NAMES:
+            key, default = _MAPPED_NAMES[theme_color]
+            mapped = self.mapping.get(key)
+            return _THEME_NAME_TO_SLOT.get(mapped, default) if mapped else default
+        return _THEME_NAME_TO_SLOT.get(theme_color)
+
+    def resolve(
+        self, theme_color: str, tint: str | None, shade: str | None
+    ) -> str | None:
+        slot = self.slot_for(theme_color)
+        if slot is None:
+            return None
+        base = self.slots.get(slot)
+        if not base:
+            return None
+        return _apply_tint_shade(base, tint, shade)
+
+    def differing_slots(self, other: "_ThemeColors") -> list[str]:
+        if not self.defined or not other.defined:
+            return []
+        return sorted(
+            slot for slot in _THEME_SLOTS
+            if self.slots.get(slot) != other.slots.get(slot)
+        )
+
+
+def _pack_theme_ref(el: etree._Element, base: str, trio: tuple) -> str | None:
+    """The raw colour reference on one element, as a packed string, or None
+    when it names no theme colour (a plain hex needs no resolution)."""
+    theme = el.get(qn(f"w:{trio[0]}"))
+    if not theme or theme == "none":
+        return None
+    return "|".join(
+        el.get(qn(f"w:{a}")) or ""
+        for a in (base, trio[0], trio[1], trio[2])
+    )
+
+
+def _direct_skip(direct: dict) -> set:
+    """Keys a paragraph or run already carries directly. A colour aspect
+    counts as carried when EITHER its plain attribute or its theme
+    reference is present, so the two halves never fight each other."""
+    keys = set(direct)
+    for elem, aspects in _THEME_ASPECTS.items():
+        for base in aspects:
+            if (elem, base) in keys or (elem, _THEME_KEY + base) in keys:
+                keys.add((elem, base))
+                keys.add((elem, _THEME_KEY + base))
+    return keys
+
+
+def _freeze_theme_colors(
+    elements, src_theme: _ThemeColors, tgt_theme: _ThemeColors
+) -> int:
+    """Resolve theme colour references in CARRIED xml against the source
+    theme and write the result as a plain value, dropping the theme
+    attributes so Word cannot re-resolve them against its own theme.
+
+    The theme part is never transplanted, so every reference in carried
+    content (direct formatting, and the definitions of cloned or imported
+    styles) would otherwise take the target's colours (round-2 review, M6).
+    Only references whose slot actually resolves differently are touched.
+    """
+    if not src_theme.defined or not tgt_theme.defined:
+        return 0
+    frozen = 0
+    for root in elements:
+        for elem, aspects in _THEME_ASPECTS.items():
+            for el in root.iter(qn(f"w:{elem}")):
+                for base, trio in aspects.items():
+                    packed = _pack_theme_ref(el, base, trio)
+                    if packed is None:
+                        continue
+                    src_hex = _resolve_theme_ref(packed, src_theme)
+                    tgt_hex = _resolve_theme_ref(packed, tgt_theme)
+                    if src_hex is None or src_hex == tgt_hex:
+                        continue
+                    el.set(qn(f"w:{base}"), src_hex)
+                    for gone in trio:
+                        el.attrib.pop(qn(f"w:{gone}"), None)
+                    frozen += 1
+    return frozen
+
+
+def _resolve_theme_ref(packed: str | None, theme: _ThemeColors) -> str | None:
+    """A packed reference resolved against one package's theme."""
+    if not packed:
+        return None
+    val, name, tint, shade = (packed.split("|") + ["", "", "", ""])[:4]
+    hit = theme.resolve(name, tint or None, shade or None)
+    if hit:
+        return hit
+    return (val or "").upper() or None
 
 
 # ----------------------------------------------------------- numbering layer
@@ -940,6 +1151,10 @@ class _DefaultsBaker:
         # Numbering travels definition-for-definition, so the SOURCE's
         # levels describe both sides of the diff.
         self.numbering = _NumberingIndex(src)
+        self.src_theme = _ThemeColors(src)
+        self.tgt_theme = _ThemeColors(pkg)
+        self.theme_slots_differ = self.src_theme.differing_slots(self.tgt_theme)
+        self.theme_colors_baked = 0
         self._src_chain: dict[tuple[str, str], dict] = {}
         # Two DIFFERENT mappings, so two memos: _tgt_own is "values along
         # the TARGET's own basedOn chain", _tgt_chain is "values a SOURCE
@@ -1157,22 +1372,38 @@ class _DefaultsBaker:
         there is a safe one; where there is not, it is recorded in
         not_baked WITH a reason rather than dropped in silence."""
         out: dict[tuple[str, str], str] = {}
+        # An aspect with a theme reference on either side is decided by the
+        # RESOLVED colour, so its plain attribute is not compared twice.
+        themed = {
+            (k[0], k[1][len(_THEME_KEY):])
+            for k in set(src_eff) | set(tgt_eff)
+            if k[1].startswith(_THEME_KEY)
+        }
         for key in set(src_eff) | set(tgt_eff):
             sv, tv = src_eff.get(key), tgt_eff.get(key)
+            if key in themed:
+                continue
+            if key[1].startswith(_THEME_KEY):
+                base = (key[0], key[1][len(_THEME_KEY):])
+                sv_hex = (
+                    _resolve_theme_ref(sv, self.src_theme) if sv
+                    else (src_eff.get(base) or "").upper() or None
+                )
+                tv_hex = (
+                    _resolve_theme_ref(tv, self.tgt_theme) if tv
+                    else (tgt_eff.get(base) or "").upper() or None
+                )
+                if sv_hex is None or sv_hex == tv_hex:
+                    continue
+                self.differing.add((which, key))
+                self._attribute(key, which, styles)
+                out[key] = sv_hex
+                self.theme_colors_baked += 1
+                continue
             if sv == tv:
                 continue
             self.differing.add((which, key))
-            # Attribute the difference to a shared style name only when that
-            # style's chain actually defines the property (otherwise it came
-            # from docDefaults and naming a style would mislead).
-            for sid in styles:
-                name = self.src_id2name.get(sid) if sid else None
-                if not name or not self.tgt_name2id.get(name):
-                    continue
-                if key in self._src_style_props(
-                    sid, which
-                ) or key in self._tgt_style_props(sid, which):
-                    self.style_diffs.setdefault(name, set()).add((which, key))
+            self._attribute(key, which, styles)
             if which == "pPr" and key in _NEVER_BAKE_PPR:
                 self.not_baked.setdefault((which, key), _REASON_STRUCTURAL)
                 continue
@@ -1189,6 +1420,19 @@ class _DefaultsBaker:
             out[key] = value
         return out
 
+    def _attribute(self, key, which: str, styles) -> None:
+        """Name the shared style responsible for a difference, but only when
+        that style's chain actually defines the property (otherwise it came
+        from docDefaults and naming a style would mislead)."""
+        for sid in styles:
+            name = self.src_id2name.get(sid) if sid else None
+            if not name or not self.tgt_name2id.get(name):
+                continue
+            if key in self._src_style_props(
+                sid, which
+            ) or key in self._tgt_style_props(sid, which):
+                self.style_diffs.setdefault(name, set()).add((which, key))
+
     # ---- baking
 
     def _write(
@@ -1198,6 +1442,13 @@ class _DefaultsBaker:
         order = _PPR_BAKE_ORDER if which == "pPr" else _RPR_ORDER
         toggles = _TOGGLE_PPR if which == "pPr" else _TOGGLE_RPR
         elem, attr = key
+        if attr.startswith(_THEME_KEY):
+            base = attr[len(_THEME_KEY):]
+            el = _ordered_get_or_add(holder, elem, order)
+            el.set(qn(f"w:{base}"), value)
+            for gone in _THEME_ASPECTS.get(elem, {}).get(base, ()):
+                el.attrib.pop(qn(f"w:{gone}"), None)
+            return
         if attr == "_xml":
             existing = holder.find(qn(f"w:{elem}"))
             if existing is not None:
@@ -1229,7 +1480,7 @@ class _DefaultsBaker:
         run_bake = self._run_diff_for(pstyle, rstyle)
         if not run_bake:
             return False
-        direct = set(_direct_props(rpr, "rPr"))
+        direct = _direct_skip(_direct_props(rpr, "rPr"))
         changed = False
         for key in sorted(run_bake):
             if key in direct:
@@ -1252,7 +1503,7 @@ class _DefaultsBaker:
         # ---- paragraph properties
         to_bake, _num_keys = self._paragraph_diff(pstyle, num_id, ilvl)
         if to_bake:
-            direct = set(_direct_props(ppr, "pPr"))
+            direct = _direct_skip(_direct_props(ppr, "pPr"))
             changed = False
             for key in sorted(to_bake):
                 if key in direct:
@@ -1297,7 +1548,10 @@ class _DefaultsBaker:
     @staticmethod
     def _fmt(items) -> list[str]:
         return sorted(
-            f"{which}.{e}" if a == "_xml" else f"{which}.{e}.{a}"
+            f"{which}.{e}" if a == "_xml"
+            else f"{which}.{e}.{a[len(_THEME_KEY):]}(theme)"
+            if a.startswith(_THEME_KEY)
+            else f"{which}.{e}.{a}"
             for (which, (e, a)) in items
         )
 
@@ -1332,6 +1586,14 @@ class _DefaultsBaker:
         out = {
             "differ": True,
             "differing_properties": self._fmt(self.differing),
+            **(
+                {
+                    "theme_colors_baked": self.theme_colors_baked,
+                    "theme_slots_differing": self.theme_slots_differ,
+                }
+                if self.theme_colors_baked or self.theme_slots_differ
+                else {}
+            ),
             "paragraphs_baked": self.paragraphs_baked,
             "runs_baked": self.runs_baked,
             "paragraph_marks_baked": self.marks_baked,
@@ -1836,6 +2098,19 @@ def _transplant(
         remap_targets, numbering.map, set(numbering.unresolved)
     )
 
+    # B2b. formatting="source": theme colour references in the carried xml
+    # (direct formatting and the definitions of cloned or imported styles)
+    # are resolved against the SOURCE theme and frozen, because the theme
+    # part never travels and the target's colours would take over (M6).
+    theme_refs_frozen = 0
+    theme_slots_differ: list[str] = []
+    if formatting == "source":
+        src_theme, tgt_theme = _ThemeColors(src), _ThemeColors(pkg)
+        theme_slots_differ = src_theme.differing_slots(tgt_theme)
+        theme_refs_frozen = _freeze_theme_colors(
+            remap_targets, src_theme, tgt_theme
+        )
+
     # B3. Notes: ensure parts/styles exist, assign fresh ids, retag, append.
     notes_carried = {"footnote": 0, "endnote": 0}
     for kind, pairs in note_plan.items():
@@ -2180,6 +2455,23 @@ def _transplant(
         "section_breaks_stripped": section_breaks_stripped,
         "formatting_mode": formatting,
     }
+    if theme_refs_frozen or (
+        dd_baker is not None and dd_baker.theme_colors_baked
+    ):
+        result["theme_colors"] = {
+            "differing_slots": theme_slots_differ,
+            "references_frozen": theme_refs_frozen,
+            "resolved_from_styles": (
+                dd_baker.theme_colors_baked if dd_baker is not None else 0
+            ),
+            "note": (
+                "the two files' themes define these colour slots "
+                "differently and the theme part does not travel, so theme "
+                "colour references in the carried content were resolved "
+                "against the SOURCE theme and written as plain values; "
+                "they will not follow the target's theme from here on"
+            ),
+        }
     if formatting != "source":
         result["runs_stripped"] = runs_stripped
         result["paragraphs_stripped"] = paras_stripped
