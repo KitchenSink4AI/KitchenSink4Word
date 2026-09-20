@@ -855,12 +855,40 @@ def _toggle_value(el: etree._Element) -> str:
     return "0" if el.get(qn("w:val")) in ("0", "false", "off") else "1"
 
 
+def _complex_signature(
+    el: etree._Element, themes: tuple | None = None
+) -> str:
+    """A whole-element property as a comparable, writable string.
+
+    Detached from its package first: inclusive c14n of an element still in
+    its tree emits every namespace its ANCESTORS declare, so the same
+    w:pBdr serialised out of two packages whose roots declare different
+    namespace sets compared unequal and baked a border nobody asked for.
+    Only the namespaces the element itself uses survive here.
+    """
+    clone = copy.deepcopy(el)
+    if themes is not None:
+        _freeze_theme_colors([clone], themes[0], themes[1])
+    clone = etree.fromstring(etree.tostring(clone))
+    etree.cleanup_namespaces(clone)
+    return etree.tostring(clone, method="c14n").decode()
+
+
 def _direct_props(
-    holder: etree._Element | None, which: str
+    holder: etree._Element | None, which: str, themes: tuple | None = None,
 ) -> dict[tuple[str, str], str]:
     """Tracked (element, attribute) -> value pairs explicitly present on a
     pPr or rPr. Toggles report under the pseudo-attribute "val"; complex
-    properties report their canonical serialization under "_xml"."""
+    properties report their canonical serialization under "_xml".
+
+    `themes` is (this package's theme, the other package's theme). When
+    given, theme references inside a complex property are resolved against
+    this package's theme wherever the two disagree about the slot, so two
+    byte-identical w:pBdr elements that the two themes paint different
+    colours no longer compare equal (round-3 review, m10). Slots the two
+    themes agree on are left as live references, so an in-template merge
+    still follows the merged document's theme.
+    """
     props: dict[tuple[str, str], str] = {}
     if holder is None:
         return props
@@ -886,14 +914,12 @@ def _direct_props(
         for name in _COMPLEX_PPR:
             el = holder.find(qn(f"w:{name}"))
             if el is not None:
-                props[(name, "_xml")] = etree.tostring(
-                    el, method="c14n"
-                ).decode()
+                props[(name, "_xml")] = _complex_signature(el, themes)
     return props
 
 
 def _docdefaults_props(
-    pkg: DocxPackage, which: str
+    pkg: DocxPackage, which: str, themes: tuple | None = None,
 ) -> dict[tuple[str, str], str]:
     """Tracked property values from styles.xml docDefaults."""
     if not pkg.has_part("word/styles.xml"):
@@ -905,7 +931,7 @@ def _docdefaults_props(
         holder = dd.find(f"{qn('w:pPrDefault')}/{qn('w:pPr')}")
     else:
         holder = dd.find(f"{qn('w:rPrDefault')}/{qn('w:rPr')}")
-    return _direct_props(holder, which)
+    return _direct_props(holder, which, themes)
 
 
 def _builtin(key: tuple[str, str], which: str) -> str:
@@ -1088,6 +1114,26 @@ class _ThemeColors:
         )
 
 
+# The two theme trios, by the attribute that names the slot. Every
+# colour-bearing WordprocessingML element uses one or both of them, so a
+# descent keyed on these finds the ones no aspect table lists: the CT_Border
+# children of w:pBdr, w:tblBorders, w:tcBorders and w:pgBorders, and
+# w:background (round-3 review, m10).
+_THEME_TRIOS = (
+    ("themeColor", "themeTint", "themeShade"),
+    ("themeFill", "themeFillTint", "themeFillShade"),
+)
+
+
+def _theme_base_attr(el: etree._Element, theme_attr: str) -> str:
+    """Which attribute the theme reference resolves INTO. CT_Color keeps
+    its colour in w:val; every other colour-bearing type keeps it in
+    w:color, and a fill always lands in w:fill."""
+    if theme_attr == "themeFill":
+        return "fill"
+    return "val" if el.tag == qn("w:color") else "color"
+
+
 def _pack_theme_ref(el: etree._Element, base: str, trio: tuple) -> str | None:
     """The raw colour reference on one element, as a packed string, or None
     when it names no theme colour (a plain hex needs no resolution)."""
@@ -1124,25 +1170,34 @@ def _freeze_theme_colors(
     content (direct formatting, and the definitions of cloned or imported
     styles) would otherwise take the target's colours (round-2 review, M6).
     Only references whose slot actually resolves differently are touched.
+
+    The descent is keyed on the theme ATTRIBUTES rather than on a list of
+    element names, so it reaches the colour carriers no aspect table names:
+    a themed bottom rule under a heading (w:pBdr/w:bottom), the borders of
+    a carried table (w:tblBorders, w:tcBorders), page borders, and
+    w:background. Those used to pass through untouched and silently
+    re-theme (round-3 review, m10).
     """
     if not src_theme.defined or not tgt_theme.defined:
         return 0
     frozen = 0
     for root in elements:
-        for elem, aspects in _THEME_ASPECTS.items():
-            for el in root.iter(qn(f"w:{elem}")):
-                for base, trio in aspects.items():
-                    packed = _pack_theme_ref(el, base, trio)
-                    if packed is None:
-                        continue
-                    src_hex = _resolve_theme_ref(packed, src_theme)
-                    tgt_hex = _resolve_theme_ref(packed, tgt_theme)
-                    if src_hex is None or src_hex == tgt_hex:
-                        continue
-                    el.set(qn(f"w:{base}"), src_hex)
-                    for gone in trio:
-                        el.attrib.pop(qn(f"w:{gone}"), None)
-                    frozen += 1
+        for el in root.iter():
+            if not isinstance(el.tag, str):
+                continue
+            for trio in _THEME_TRIOS:
+                base = _theme_base_attr(el, trio[0])
+                packed = _pack_theme_ref(el, base, trio)
+                if packed is None:
+                    continue
+                src_hex = _resolve_theme_ref(packed, src_theme)
+                tgt_hex = _resolve_theme_ref(packed, tgt_theme)
+                if src_hex is None or src_hex == tgt_hex:
+                    continue
+                el.set(qn(f"w:{base}"), src_hex)
+                for gone in trio:
+                    el.attrib.pop(qn(f"w:{gone}"), None)
+                frozen += 1
     return frozen
 
 
@@ -1250,13 +1305,18 @@ class _DefaultsBaker:
     See the section comment above."""
 
     def __init__(self, src: DocxPackage, pkg: DocxPackage):
+        # Built first: the complex-property comparison needs both themes to
+        # tell a themed border apart from an identical one (review m10).
+        src_theme, tgt_theme = _ThemeColors(src), _ThemeColors(pkg)
+        self.src_themes = (src_theme, tgt_theme)
+        self.tgt_themes = (tgt_theme, src_theme)
         self.src_dd = {
-            "pPr": _docdefaults_props(src, "pPr"),
-            "rPr": _docdefaults_props(src, "rPr"),
+            "pPr": _docdefaults_props(src, "pPr", self.src_themes),
+            "rPr": _docdefaults_props(src, "rPr", self.src_themes),
         }
         self.tgt_dd = {
-            "pPr": _docdefaults_props(pkg, "pPr"),
-            "rPr": _docdefaults_props(pkg, "rPr"),
+            "pPr": _docdefaults_props(pkg, "pPr", self.tgt_themes),
+            "rPr": _docdefaults_props(pkg, "rPr", self.tgt_themes),
         }
         self.src_el, self.src_based, self.default_para_style = _style_index(src)
         self.tgt_el, self.tgt_based, self.tgt_default_para = _style_index(pkg)
@@ -1265,8 +1325,7 @@ class _DefaultsBaker:
         # Numbering travels definition-for-definition, so the SOURCE's
         # levels describe both sides of the diff.
         self.numbering = _NumberingIndex(src)
-        self.src_theme = _ThemeColors(src)
-        self.tgt_theme = _ThemeColors(pkg)
+        self.src_theme, self.tgt_theme = src_theme, tgt_theme
         self.theme_slots_differ = self.src_theme.differing_slots(self.tgt_theme)
         self.theme_colors_baked = 0
         self._src_chain: dict[tuple[str, str], dict] = {}
@@ -1299,6 +1358,7 @@ class _DefaultsBaker:
         els: dict[str, etree._Element],
         based: dict[str, str],
         memo: dict,
+        themes: tuple | None = None,
     ) -> dict[tuple[str, str], str]:
         """Values DEFINED along a style's basedOn chain (ancestors first, so
         the style's own values win). docDefaults are NOT included."""
@@ -1316,13 +1376,16 @@ class _DefaultsBaker:
             cur = based.get(cur)
         props: dict[tuple[str, str], str] = {}
         for s in reversed(chain):
-            props.update(_direct_props(els[s].find(qn(f"w:{which}")), which))
+            props.update(
+                _direct_props(els[s].find(qn(f"w:{which}")), which, themes)
+            )
         memo[(sid, which)] = props
         return props
 
     def _src_style_props(self, sid: str | None, which: str) -> dict:
         return self._chain_props(
-            sid, which, self.src_el, self.src_based, self._src_chain
+            sid, which, self.src_el, self.src_based, self._src_chain,
+            self.src_themes,
         )
 
     def _tgt_style_props(self, sid: str | None, which: str) -> dict:
@@ -1349,13 +1412,21 @@ class _DefaultsBaker:
             tgt_id = self.tgt_name2id.get(name)
         if tgt_id is not None:
             props = self._chain_props(
-                tgt_id, which, self.tgt_el, self.tgt_based, self._tgt_own
+                tgt_id, which, self.tgt_el, self.tgt_based, self._tgt_own,
+                self.tgt_themes,
             )
         else:
+            # A name-unmatched source style is CLONED, and the clone's own
+            # theme references are frozen against the source theme, so the
+            # source's resolution is what the carried content will see.
             props = dict(self._tgt_style_props(self.src_based.get(sid), which))
             el = self.src_el.get(sid)
             if el is not None:
-                props.update(_direct_props(el.find(qn(f"w:{which}")), which))
+                props.update(
+                    _direct_props(
+                        el.find(qn(f"w:{which}")), which, self.src_themes
+                    )
+                )
         self._tgt_chain[(sid, which)] = props
         return props
 
@@ -1424,7 +1495,7 @@ class _DefaultsBaker:
             tgt_eff.update(
                 self._chain_props(
                     self.tgt_default_para, "pPr", self.tgt_el,
-                    self.tgt_based, self._tgt_own,
+                    self.tgt_based, self._tgt_own, self.tgt_themes,
                 )
             )
         # The numbering layer sits above both style chains and travels
@@ -1463,7 +1534,7 @@ class _DefaultsBaker:
             tgt_eff.update(
                 self._chain_props(
                     self.tgt_default_para, "rPr", self.tgt_el,
-                    self.tgt_based, self._tgt_own,
+                    self.tgt_based, self._tgt_own, self.tgt_themes,
                 )
             )
         tgt_eff.update(self._tgt_style_props(rstyle, "rPr"))
