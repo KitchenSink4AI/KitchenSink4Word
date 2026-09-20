@@ -220,6 +220,7 @@ APPLY_OPS: dict[str, tuple[set, set]] = {
                {"anchor", "formatting"}),
     "set_paragraph_format": ({"anchor", "format"}, {"anchor", "format"}),
     "set_cell": ({"anchor", "text"}, {"anchor", "text"}),
+    "move": ({"anchor", "anchors", "location"}, {"location"}),
 }
 
 
@@ -455,6 +456,54 @@ def _validate_one(pkg: DocxPackage, edit: dict) -> dict:
                 "els": [i["el"] for i in infos],
                 "indices": [i["paragraph_index"] for i in infos],
                 "_keepalive": infos}
+
+    if op == "move":
+        from ..core.locate import resolve_location
+
+        given = [k for k in ("anchor", "anchors") if k in edit]
+        if len(given) != 1:
+            raise WordMcpError(
+                'move op takes exactly one of "anchor" (one id) or '
+                '"anchors" (a list of ids, moved as a block in the order '
+                "given)"
+            )
+        ids = edit.get("anchors", [edit.get("anchor")])
+        if not isinstance(ids, list) or not ids:
+            raise WordMcpError('"anchors" must be a non-empty list of ids')
+        infos = [
+            _resolve_para_anchor(pkg, {"anchor": a}, op) for a in ids
+        ]
+        seen_idx: set[int] = set()
+        infos = [
+            info for info in infos
+            if not (info["paragraph_index"] in seen_idx
+                    or seen_idx.add(info["paragraph_index"]))
+        ]
+        r = resolve_location(pkg, edit["location"])
+        if r.position == "replace":
+            raise WordMcpError(
+                "move op position 'replace' is not a destination; use "
+                "before/after/start/end"
+            )
+        mode = r.position
+        paras = [
+            el for k, _i, el in body_items(pkg) if k == "paragraph"
+        ]
+        ref = None
+        if mode not in ("end", "start"):
+            if not paras:
+                mode = "end"
+            else:
+                ref = paras[r.paragraph_index]
+                if any(ref is info["el"] for info in infos):
+                    raise WordMcpError(
+                        "move op destination is one of the paragraphs being "
+                        "moved; pick a destination outside the moved block"
+                    )
+        return {"op": op, "kind": "move", "mode": mode, "ref": ref,
+                "els": [i["el"] for i in infos],
+                "indices": [i["paragraph_index"] for i in infos],
+                "_keepalive": (infos, paras)}
 
     if op == "set_cell":
         info = _view.resolve_anchor(pkg, edit["anchor"])
@@ -713,6 +762,51 @@ def _apply_insert(pkg: DocxPackage, plan: dict, op_index: int) -> dict:
             "_new_els": els}
 
 
+def _apply_move(pkg: DocxPackage, plan: dict, op_index: int) -> dict:
+    """Relocate paragraph elements VERBATIM: lxml re-parents the w:p, so
+    runs, run formatting, hanging indents and bookmarks travel untouched
+    (punchlist #863 — delete-and-reinsert loses all of that)."""
+    els = plan["els"]
+    for el in els:
+        _current_index(pkg, el, "paragraph", op_index)  # still in the body?
+    body = pkg.body()
+    mode = plan["mode"]
+    if mode == "end":
+        sectpr = body.find(qn("w:sectPr"))
+        for el in els:
+            if sectpr is not None:
+                sectpr.addprevious(el)
+            else:
+                body.append(el)
+    elif mode == "start":
+        first = next(
+            (c for c in body
+             if c.tag in (qn("w:p"), qn("w:tbl")) and c not in els),
+            None,
+        )
+        if first is None:
+            for el in els:
+                body.append(el)
+        else:
+            for el in els:
+                first.addprevious(el)
+    else:
+        ref = plan["ref"]
+        _current_index(pkg, ref, "paragraph", op_index)
+        if mode == "after":
+            for el in reversed(els):
+                ref.addnext(el)
+        else:  # before
+            for el in els:
+                ref.addprevious(el)
+    pkg.mark_dirty()
+    new_indices = [
+        _current_index(pkg, el, "paragraph", op_index) for el in els
+    ]
+    return {"moved": len(els), "from_indices": plan["indices"],
+            "to_indices": new_indices}
+
+
 def _apply_one(pkg: DocxPackage, edit: dict, plan: dict, i: int) -> dict:
     from . import _runmap
 
@@ -735,6 +829,8 @@ def _apply_one(pkg: DocxPackage, edit: dict, plan: dict, i: int) -> dict:
             _tx.delete_paragraphs(pkg, run[0], run[-1])
             deleted += len(run)
         return {"deleted": deleted}
+    if op == "move":
+        return _apply_move(pkg, plan, i)
     if op == "set_cell":
         tindex = _current_index(pkg, plan["el"], "table", i)
         return {

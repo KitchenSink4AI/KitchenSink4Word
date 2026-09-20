@@ -139,6 +139,13 @@ def _live_spec(edit: dict, plan: dict, i: int) -> dict:
     runs their parameter validation and nothing else."""
     op = plan["op"]
     spec: dict = {"op": op, "index": plan.get("index")}
+    if op == "move":
+        raise UnsupportedStructure(
+            f"edit {i} (move): relocating paragraphs is file-mode only, "
+            "because the live route cannot move them without rewriting "
+            "their content; close the document in Word and resend the "
+            "batch. Nothing was applied."
+        )
     if op == "insert":
         items: list[dict] = []
         for seg in plan["segments"]:
