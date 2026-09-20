@@ -2203,3 +2203,70 @@ def test_m6_identical_themes_bake_nothing(tmp_path):
     assert color.get(qn("w:themeColor")) == "accent1", (
         "an identical theme must leave the reference alone"
     )
+
+
+# ==================================================================
+# ROUND 3 - m8: an identical table style must be imported ONCE, however
+# many times its source is inserted.
+# ==================================================================
+
+
+def _styled_table_pair(tmp_path, src_sz, tgt_sz):
+    source = tmp_path / "src.docx"
+    _table_source(source)
+    pkg = DocxPackage(source)
+    _style(pkg, "BaseTable", "Base Table", stype="table",
+           rpr=f'<w:sz w:val="{src_sz}"/>')
+    _style(pkg, "TableGrid", "Table Grid", stype="table",
+           based_on="BaseTable", rpr=f'<w:color w:val="FF0000"/>')
+    pkg.save(do_backup=False)
+    target = tmp_path / "tgt.docx"
+    _table_source(target)
+    pkg = DocxPackage(target)
+    _style(pkg, "BaseTable", "Base Table", stype="table",
+           rpr=f'<w:sz w:val="{tgt_sz}"/>')
+    _style(pkg, "TableGrid", "Table Grid", stype="table",
+           based_on="BaseTable", rpr='<w:color w:val="0000FF"/>')
+    pkg.save(do_backup=False)
+    return source, target
+
+
+def _table_style_names(path):
+    pkg = DocxPackage(path)
+    return sorted(
+        s.find(qn("w:name")).get(qn("w:val"))
+        for s in pkg.root("word/styles.xml").findall(qn("w:style"))
+        if s.get(qn("w:type")) == "table"
+    )
+
+
+def test_m8_repeated_inserts_import_one_copy(tmp_path):
+    source, target = _styled_table_pair(tmp_path, 16, 44)
+    outs = [srv.insert_document(str(target), str(source)) for _ in range(3)]
+    names = _table_style_names(target)
+    assert names.count("Table Grid (imported)") == 1, names
+    assert names.count("Base Table (imported)") == 1, names
+    assert not any("(imported 2)" in n for n in names), names
+    # the second and third inserts SAY they reused the import
+    assert outs[1]["styles"]["reused_imports"], outs[1]["styles"]
+    assert "imported_renamed" not in outs[1]["styles"]
+    pkg = DocxPackage(target)
+    refs = {
+        t.find(f"{qn('w:tblPr')}/{qn('w:tblStyle')}").get(qn("w:val"))
+        for k, _i, t in rd.body_items(pkg) if k == "table"
+    }
+    assert len(refs) == 2, refs  # the target's own, plus one imported
+
+
+def test_m8_a_genuinely_different_source_still_imports_its_own(tmp_path):
+    """Reuse must key on the definition, not just the name."""
+    source, target = _styled_table_pair(tmp_path, 16, 44)
+    srv.insert_document(str(target), str(source))
+    pkg = DocxPackage(source)
+    _style(pkg, "TableGrid", "Table Grid", stype="table",
+           based_on="BaseTable", rpr='<w:color w:val="00FF00"/>')
+    pkg.save(do_backup=False)
+    srv.insert_document(str(target), str(source))
+    names = _table_style_names(target)
+    assert names.count("Table Grid (imported)") == 1, names
+    assert names.count("Table Grid (imported 2)") == 1, names

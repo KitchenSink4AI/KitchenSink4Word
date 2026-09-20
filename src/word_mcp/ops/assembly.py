@@ -357,17 +357,33 @@ _STYLE_IDENTITY_CHILDREN = frozenset({
 })
 
 
-def _style_signature(el: etree._Element) -> str:
+def _style_signature(el: etree._Element, *, ignore_refs: bool = False) -> str:
     """Canonical serialization of a style's FORMATTING, ignoring its id,
-    name and housekeeping children."""
+    name and housekeeping children. ignore_refs also drops basedOn/link/
+    next, whose values are style IDS and therefore differ between a source
+    definition and the copy of it a previous insert already imported."""
     clone = copy.deepcopy(el)
     for attr in list(clone.attrib):
         if _localname_of_attr(attr) in ("styleId", "rsid"):
             clone.attrib.pop(attr)
+    drop = _STYLE_IDENTITY_CHILDREN
+    if ignore_refs:
+        drop = drop | {"basedOn", "link", "next"}
     for child in list(clone):
-        if _localname(child) in _STYLE_IDENTITY_CHILDREN:
+        if _localname(child) in drop:
             clone.remove(child)
     return etree.tostring(clone, method="c14n").decode()
+
+
+_IMPORTED_SUFFIX = re.compile(r"^(?P<base>.+?) \(imported(?: \d+)?\)$")
+
+
+def _imported_base_name(name: str | None) -> str | None:
+    """'Table Grid (imported 2)' -> 'Table Grid'."""
+    if not name:
+        return None
+    m = _IMPORTED_SUFFIX.match(name)
+    return m.group("base") if m else name
 
 
 def _localname_of_attr(attr: str) -> str:
@@ -419,6 +435,39 @@ class _StyleResolver:
             n += 1
         return candidate
 
+    def _already_imported(
+        self, name: str, src_def: etree._Element
+    ) -> str | None:
+        """The id of an "X (imported…)" style a PREVIOUS insert created from
+        this same definition, or None. Identity is the formatting signature
+        (ids and names stripped) plus the parent's name, so a style is
+        imported once however many times its source is inserted."""
+        want = _style_signature(src_def, ignore_refs=True)
+        want_parent = self._parent_name(src_def, self.src_id2name)
+        for cand_id, cand_name in self.tgt_id2name.items():
+            if cand_id == name or cand_name == name:
+                continue
+            if _imported_base_name(cand_name) != name:
+                continue
+            cand = self.tgt_defs.get(cand_id)
+            if cand is None or cand.get(qn("w:type")) != src_def.get(
+                qn("w:type")
+            ):
+                continue
+            if _style_signature(cand, ignore_refs=True) != want:
+                continue
+            if self._parent_name(cand, self.tgt_id2name) != want_parent:
+                continue
+            return cand_id
+        return None
+
+    @staticmethod
+    def _parent_name(el: etree._Element, id2name: dict) -> str | None:
+        base = el.find(qn("w:basedOn"))
+        if base is None or not base.get(qn("w:val")):
+            return None
+        return _imported_base_name(id2name.get(base.get(qn("w:val"))))
+
     def resolve(self, sid: str) -> None:
         if not sid or sid in self._done:
             return
@@ -440,6 +489,19 @@ class _StyleResolver:
             if tgt_def is not None and _style_signature(
                 tgt_def
             ) != _style_signature(src_def):
+                already = self._already_imported(name, src_def)
+                if already is not None:
+                    # A previous insert of this source already imported it;
+                    # re-point at that copy instead of stacking another
+                    # "(imported N)" in the user's gallery (review m8).
+                    if already != sid:
+                        self.remap[sid] = already
+                    self.matched.append({
+                        "name": self.tgt_id2name.get(already, name),
+                        "source_id": sid, "target_id": already,
+                        "reused_import": True,
+                    })
+                    return
                 rename_to = self._free_name(name)
                 tgt_id = None  # import it instead of matching by name
         if tgt_id is not None:
@@ -2433,6 +2495,13 @@ def _transplant(
             "matched_by_name": len(styles.matched),
             "remapped_ids": dict(sorted(styles.remap.items())),
             "cloned": styles.cloned,
+            **(
+                {"reused_imports": [
+                    m for m in styles.matched if m.get("reused_import")
+                ]}
+                if any(m.get("reused_import") for m in styles.matched)
+                else {}
+            ),
             **(
                 {
                     "imported_renamed": styles.imported_renamed,
