@@ -381,6 +381,59 @@ def set_document_properties(
 # ------------------------------------------------------------- style creation
 
 
+# CT_Style child sequence (abridged to the children this tool and Word
+# commonly write), used to keep merged children in schema order.
+_STYLE_CHILD_ORDER = [
+    "name", "aliases", "basedOn", "next", "link", "autoRedefine", "hidden",
+    "uiPriority", "semiHidden", "unhideWhenUsed", "qFormat", "locked",
+    "personal", "personalCompose", "personalReply", "rsid", "pPr", "rPr",
+    "tblPr", "trPr", "tcPr", "tblStylePr",
+]
+
+
+def _style_child(s: etree._Element, local: str) -> etree._Element:
+    """Get or create a style child in CT_Style order."""
+    existing = s.find(qn(f"w:{local}"))
+    if existing is not None:
+        return existing
+    el = etree.Element(qn(f"w:{local}"))
+    rank = _STYLE_CHILD_ORDER.index(local)
+    for child in s:
+        cname = etree.QName(child).localname
+        if cname in _STYLE_CHILD_ORDER and _STYLE_CHILD_ORDER.index(cname) > rank:
+            child.addprevious(el)
+            return el
+    s.append(el)
+    return el
+
+
+def _merge_props(existing: etree._Element, new: etree._Element, order: list) -> None:
+    """Merge a freshly built pPr/rPr into an existing one: a property the
+    call addressed replaces its counterpart, everything else survives.
+    rFonts merges attribute-wise, since its attributes are independent
+    script slots (ascii/hAnsi/cs are what 'font' addresses; eastAsia is
+    not) -- field test 2026-09-20, punchlist #861."""
+    for child in list(new):
+        local = etree.QName(child).localname
+        cur = existing.find(child.tag)
+        if cur is None:
+            rank = order.index(local) if local in order else len(order)
+            placed = False
+            for sib in existing:
+                sname = etree.QName(sib).localname
+                if sname in order and order.index(sname) > rank:
+                    sib.addprevious(child)
+                    placed = True
+                    break
+            if not placed:
+                existing.append(child)
+        elif local == "rFonts":
+            for k, v in child.attrib.items():
+                cur.set(k, v)
+        else:
+            existing.replace(cur, child)
+
+
 def define_style(
     pkg: DocxPackage,
     *,
@@ -392,9 +445,11 @@ def define_style(
     character_formatting: dict | None = None,
     paragraph_formatting: dict | None = None,
 ) -> dict:
-    """Create (or replace) a custom style. character_formatting takes the
-    format_text keys; paragraph_formatting takes alignment / spacing / indent
-    keys from set_paragraph_format."""
+    """Create a custom style, or update an existing one in place.
+    character_formatting takes the format_text keys; paragraph_formatting
+    takes alignment / spacing / indent keys from set_paragraph_format.
+    On an existing style, attributes and children the call does not address
+    (w:default, rsid, uiPriority, unaddressed formatting) are kept."""
     import re
 
     if style_type not in ("paragraph", "character"):
@@ -405,26 +460,49 @@ def define_style(
         raise WordMcpError("character styles cannot carry paragraph formatting")
 
     root = pkg.root("word/styles.xml")
+    existing = None
     for s in root.findall(qn("w:style")):
         if s.get(qn("w:styleId")) == style_id:
-            root.remove(s)
+            existing = s
+            break
 
-    s = etree.SubElement(root, qn("w:style"))
-    s.set(qn("w:type"), style_type)
-    s.set(qn("w:styleId"), style_id)
-    etree.SubElement(s, qn("w:name")).set(qn("w:val"), name)
-    if based_on:
-        etree.SubElement(s, qn("w:basedOn")).set(qn("w:val"), based_on)
+    result: dict = {"style_defined": style_id, "type": style_type}
+    if existing is not None:
+        old_type = existing.get(qn("w:type"))
+        if old_type and old_type != style_type:
+            raise WordMcpError(
+                f"style {style_id!r} already exists as a {old_type} style; a "
+                "style's type cannot be changed in place (content referencing "
+                "it would break). Use a different style_id."
+            )
+        s = existing
+        result["replaced"] = True
+    else:
+        s = etree.SubElement(root, qn("w:style"))
+        s.set(qn("w:type"), style_type)
+        s.set(qn("w:styleId"), style_id)
+        result["replaced"] = False
+    _style_child(s, "name").set(qn("w:val"), name)
+    if based_on == style_id:
+        # based_on defaults to "Normal", so redefining Normal itself would
+        # write a self-referential basedOn (punchlist #861).
+        result["based_on_self_skipped"] = True
+    elif based_on:
+        _style_child(s, "basedOn").set(qn("w:val"), based_on)
+    elif existing is not None:
+        bo = s.find(qn("w:basedOn"))
+        if bo is not None:
+            s.remove(bo)
     if next_style and style_type == "paragraph":
-        etree.SubElement(s, qn("w:next")).set(qn("w:val"), next_style)
-    etree.SubElement(s, qn("w:qFormat"))
+        _style_child(s, "next").set(qn("w:val"), next_style)
+    _style_child(s, "qFormat")
 
     if paragraph_formatting:
         from .text import _PARA_FMT_KEYS, _check_keys
 
         allowed = _PARA_FMT_KEYS - {"borders", "shading", "tab_stops"}
         _check_keys(paragraph_formatting, allowed, "paragraph-formatting")
-        ppr = etree.SubElement(s, qn("w:pPr"))
+        ppr = etree.Element(qn("w:pPr"))
         pf = paragraph_formatting
         # CT_PPr child order: keepNext/keepLines/pageBreakBefore/widowControl
         # come before spacing/ind/jc, so write the toggles first.
@@ -463,14 +541,19 @@ def define_style(
                     ind.set(qn("w:firstLine"), str(int(v * 20)))
                 else:
                     ind.set(qn("w:hanging"), str(int(-v * 20)))
+        from .text import _PPR_ORDER
+
+        _merge_props(_style_child(s, "pPr"), ppr, _PPR_ORDER)
 
     if character_formatting:
-        from .text import _make_rpr
+        from .text import _RPR_ORDER, _make_rpr
 
-        s.append(_make_rpr(character_formatting))
+        _merge_props(
+            _style_child(s, "rPr"), _make_rpr(character_formatting), _RPR_ORDER
+        )
 
     pkg.mark_dirty("word/styles.xml")
-    return {"style_defined": style_id, "type": style_type}
+    return result
 
 
 def apply_character_style(

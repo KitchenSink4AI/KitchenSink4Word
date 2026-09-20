@@ -702,6 +702,17 @@ _PPR_ORDER = [
     "pPrChange",
 ]
 
+# CT_RPr child sequence (the schema order Word writes and strict OOXML
+# validators enforce).
+_RPR_ORDER = [
+    "rStyle", "rFonts", "b", "bCs", "i", "iCs", "caps", "smallCaps",
+    "strike", "dstrike", "outline", "shadow", "emboss", "imprint",
+    "noProof", "snapToGrid", "vanish", "webHidden", "color", "spacing",
+    "w", "kern", "position", "sz", "szCs", "highlight", "u", "effect",
+    "bdr", "shd", "fitText", "vertAlign", "rtl", "cs", "em", "lang",
+    "eastAsianLayout", "specVanish", "oMath",
+]
+
 
 def _ppr_get_or_add(ppr, local: str):
     existing = ppr.find(qn(f"w:{local}"))
