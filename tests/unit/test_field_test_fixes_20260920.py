@@ -802,3 +802,121 @@ def test_apply_edits_format_op_covers_the_paragraph_mark(tmp_path):
     )
     paras, _pkg = _body_paras(path)
     assert _italic_state(paras[0]) == ([False], False)
+
+
+# ==================================================================
+# #863: relocating a paragraph without losing its run formatting
+# ==================================================================
+
+
+def _anchors(path):
+    """Display anchor per body paragraph, in document order."""
+    view = srv.get_document_view(str(path))
+    out = []
+    for line in view["view"].splitlines():
+        if line.startswith("[") and "]" in line:
+            out.append((line.split("]")[0].lstrip("["), line.split("] ", 1)[-1]))
+    return out
+
+
+def _texts(path):
+    paras, _pkg = _body_paras(path)
+    return [rd.paragraph_text(p) for p in paras]
+
+
+def test_apply_edits_move_relocates_a_reference_entry(tmp_path):
+    """Re-alphabetising a reference list: the entry moves, and its italic
+    journal title and hanging indent survive (delete-and-reinsert loses
+    both, which is why this went out to raw lxml)."""
+    from word_mcp.ops import text as tx
+
+    path = _build(
+        tmp_path / "refs.docx",
+        ("Adams, A. (2001). First.", "Zulu, Z. (2003). Third.",
+         "Baker, B. (2002). Second."),
+    )
+    pkg = DocxPackage(path)
+    tx.format_paragraphs(pkg, [1], {"italic": True})
+    tx.set_paragraph_format(
+        pkg, [1], {"indent_left_pt": 36, "first_line_indent_pt": -36}
+    )
+    pkg.save(do_backup=False)
+
+    anchors = _anchors(path)
+    zulu = anchors[1][0]
+    baker = anchors[2][0]
+    out = srv.apply_edits(
+        str(path),
+        [{"op": "move", "anchor": zulu,
+          "location": {"anchor": baker, "position": "after"}}],
+    )
+    assert out["changed"]["0"]["moved"] == 1
+    assert _texts(path) == [
+        "Adams, A. (2001). First.",
+        "Baker, B. (2002). Second.",
+        "Zulu, Z. (2003). Third.",
+    ]
+    paras, _pkg = _body_paras(path)
+    moved = paras[2]
+    assert _italic_state(moved) == ([True], True), "run formatting was lost"
+    ind = moved.find(f"{qn('w:pPr')}/{qn('w:ind')}")
+    assert ind.get(qn("w:hanging")) == "720", "the hanging indent was lost"
+
+
+def test_apply_edits_move_block_of_paragraphs_before_a_target(tmp_path):
+    path = _build(tmp_path / "d.docx", ("A", "B", "C", "D"))
+    anchors = _anchors(path)
+    out = srv.apply_edits(
+        str(path),
+        [{"op": "move", "anchors": [anchors[2][0], anchors[3][0]],
+          "location": {"anchor": anchors[0][0], "position": "before"}}],
+    )
+    assert out["changed"]["0"]["moved"] == 2
+    assert _texts(path) == ["C", "D", "A", "B"]
+
+
+def test_apply_edits_move_to_the_document_start_and_end(tmp_path):
+    path = _build(tmp_path / "d.docx", ("A", "B", "C"))
+    anchors = _anchors(path)
+    srv.apply_edits(
+        str(path),
+        [{"op": "move", "anchor": anchors[2][0], "location": {"paragraph": 0, "position": "start"}}],
+    )
+    assert _texts(path) == ["C", "A", "B"]
+    anchors = _anchors(path)
+    srv.apply_edits(
+        str(path),
+        [{"op": "move", "anchor": anchors[0][0], "location": {"paragraph": 0, "position": "end"}}],
+    )
+    assert _texts(path) == ["A", "B", "C"]
+
+
+def test_apply_edits_move_refuses_its_own_destination(tmp_path):
+    import pytest
+    from word_mcp.core.errors import WordMcpError
+
+    path = _build(tmp_path / "d.docx", ("A", "B"))
+    anchors = _anchors(path)
+    with pytest.raises(WordMcpError):
+        srv.apply_edits(
+            str(path),
+            [{"op": "move", "anchor": anchors[0][0],
+              "location": {"anchor": anchors[0][0], "position": "after"}}],
+        )
+    assert _texts(path) == ["A", "B"]
+
+
+def test_apply_edits_move_is_serialized_as_one_element(tmp_path):
+    """The moved w:p must be the SAME element, byte for byte, afterwards."""
+    from lxml import etree as _et
+
+    path = _build(tmp_path / "d.docx", ("A", "B", "C"))
+    paras, _pkg = _body_paras(path)
+    before = _et.tostring(paras[0])
+    anchors = _anchors(path)
+    srv.apply_edits(
+        str(path),
+        [{"op": "move", "anchor": anchors[0][0], "location": {"paragraph": 0, "position": "end"}}],
+    )
+    paras, _pkg = _body_paras(path)
+    assert _et.tostring(paras[-1]) == before

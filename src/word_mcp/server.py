@@ -2166,25 +2166,24 @@ def apply_edits(
     backup, and validated save for the batch. Anchors come from
     get_document_view. Ops (each edit has "op"): replace {anchor, find,
     text, occurrence?} (omitted = every match); set_text {anchor, text}
-    (whole paragraph); insert {location, markdown} (headings, plain
-    paragraphs, lists, and pipe tables become real Word structures;
-    location is the standard object); delete {anchor or anchors};
-    set_style {anchor, style}; format {anchor, formatting,
-    find?, occurrence?}; set_paragraph_format {anchor, format}; set_cell
-    {anchor: "t:hex:rNcN", text}. The whole batch validates BEFORE
+    (whole paragraph); insert {location, markdown} (headings, paragraphs,
+    lists and pipe tables become real Word structures; location is the
+    standard object); delete {anchor or anchors};
+    move {anchor or anchors, location} (verbatim relocation, file mode
+    only); set_style {anchor, style}; format {anchor, formatting, find?,
+    occurrence?} (no find = whole paragraph, mark included);
+    set_paragraph_format {anchor, format};
+    set_cell {anchor: "t:hex:rNcN", text}. The whole batch validates BEFORE
     anything mutates, against BATCH-START text (never reference text an
     earlier op creates); one stale anchor refuses it all (STALE_ANCHOR
-    lists failed ops: re-view, resend). The changed map carries per-op
-    results, with fresh anchors for inserted paragraphs, so follow-up
-    batches chain without re-viewing. Ops run in order; keep deletes
-    last. Auto-backup in file mode (backup=False skips rotation); atomic
-    validated save. A document open in Word is edited live as ONE undo
-    step: serialized, validated before any write, rolled back on
-    mid-batch failure. Markdown lists/tables are file-mode only there;
-    stale targets refuse: com_save_document (com-live pack) first,
-    re-view, resend.
-    Use this when a change needs two or more edits; for one, use
-    the standalone tool.
+    lists the failed ops). changed carries per-op results
+    plus fresh anchors for inserted paragraphs, so batches chain without
+    re-viewing. Ops run in order; keep deletes last. Auto-backup in file
+    mode; atomic validated save. A document open in Word is edited live as
+    ONE undo step: serialized, validated before any write, rolled back on
+    mid-batch failure. Markdown lists/tables and move are file-mode only
+    there; stale targets refuse: com_save_document first, re-view, resend.
+    Use it when a change needs two or more edits.
     """
     if atomic is not True:
         raise WordMcpError(
