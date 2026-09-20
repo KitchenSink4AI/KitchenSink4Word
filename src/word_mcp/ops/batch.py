@@ -220,7 +220,8 @@ APPLY_OPS: dict[str, tuple[set, set]] = {
                {"anchor", "formatting"}),
     "set_paragraph_format": ({"anchor", "format"}, {"anchor", "format"}),
     "set_cell": ({"anchor", "text"}, {"anchor", "text"}),
-    "move": ({"anchor", "anchors", "location"}, {"location"}),
+    "move": ({"anchor", "anchors", "location", "allow_cross_section"},
+             {"location"}),
 }
 
 
@@ -479,6 +480,18 @@ def _validate_one(pkg: DocxPackage, edit: dict) -> dict:
             if not (info["paragraph_index"] in seen_idx
                     or seen_idx.add(info["paragraph_index"]))
         ]
+        # A paragraph whose pPr holds a sectPr IS a section boundary: moving
+        # it relocates the break and silently re-sections the document
+        # (adversarial review 2026-09-20, M5).
+        for info in infos:
+            if info["el"].find(f"{qn('w:pPr')}/{qn('w:sectPr')}") is not None:
+                raise UnsupportedStructure(
+                    f"paragraph {info['paragraph_index']} carries a section "
+                    "break (its pPr holds a w:sectPr), so moving it would "
+                    "relocate the boundary and re-section the document. Move "
+                    "the content paragraphs around the break instead, or use "
+                    "move_section to move a whole section. Nothing was applied."
+                )
         r = resolve_location(pkg, edit["location"])
         if r.position == "replace":
             raise WordMcpError(
@@ -500,9 +513,33 @@ def _validate_one(pkg: DocxPackage, edit: dict) -> dict:
                         "move op destination is one of the paragraphs being "
                         "moved; pick a destination outside the moved block"
                     )
+        # Crossing a section boundary hands the paragraph a different page
+        # setup, headers and footers, and separates it from the section its
+        # content belonged to. Refused unless the caller says otherwise.
+        sections = _section_of(paras)
+        dest_index = (
+            0 if mode == "start"
+            else len(paras) if mode == "end"
+            else r.paragraph_index + (1 if mode == "after" else 0)
+        )
+        dest_section = sections[min(dest_index, len(paras) - 1)] if paras else 0
+        crossing = sorted({
+            sections[i["paragraph_index"]] for i in infos
+            if sections[i["paragraph_index"]] != dest_section
+        })
+        if crossing and not edit.get("allow_cross_section"):
+            raise UnsupportedStructure(
+                f"the move crosses a section boundary (moving from section(s) "
+                f"{crossing} into section {dest_section}): the paragraphs "
+                "would take that section's page setup, headers and footers "
+                "and leave the section their content belongs to. Pass "
+                'allow_cross_section: true on the op to do it anyway. '
+                "Nothing was applied."
+            )
         return {"op": op, "kind": "move", "mode": mode, "ref": ref,
                 "els": [i["el"] for i in infos],
                 "indices": [i["paragraph_index"] for i in infos],
+                "crossing": crossing, "dest_section": dest_section,
                 "_keepalive": (infos, paras)}
 
     if op == "set_cell":
@@ -762,6 +799,37 @@ def _apply_insert(pkg: DocxPackage, plan: dict, op_index: int) -> dict:
             "_new_els": els}
 
 
+def _section_of(paras: list) -> list[int]:
+    """Section index per body paragraph. A paragraph whose pPr carries a
+    sectPr ENDS its section, so it belongs to it."""
+    out: list[int] = []
+    section = 0
+    for p in paras:
+        out.append(section)
+        if p.find(f"{qn('w:pPr')}/{qn('w:sectPr')}") is not None:
+            section += 1
+    return out
+
+
+def _track_changes_on(pkg: DocxPackage) -> bool:
+    """Is w:trackChanges set in settings.xml? The file-mode edit surface
+    applies changes directly, so a document under review needs to be told
+    (adversarial review 2026-09-20, N1)."""
+    if not pkg.has_part("word/settings.xml"):
+        return False
+    el = pkg.root("word/settings.xml").find(qn("w:trackChanges"))
+    if el is None:
+        return False
+    return el.get(qn("w:val"), "1") not in ("0", "false", "off")
+
+
+_TRACKED_WARNING = (
+    "w:trackChanges is on in this document, but this edit was applied "
+    "directly and is NOT recorded as a tracked revision; a reviewer will "
+    "not see it in the revision pane"
+)
+
+
 def _apply_move(pkg: DocxPackage, plan: dict, op_index: int) -> dict:
     """Relocate paragraph elements VERBATIM: lxml re-parents the w:p, so
     runs, run formatting, hanging indents and bookmarks travel untouched
@@ -803,8 +871,20 @@ def _apply_move(pkg: DocxPackage, plan: dict, op_index: int) -> dict:
     new_indices = [
         _current_index(pkg, el, "paragraph", op_index) for el in els
     ]
-    return {"moved": len(els), "from_indices": plan["indices"],
-            "to_indices": new_indices}
+    out = {"moved": len(els), "from_indices": plan["indices"],
+           "to_indices": new_indices}
+    warnings: list[str] = []
+    if plan.get("crossing"):
+        warnings.append(
+            f"moved across a section boundary into section "
+            f"{plan['dest_section']} (allow_cross_section was set): the "
+            "paragraphs now take that section's page setup and furniture"
+        )
+    if _track_changes_on(pkg):
+        warnings.append(_TRACKED_WARNING)
+    if warnings:
+        out["warnings"] = warnings
+    return out
 
 
 def _apply_one(pkg: DocxPackage, edit: dict, plan: dict, i: int) -> dict:
@@ -828,7 +908,10 @@ def _apply_one(pkg: DocxPackage, edit: dict, plan: dict, i: int) -> dict:
         for run in reversed(runs):
             _tx.delete_paragraphs(pkg, run[0], run[-1])
             deleted += len(run)
-        return {"deleted": deleted}
+        out = {"deleted": deleted}
+        if _track_changes_on(pkg):
+            out["warnings"] = [_TRACKED_WARNING]
+        return out
     if op == "move":
         return _apply_move(pkg, plan, i)
     if op == "set_cell":

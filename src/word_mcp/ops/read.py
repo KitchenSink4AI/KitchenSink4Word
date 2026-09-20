@@ -271,8 +271,10 @@ def _formatted_heading_level(
     text = paragraph_text(p).strip()
     if not text or len(text) > 120 or len(text.split()) > 15:
         return None
-    if text[-1] in ".,;":
-        return None  # sentence-final punctuation: body prose
+    if text[-1] in ".,;:":
+        # sentence-final punctuation, or a colon lead-in ("Dr. Smith said
+        # the following:"), which is body prose (adversarial review, m7)
+        return None
     if _CAPTION_LEAD.match(text):
         return None  # a numbered caption, not a heading
     runs = [

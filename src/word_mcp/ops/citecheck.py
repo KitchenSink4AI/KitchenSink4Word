@@ -86,7 +86,9 @@ def _norm_token(tok: str) -> str:
 
 def _norm_phrase(phrase: str) -> list[str]:
     """An author phrase as normalized tokens, with leading prose words
-    ('as Smith (2020)') dropped."""
+    ('as Smith (2020)') dropped. A paragraph boundary ends the phrase: it
+    swallowed the preceding heading otherwise (adversarial review, m6)."""
+    phrase = phrase.rsplit("\n", 1)[-1]
     toks = [t for t in (_norm_token(t) for t in phrase.split()) if t]
     while len(toks) > 1 and toks[0] in _LEAD_STOP:
         toks.pop(0)
@@ -168,7 +170,12 @@ def check_citation_parity(pkg: DocxPackage) -> dict:
         if not whole:
             return
         entry = cited.setdefault(
-            (whole, year), {"count": 0, "keys": keys, "phrase": phrase.strip()}
+            (whole, year),
+            {
+                "count": 0,
+                "keys": keys,
+                "phrase": phrase.rsplit("\n", 1)[-1].strip(),
+            },
         )
         entry["count"] += 1
 
