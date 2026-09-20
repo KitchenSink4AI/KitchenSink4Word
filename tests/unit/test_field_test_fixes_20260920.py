@@ -8,6 +8,8 @@ Each test reproduces the reported defect first, then asserts the fix.
 
 from __future__ import annotations
 
+import pytest
+
 from lxml import etree
 
 from docx import Document
@@ -2112,7 +2114,7 @@ def test_m6_tinted_theme_color_resolves_through_the_tint(tmp_path):
     srv.insert_document(str(target), str(source))
     paras, _pkg = _body_paras(target)
     color = _rpr_of(paras[-1]).find(qn("w:color"))
-    assert color.get(qn("w:val")) == "D96666"
+    assert color.get(qn("w:val")) == "FF4040"
     assert qn("w:themeTint") not in color.attrib
 
 
@@ -2390,3 +2392,257 @@ def test_cnf_style_is_reported_but_never_baked(tmp_path):
     assert any("conditional-formatting" in r for r in dd["not_baked_reasons"])
     paras, _pkg = _body_paras(target)
     assert paras[-1].find(f"{qn('w:pPr')}/{qn('w:cnfStyle')}") is None
+
+
+# ==================================================================
+# ROUND 4 - M7: themeTint / themeShade are HSL LUMINANCE arithmetic.
+# A per-channel RGB blend toward white is the obvious reading and it is
+# wrong. Every row below is what WORD ITSELF rendered: a synthetic docx
+# whose theme accents carry the base colours, one flat-shaded paragraph
+# per variant, exported to PDF through a hidden Word instance, rasterised
+# at 110 dpi and sampled for the dominant fill pixel.
+# Measurement script and PNG/PDF artifacts:
+# Temp/temp_misc/verify_word_pr29/round4/ (scratchpad r4_measure.py).
+# The tolerance is 2 units per channel: the rasteriser shows the same
+# ~1-unit offset on the UNTINTED rows, so it is measurement noise, not
+# formula error.
+# ==================================================================
+
+_WORD_TOLERANCE = 2
+
+# (theme slot RGB, themeTint, themeShade, what Word rendered)
+_WORD_TINT_SHADE_MEASUREMENTS = [
+    ("4472C4", None, None, (68, 113, 196)),
+    ("4472C4", "33", None, (217, 225, 243)),
+    ("4472C4", "66", None, (180, 197, 231)),
+    ("4472C4", "99", None, (142, 170, 219)),
+    ("4472C4", "CC", None, (105, 141, 207)),
+    ("4472C4", None, "40", (14, 28, 49)),
+    ("4472C4", None, "80", (31, 56, 99)),
+    ("4472C4", None, "BF", (46, 83, 149)),
+    ("4472C4", "33", "80", (217, 225, 243)),
+    ("4472C4", "99", "40", (142, 170, 219)),
+    ("70AD47", None, None, (111, 172, 70)),
+    ("70AD47", "33", None, (225, 238, 217)),
+    ("70AD47", "66", None, (197, 223, 179)),
+    ("70AD47", "99", None, (168, 208, 141)),
+    ("70AD47", "CC", None, (138, 193, 104)),
+    ("70AD47", None, "40", (27, 43, 17)),
+    ("70AD47", None, "80", (56, 85, 34)),
+    ("70AD47", None, "BF", (82, 129, 53)),
+    ("70AD47", "33", "80", (225, 238, 217)),
+    ("70AD47", "99", "40", (168, 208, 141)),
+    ("7F7F7F", None, None, (126, 127, 126)),
+    ("7F7F7F", "33", None, (228, 229, 228)),
+    ("7F7F7F", "66", None, (202, 202, 202)),
+    ("7F7F7F", "99", None, (177, 178, 177)),
+    ("7F7F7F", "CC", None, (151, 151, 151)),
+    ("7F7F7F", None, "40", (31, 31, 31)),
+    ("7F7F7F", None, "80", (62, 62, 62)),
+    ("7F7F7F", None, "BF", (95, 95, 95)),
+    ("7F7F7F", "33", "80", (228, 229, 228)),
+    ("7F7F7F", "99", "40", (177, 178, 177)),
+    ("C00000", None, None, (192, 0, 0)),
+    ("C00000", "33", None, (255, 190, 190)),
+    ("C00000", "66", None, (255, 126, 126)),
+    ("C00000", "99", None, (255, 64, 64)),
+    ("C00000", "CC", None, (255, 0, 0)),
+    ("C00000", None, "40", (47, 0, 0)),
+    ("C00000", None, "80", (95, 0, 0)),
+    ("C00000", None, "BF", (143, 0, 0)),
+    ("C00000", "33", "80", (255, 190, 190)),
+    ("C00000", "99", "40", (255, 64, 64)),
+    ("ED7D31", None, None, (236, 124, 48)),
+    ("ED7D31", "33", None, (250, 227, 212)),
+    ("ED7D31", "66", None, (247, 201, 172)),
+    ("ED7D31", "99", None, (244, 175, 131)),
+    ("ED7D31", "CC", None, (239, 149, 90)),
+    ("ED7D31", None, "40", (65, 30, 4)),
+    ("ED7D31", None, "80", (131, 59, 10)),
+    ("ED7D31", None, "BF", (196, 88, 17)),
+    ("ED7D31", "33", "80", (250, 227, 212)),
+    ("ED7D31", "99", "40", (244, 175, 131)),
+    ("203864", None, None, (31, 56, 99)),
+    ("203864", "33", None, (197, 210, 235)),
+    ("203864", "66", None, (139, 167, 218)),
+    ("203864", "99", None, (82, 123, 199)),
+    ("203864", "CC", None, (49, 86, 157)),
+    ("203864", None, "40", (8, 13, 23)),
+    ("203864", None, "80", (15, 28, 48)),
+    ("203864", None, "BF", (23, 41, 73)),
+    ("203864", "33", "80", (197, 210, 235)),
+    ("203864", "99", "40", (82, 123, 199)),
+]
+
+
+def _hex_to_rgb(h):
+    return tuple(int(h[i:i + 2], 16) for i in (0, 2, 4))
+
+
+@pytest.mark.parametrize(
+    "base,tint,shade,word_rgb",
+    _WORD_TINT_SHADE_MEASUREMENTS,
+    ids=[
+        f"{b}-t{t or '-'}-s{s or '-'}"
+        for b, t, s, _ in _WORD_TINT_SHADE_MEASUREMENTS
+    ],
+)
+def test_m7_tint_and_shade_match_what_word_renders(base, tint, shade,
+                                                   word_rgb):
+    """Pure Python, no Word needed: the arithmetic is pinned to the
+    measured renders so CI on Linux catches a regression."""
+    from word_mcp.ops.assembly import _apply_tint_shade
+
+    got = _hex_to_rgb(_apply_tint_shade(base, tint, shade))
+    delta = max(abs(a - b) for a, b in zip(got, word_rgb))
+    assert delta <= _WORD_TOLERANCE, (
+        f"{base} tint={tint} shade={shade}: Word renders {word_rgb}, "
+        f"the tool bakes {got}"
+    )
+
+
+def test_m7_an_rgb_blend_would_fail_these_fixtures():
+    """The round-3 arithmetic, kept here so the fixtures are known to
+    discriminate: a per-channel blend toward white is off by up to 51."""
+    from word_mcp.ops.assembly import _apply_tint_shade
+
+    worst = 0
+    for base, tint, shade, word_rgb in _WORD_TINT_SHADE_MEASUREMENTS:
+        if not tint or shade:
+            continue
+        f = int(tint, 16) / 255.0
+        old = tuple(
+            round(c * f + 255 * (1 - f)) for c in _hex_to_rgb(base)
+        )
+        worst = max(worst, max(abs(a - b) for a, b in zip(old, word_rgb)))
+    assert worst > _WORD_TOLERANCE, "the fixtures no longer discriminate"
+    # and the current arithmetic clears the same bar
+    assert _apply_tint_shade("C00000", "99", None) == "FF4040"
+
+
+def test_m7_tint_wins_when_both_tint_and_shade_are_present():
+    """12 of 12 measured fixtures with both attributes render as the TINT
+    alone, so tint takes precedence and the shade is ignored."""
+    from word_mcp.ops.assembly import _apply_tint_shade
+
+    for base, tint, shade, _word in _WORD_TINT_SHADE_MEASUREMENTS:
+        if tint and shade:
+            assert _apply_tint_shade(base, tint, shade) == _apply_tint_shade(
+                base, tint, None
+            )
+
+
+def test_m7_a_full_byte_is_an_exact_identity():
+    """tint=FF and shade=FF mean 'no change'; the HSL round trip must not
+    drift the colour."""
+    from word_mcp.ops.assembly import _apply_tint_shade
+
+    for base in ("4472C4", "70AD47", "7F7F7F", "C00000", "ED7D31", "203864"):
+        assert _apply_tint_shade(base, "FF", None) == base
+        assert _apply_tint_shade(base, None, "FF") == base
+
+
+def test_m7_a_tint_keeps_the_hue_and_the_saturation():
+    """The visible half of the bug: an RGB blend desaturates as it
+    lightens, so a tinted navy went grey-blue. HSL keeps the hue."""
+    import colorsys
+
+    from word_mcp.ops.assembly import _apply_tint_shade
+
+    for base in ("203864", "C00000", "4472C4"):
+        r, g, b = (c / 255 for c in _hex_to_rgb(base))
+        h0, _l0, s0 = colorsys.rgb_to_hls(r, g, b)
+        r, g, b = (c / 255 for c in _hex_to_rgb(
+            _apply_tint_shade(base, "66", None)
+        ))
+        h1, _l1, s1 = colorsys.rgb_to_hls(r, g, b)
+        assert abs(h1 - h0) < 0.01, f"{base}: hue moved"
+        assert abs(s1 - s0) < 0.06, f"{base}: saturation moved"
+
+
+def _render_shaded_fill(tmp_path, base_hex, tint, shade):
+    """Build a one-paragraph synthetic docx whose accent1 is base_hex and
+    whose only paragraph is flat-shaded from it, render it through a
+    private hidden Word, and return the dominant fill pixel."""
+    import collections
+
+    fitz = pytest.importorskip("fitz")
+
+    path = _build(tmp_path / f"m7_{base_hex}_{tint}_{shade}.docx", ("M7",))
+    pkg = DocxPackage(path)
+    p = [el for k, _i, el in rd.body_items(pkg) if k == "paragraph"][0]
+    ppr = p.find(qn("w:pPr"))
+    if ppr is None:
+        ppr = etree.Element(qn("w:pPr"))
+        p.insert(0, ppr)
+    shd = etree.SubElement(ppr, qn("w:shd"))
+    shd.set(qn("w:val"), "clear")
+    shd.set(qn("w:color"), "auto")
+    shd.set(qn("w:themeFill"), "accent1")
+    if tint:
+        shd.set(qn("w:themeFillTint"), tint)
+    if shade:
+        shd.set(qn("w:themeFillShade"), shade)
+    pkg.mark_dirty()
+    pkg.save(do_backup=False)
+    _set_theme(path, **{**_BASE_SLOTS, "accent1": base_hex})
+
+    pdf = tmp_path / (path.stem + ".pdf")
+    import pythoncom
+    import win32com.client
+
+    pythoncom.CoInitialize()
+    app = None
+    try:
+        app = win32com.client.DispatchEx("Word.Application")
+        app.Visible = False
+        app.DisplayAlerts = 0
+        doc = app.Documents.Open(
+            str(path), ReadOnly=False, AddToRecentFiles=False, Visible=False
+        )
+        doc.ExportAsFixedFormat(str(pdf), 17)
+        doc.Close(0)
+    finally:
+        if app is not None:
+            try:
+                app.Quit(0)
+            except Exception:
+                pass
+        pythoncom.CoUninitialize()
+
+    rendered = fitz.open(str(pdf))
+    pix = rendered[0].get_pixmap(dpi=110)
+    # pix.samples rebuilds the bytes object on every access, so read it once.
+    data, n = pix.samples, pix.n
+    counts = collections.Counter()
+    for i in range(0, len(data), n):
+        r, g, b = data[i], data[i + 1], data[i + 2]
+        if r > 248 and g > 248 and b > 248:
+            continue
+        counts[(r, g, b)] += 1
+    rendered.close()
+    return counts.most_common(1)[0][0]
+
+
+@pytest.mark.live
+@pytest.mark.skipif(not _word_available(), reason="needs Word")
+@pytest.mark.parametrize(
+    "base,tint,shade",
+    [("4472C4", "33", None), ("70AD47", "99", None),
+     ("7F7F7F", "66", None), ("C00000", "33", None),
+     ("203864", "CC", None), ("ED7D31", None, "80"),
+     ("4472C4", None, "BF"), ("4472C4", "33", "80")],
+)
+def test_m7_the_baked_value_is_what_word_draws(tmp_path, base, tint, shade):
+    """The proof, against Word rather than against our own formula: the
+    hex the tool bakes for a themed fill is the colour Word paints for the
+    same fill, within 2 units per channel."""
+    from word_mcp.ops.assembly import _apply_tint_shade
+
+    drawn = _render_shaded_fill(tmp_path, base, tint, shade)
+    baked = _hex_to_rgb(_apply_tint_shade(base, tint, shade))
+    delta = max(abs(a - b) for a, b in zip(baked, drawn))
+    assert delta <= _WORD_TOLERANCE, (
+        f"{base} tint={tint} shade={shade}: Word drew {drawn}, "
+        f"the tool bakes {baked}"
+    )
