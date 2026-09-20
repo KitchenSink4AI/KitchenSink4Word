@@ -2976,3 +2976,16 @@ def test_m13_the_carried_table_points_at_the_reused_style(tmp_path):
     ]
     assert refs.count(reused_id) == 2, refs
     assert _table_style_names(target).count("Table Grid (imported)") == 1
+
+
+def test_m12_the_docstring_says_theme_colours_are_frozen(tmp_path):
+    """An agent deciding whether to call insert_document could only learn
+    that carried theme colours stop tracking the target's theme by reading
+    the result afterwards (round-3 review, m12)."""
+    import inspect
+
+    doc = inspect.getdoc(srv.insert_document)
+    assert "theme colours" in doc
+    assert "theme_colors" in doc
+    assert "no longer follow the target's theme" in doc
+    assert len(doc) / 4 <= 350, "the multiplex docstring budget"

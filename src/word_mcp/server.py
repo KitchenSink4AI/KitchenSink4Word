@@ -622,17 +622,18 @@ def insert_document(
     collisions renamed), tracked changes, equations. Styles reconcile BY
     NAME (target wins on a match; unmatched styles are cloned in). The
     source's section setup is never carried; mid-content section breaks
-    and comment references are stripped and reported.
-    OLE/ActiveX/subdocuments/altChunks refuse the whole insertion (nothing
-    half-applied). formatting mirrors Word's paste modes: 'source' keeps
-    direct formatting; 'merge' keeps emphasis but strips
+    and comment refs are stripped and reported.
+    OLE/ActiveX/subdocuments/altChunks refuse the whole insertion.
+    formatting mirrors Word's paste modes: 'source' keeps direct
+    formatting; 'merge' keeps emphasis but strips
     font/size/color/spacing/indent overrides; 'destination' strips all but
-    structural properties. With 'source', properties inherited from the
-    source's document defaults become explicit when the files' defaults
-    differ (reported under document_defaults), so carried text keeps its
-    source spacing. The source file is never modified. Auto-backup:
-    prev/anchor slots in .ks4w-backups (backup=False skips rotation only);
-    atomic validated save. Refuses documents open in Word.
+    structural properties. With 'source', what the two files resolve
+    differently is made explicit on the carried content: document defaults
+    and same-name styles (document_defaults), and theme colours, written
+    as fixed values that no longer follow the target's theme
+    (theme_colors). The source file is never modified. Auto-backup
+    (backup=False skips rotation only); atomic validated save. Refuses
+    documents open in Word.
     """
 
     def _do(pkg: DocxPackage) -> dict:
