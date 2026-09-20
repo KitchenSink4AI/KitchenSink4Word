@@ -4998,14 +4998,13 @@ def com_word_status() -> dict:
 
 @_tool("com-live")
 def com_refresh_fields(file_path: str) -> dict:
-    """Update every field in the document (TOC page numbers, PAGEREF,
-    NUMPAGES, SEQ, cross-references) via an invisible Word instance, giving
-    correct page numbers and computed values immediately. Use after
-    inserting a TOC, index, or caption list for real page numbers, or after
-    any edit that shifts pages. The source file is modified in place and
-    saved by the invisible instance; open-in-Word copies are untouched
-    (Option C: COM saves only what it is asked to). Requires Word
-    installed.
+    """Update every field in every story (body, each section's headers and
+    footers, notes: TOC page numbers, PAGEREF, SEQ, cross-references) via
+    an invisible Word instance, reporting the field count per story. Use after inserting a TOC or caption list, or after
+    any edit that shifts pages. PAGE and NUMPAGES in headers and footers
+    are recomputed by Word at layout time, so their cached values in the
+    file stay as they were. The file is modified in place and saved by the
+    invisible instance. Requires Word installed.
     """
     from .com import bridge
 

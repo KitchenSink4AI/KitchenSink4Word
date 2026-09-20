@@ -310,3 +310,116 @@ def test_define_style_refuses_changing_an_existing_style_type(tmp_path):
         sx.define_style(
             pkg, style_id="Normal", name="Normal", style_type="character",
         )
+
+
+# ==================================================================
+# #862: com_refresh_fields must reach header and footer stories
+# ==================================================================
+
+
+def _word_available():
+    import sys
+
+    if sys.platform != "win32":
+        return False
+    try:
+        import pythoncom  # noqa: F401
+        import win32com.client  # noqa: F401
+    except ImportError:
+        return False
+    import winreg
+
+    try:
+        winreg.OpenKey(winreg.HKEY_CLASSES_ROOT, "Word.Application")
+        return True
+    except OSError:
+        return False
+
+
+def test_story_counts_never_sum_the_same_fields_twice():
+    """Pure-Python half: two update passes over the same fields report the
+    larger per-story count, not the sum."""
+    from word_mcp.com import bridge
+
+    merged = bridge._merge_counts(
+        {"body": 106, "primary_header": 2}, {"body": 106, "primary_footer": 2}
+    )
+    assert merged == {"body": 106, "primary_header": 2, "primary_footer": 2}
+    assert bridge._STORY_NAMES[7] == "primary_header"
+    assert bridge._STORY_NAMES[9] == "primary_footer"
+
+
+def _two_section_doc_with_stale_headers(path):
+    """Two sections, each with a header field whose cached result is stale."""
+    from word_mcp.ops import furniture as fu
+    from word_mcp.ops import structure as sx
+
+    d = Document()
+    for i in range(40):
+        d.add_paragraph(f"Section one paragraph {i} " + "lorem ipsum " * 8)
+    d.add_section()
+    for i in range(40):
+        d.add_paragraph(f"Section two paragraph {i} " + "lorem ipsum " * 8)
+    d.save(str(path))
+
+    pkg = DocxPackage(path)
+    sx.set_document_properties(pkg, title="Fresh Title")
+    fu.set_header_footer(pkg, "header", "sec one", section=0)
+    fu.set_header_footer(pkg, "header", "sec two", section=1)
+    pkg.save(do_backup=False)
+
+    pkg = DocxPackage(path)
+    for i, part in enumerate(("word/header1.xml", "word/header2.xml")):
+        root = pkg.root(part)
+        p = root.find(qn("w:p"))
+        for r in list(p.findall(qn("w:r"))):
+            p.remove(r)
+        begin = etree.SubElement(p, qn("w:r"))
+        etree.SubElement(begin, qn("w:fldChar")).set(
+            qn("w:fldCharType"), "begin"
+        )
+        instr_run = etree.SubElement(p, qn("w:r"))
+        it = etree.SubElement(instr_run, qn("w:instrText"))
+        it.set("{http://www.w3.org/XML/1998/namespace}space", "preserve")
+        it.text = " DOCPROPERTY Title \\* MERGEFORMAT "
+        sep = etree.SubElement(p, qn("w:r"))
+        etree.SubElement(sep, qn("w:fldChar")).set(
+            qn("w:fldCharType"), "separate"
+        )
+        cached = etree.SubElement(p, qn("w:r"))
+        etree.SubElement(cached, qn("w:t")).text = f"STALE{i + 1}"
+        end = etree.SubElement(p, qn("w:r"))
+        etree.SubElement(end, qn("w:fldChar")).set(qn("w:fldCharType"), "end")
+        pkg.mark_dirty(part)
+    pkg.save(do_backup=False)
+
+
+def _header_texts(path, part):
+    pkg = DocxPackage(path)
+    return [t.text for t in pkg.root(part).iter(qn("w:t"))]
+
+
+def test_com_refresh_fields_updates_every_section_header(tmp_path):
+    """Iterating doc.StoryRanges reaches only the FIRST story of each type,
+    so section two's header kept its stale cache. The NextStoryRange walk
+    reaches every one, and the result reports per-story counts."""
+    import pytest
+
+    if not _word_available():
+        pytest.skip("Word/pywin32 not available on this machine")
+    from word_mcp.com import bridge
+
+    path = tmp_path / "sections.docx"
+    _two_section_doc_with_stale_headers(path)
+    assert _header_texts(path, "word/header2.xml") == ["STALE2"]
+
+    out = bridge.refresh_fields(str(path))
+    assert out["fields_refreshed"] is True
+    assert "fields_by_story" in out
+    assert any(
+        "header" in story for story in out["fields_by_story"]
+    ), out["fields_by_story"]
+    assert _header_texts(path, "word/header1.xml") == ["Fresh Title"]
+    assert _header_texts(path, "word/header2.xml") == ["Fresh Title"], (
+        "section two's header field was never updated"
+    )
