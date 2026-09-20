@@ -2270,3 +2270,23 @@ def test_m8_a_genuinely_different_source_still_imports_its_own(tmp_path):
     names = _table_style_names(target)
     assert names.count("Table Grid (imported)") == 1, names
     assert names.count("Table Grid (imported 2)") == 1, names
+
+
+def test_m9_outline_level_reason_states_the_toc_consequence(tmp_path):
+    """"structure, not appearance" does not tell a user their chapter
+    heading may move a level in the table of contents (review m9)."""
+    source = _build(tmp_path / "src.docx", ("A line.",))
+    pkg = DocxPackage(source)
+    _style(pkg, "Shared", "Shared Style")
+    _apply_pstyle(pkg, 0, "Shared")
+    pkg.save(do_backup=False)
+    target = _build(tmp_path / "tgt.docx", ("T1",))
+    pkg = DocxPackage(target)
+    _style(pkg, "Shared", "Shared Style", ppr='<w:outlineLvl w:val="0"/>')
+    pkg.save(do_backup=False)
+
+    dd = srv.insert_document(str(target), str(source))["document_defaults"]
+    reason = " ".join(dd["not_baked_reasons"])
+    assert "table of contents" in reason
+    assert "navigation pane" in reason
+    assert "set_paragraph_format" in reason
