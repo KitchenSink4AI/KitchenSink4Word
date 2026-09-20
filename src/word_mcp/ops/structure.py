@@ -407,12 +407,17 @@ def _style_child(s: etree._Element, local: str) -> etree._Element:
     return el
 
 
+# Elements whose attributes are independent settings with their own tool
+# keys (rFonts script slots, spacing before/after/line, ind left/right/
+# firstLine), merged attribute-wise so a call addressing one does not wipe
+# the others. Everything else replaces its counterpart element.
+_ATTRWISE_MERGE = {"rFonts", "spacing", "ind", "lang"}
+
+
 def _merge_props(existing: etree._Element, new: etree._Element, order: list) -> None:
     """Merge a freshly built pPr/rPr into an existing one: a property the
-    call addressed replaces its counterpart, everything else survives.
-    rFonts merges attribute-wise, since its attributes are independent
-    script slots (ascii/hAnsi/cs are what 'font' addresses; eastAsia is
-    not) -- field test 2026-09-20, punchlist #861."""
+    call addressed replaces its counterpart, everything else survives
+    (field test 2026-09-20, punchlist #861)."""
     for child in list(new):
         local = etree.QName(child).localname
         cur = existing.find(child.tag)
@@ -427,7 +432,7 @@ def _merge_props(existing: etree._Element, new: etree._Element, order: list) -> 
                     break
             if not placed:
                 existing.append(child)
-        elif local == "rFonts":
+        elif local in _ATTRWISE_MERGE:
             for k, v in child.attrib.items():
                 cur.set(k, v)
         else:
@@ -537,10 +542,13 @@ def define_style(
                 ind.set(qn("w:right"), str(int(pf["indent_right_pt"] * 20)))
             if "first_line_indent_pt" in pf:
                 v = pf["first_line_indent_pt"]
+                # hanging wins over firstLine, so one clears the other (#865).
                 if v >= 0:
                     ind.set(qn("w:firstLine"), str(int(v * 20)))
+                    ind.set(qn("w:hanging"), "0")
                 else:
                     ind.set(qn("w:hanging"), str(int(-v * 20)))
+                    ind.set(qn("w:firstLine"), "0")
         from .text import _PPR_ORDER
 
         _merge_props(_style_child(s, "pPr"), ppr, _PPR_ORDER)

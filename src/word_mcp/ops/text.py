@@ -1087,10 +1087,16 @@ def set_paragraph_format(
                 ind.set(qn("w:right"), str(int(formatting["indent_right_pt"] * 20)))
             if "first_line_indent_pt" in formatting:
                 val = formatting["first_line_indent_pt"]
+                # firstLine and hanging are the two halves of one setting and
+                # hanging wins when both are present, so writing one must
+                # clear the other or a pre-existing hanging indent survives a
+                # first_line_indent_pt of 0 (field test 2026-09-20, #865).
                 if val >= 0:
                     ind.set(qn("w:firstLine"), str(int(val * 20)))
+                    ind.attrib.pop(qn("w:hanging"), None)
                 else:
                     ind.set(qn("w:hanging"), str(int(-val * 20)))
+                    ind.attrib.pop(qn("w:firstLine"), None)
         if "keep_with_next" in formatting:
             kn = ppr.find(qn("w:keepNext"))
             if formatting["keep_with_next"] and kn is None:
