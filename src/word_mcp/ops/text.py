@@ -729,6 +729,39 @@ def _ppr_get_or_add(ppr, local: str):
     return el
 
 
+def _rpr_get_or_add(rpr, local: str):
+    """Get an rPr child, or create it in CT_RPr schema position. Appending
+    new children produced rPr elements that Word tolerates but a strict
+    OOXML validator rejects (field test 2026-09-20, punchlist #866)."""
+    existing = rpr.find(qn(f"w:{local}"))
+    if existing is not None:
+        return existing
+    el = etree.Element(qn(f"w:{local}"))
+    my_rank = _RPR_ORDER.index(local) if local in _RPR_ORDER else len(_RPR_ORDER)
+    for child in rpr:
+        name = etree.QName(child).localname
+        if name in _RPR_ORDER and _RPR_ORDER.index(name) > my_rank:
+            child.addprevious(el)
+            return el
+    rpr.append(el)
+    return el
+
+
+def _sort_rpr(rpr) -> None:
+    """Put an existing rPr's children back into schema order. Skipped when
+    a child is not in the table (extension elements have no defined slot
+    here and reordering around them is riskier than leaving them be)."""
+    children = list(rpr)
+    names = [etree.QName(c).localname for c in children]
+    if any(n not in _RPR_ORDER for n in names):
+        return
+    ranks = [_RPR_ORDER.index(n) for n in names]
+    if ranks == sorted(ranks):
+        return
+    for child in sorted(children, key=lambda c: _RPR_ORDER.index(etree.QName(c).localname)):
+        rpr.append(child)
+
+
 def _check_keys(fmt: dict, allowed: set, what: str) -> None:
     unknown = set(fmt) - allowed
     if unknown:
@@ -745,16 +778,18 @@ def _make_rpr(fmt: dict) -> etree._Element:
 
 
 def _apply_fmt(rpr: etree._Element, fmt: dict) -> None:
-    """Apply formatting keys to an rPr, respecting the schema's element order
-    loosely (Word tolerates rPr child order in practice, but we keep toggles
-    first, then fonts/size/color, matching common output)."""
+    """Apply formatting keys to an rPr. Children are created in CT_RPr
+    schema order, and an rPr that is already out of order is sorted on the
+    way in (punchlist #866): Word tolerates any order, strict OOXML
+    validators and other consumers do not."""
     _check_keys(fmt, _CHAR_FMT_KEYS, "character-formatting")
+    _sort_rpr(rpr)
     for key, tag in _TOGGLES.items():
         if key in fmt:
             el = rpr.find(qn(tag))
             if fmt[key]:
                 if el is None:
-                    el = etree.SubElement(rpr, qn(tag))
+                    el = _rpr_get_or_add(rpr, tag[2:])
                 if key == "underline":
                     el.set(qn("w:val"), "single")
                 else:
@@ -764,24 +799,24 @@ def _apply_fmt(rpr: etree._Element, fmt: dict) -> None:
     if "font" in fmt:
         rfonts = rpr.find(qn("w:rFonts"))
         if rfonts is None:
-            rfonts = etree.SubElement(rpr, qn("w:rFonts"))
+            rfonts = _rpr_get_or_add(rpr, "rFonts")
         for attr in ("w:ascii", "w:hAnsi", "w:cs"):
             rfonts.set(qn(attr), fmt["font"])
     if "size_pt" in fmt:
         for tag in ("w:sz", "w:szCs"):
             el = rpr.find(qn(tag))
             if el is None:
-                el = etree.SubElement(rpr, qn(tag))
+                el = _rpr_get_or_add(rpr, tag[2:])
             el.set(qn("w:val"), str(int(fmt["size_pt"] * 2)))
     if "color" in fmt:
         el = rpr.find(qn("w:color"))
         if el is None:
-            el = etree.SubElement(rpr, qn("w:color"))
+            el = _rpr_get_or_add(rpr, "color")
         el.set(qn("w:val"), fmt["color"].lstrip("#"))
     if "highlight" in fmt:
         el = rpr.find(qn("w:highlight"))
         if el is None:
-            el = etree.SubElement(rpr, qn("w:highlight"))
+            el = _rpr_get_or_add(rpr, "highlight")
         el.set(qn("w:val"), fmt["highlight"])
     for key, tag in (
         ("small_caps", "w:smallCaps"),
@@ -792,28 +827,28 @@ def _apply_fmt(rpr: etree._Element, fmt: dict) -> None:
         if key in fmt:
             el = rpr.find(qn(tag))
             if fmt[key] and el is None:
-                etree.SubElement(rpr, qn(tag))
+                _rpr_get_or_add(rpr, tag[2:])
             elif not fmt[key] and el is not None:
                 rpr.remove(el)
     if "char_spacing_pt" in fmt:
         el = rpr.find(qn("w:spacing"))
         if el is None:
-            el = etree.SubElement(rpr, qn("w:spacing"))
+            el = _rpr_get_or_add(rpr, "spacing")
         el.set(qn("w:val"), str(int(fmt["char_spacing_pt"] * 20)))
     if "kerning_pt" in fmt:
         el = rpr.find(qn("w:kern"))
         if el is None:
-            el = etree.SubElement(rpr, qn("w:kern"))
+            el = _rpr_get_or_add(rpr, "kern")
         el.set(qn("w:val"), str(int(fmt["kerning_pt"] * 2)))
     if "position_pt" in fmt:
         el = rpr.find(qn("w:position"))
         if el is None:
-            el = etree.SubElement(rpr, qn("w:position"))
+            el = _rpr_get_or_add(rpr, "position")
         el.set(qn("w:val"), str(int(fmt["position_pt"] * 2)))
     if "language" in fmt or "east_asian_language" in fmt:
         el = rpr.find(qn("w:lang"))
         if el is None:
-            el = etree.SubElement(rpr, qn("w:lang"))
+            el = _rpr_get_or_add(rpr, "lang")
         if fmt.get("language"):
             el.set(qn("w:val"), fmt["language"])
         if fmt.get("east_asian_language"):
@@ -825,7 +860,7 @@ def _apply_fmt(rpr: etree._Element, fmt: dict) -> None:
             )
         el = rpr.find(qn("w:vertAlign"))
         if el is None:
-            el = etree.SubElement(rpr, qn("w:vertAlign"))
+            el = _rpr_get_or_add(rpr, "vertAlign")
         el.set(
             qn("w:val"),
             "superscript" if fmt.get("superscript") else "subscript",
