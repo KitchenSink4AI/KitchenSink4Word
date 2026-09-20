@@ -548,18 +548,26 @@ def _apply_num_remap(elements, num_map: dict[str, str], unresolved: set[str]):
     return stripped
 
 
-# ------------------------------- document-defaults reconciliation (source)
+# ------------------------------- inherited-formatting reconciliation (source)
 #
 # The half-single-spaced-dissertation bug (field test, 2026-09-03): with
 # formatting="source", paragraphs that carried NO explicit line_spacing or
 # space_after relied on their SOURCE file's docDefaults for those values.
 # After transplant they resolved against the TARGET's docDefaults instead,
-# silently changing the rendered spacing. formatting="source" promises the
-# source look, so for every tracked property where the two files'
-# docDefaults differ, the source-effective value is baked as an explicit
-# property onto carried paragraphs/runs that inherited it (direct values
-# and style-chain values are left alone: direct already wins, and style
-# values follow the documented by-name reconciliation contract).
+# silently changing the rendered spacing.
+#
+# The same bug one layer up (field test, 2026-09-20, punchlist #860):
+# python-docx sources define their body look on the Normal STYLE, not on
+# docDefaults. Styles reconcile BY NAME with the target's definition
+# governing, so a carried paragraph that inherited 12pt/double from its own
+# Normal silently inherited the target's Normal instead, and the
+# docDefaults-only check reported nothing wrong.
+#
+# So the whole inheritance chain is resolved on both sides — run/paragraph
+# direct values, the style basedOn chain as it will resolve AFTER by-name
+# reconciliation, then docDefaults — and every tracked property whose
+# resolved value would change is baked explicit onto the carried copy.
+# Direct values are left alone (they already win and already carry).
 
 # Attribute-level tracked properties (OOXML merges these attribute-wise).
 _DD_PPR_ATTRS: dict[str, tuple[str, ...]] = {
@@ -649,100 +657,242 @@ def _docdefaults_props(
     return out
 
 
-def _direct_keys(
+def _direct_props(
     holder: etree._Element | None, table: dict[str, tuple[str, ...]]
-) -> set[tuple[str, str]]:
-    """Tracked (element, attribute) keys explicitly present on a pPr/rPr."""
-    keys: set[tuple[str, str]] = set()
+) -> dict[tuple[str, str], str]:
+    """Tracked (element, attribute) -> value pairs explicitly on a pPr/rPr."""
+    props: dict[tuple[str, str], str] = {}
     if holder is None:
-        return keys
+        return props
     for elem_name, attrs in table.items():
         el = holder.find(qn(f"w:{elem_name}"))
         if el is None:
             continue
         for a in attrs:
-            if el.get(qn(f"w:{a}")) is not None:
-                keys.add((elem_name, a))
-    return keys
+            v = el.get(qn(f"w:{a}"))
+            if v is not None:
+                props[(elem_name, a)] = v
+    return props
+
+
+def _style_index(pkg: DocxPackage):
+    """styleId -> element, styleId -> basedOn, default paragraph styleId."""
+    els: dict[str, etree._Element] = {}
+    based: dict[str, str] = {}
+    default_para: str | None = None
+    if pkg.has_part("word/styles.xml"):
+        for s in pkg.root("word/styles.xml").findall(qn("w:style")):
+            sid = s.get(qn("w:styleId"))
+            if not sid:
+                continue
+            els[sid] = s
+            b = s.find(qn("w:basedOn"))
+            if b is not None and b.get(qn("w:val")):
+                based[sid] = b.get(qn("w:val"))
+            if (
+                s.get(qn("w:type")) == "paragraph"
+                and s.get(qn("w:default")) in ("1", "true", "on")
+            ):
+                default_para = sid
+    return els, based, default_para
 
 
 class _DefaultsBaker:
-    """Bakes source-docDefaults-inherited properties onto carried copies
-    (formatting='source' only). See the section comment above."""
+    """Bakes inherited formatting onto carried copies (formatting='source'
+    only) wherever the source's and the post-transplant target's resolved
+    values differ: docDefaults, the style basedOn chain, or both. See the
+    section comment above."""
 
     def __init__(self, src: DocxPackage, pkg: DocxPackage):
-        self.src_ppr = _docdefaults_props(src, "pPr")
-        self.tgt_ppr = _docdefaults_props(pkg, "pPr")
-        self.src_rpr = _docdefaults_props(src, "rPr")
-        self.tgt_rpr = _docdefaults_props(pkg, "rPr")
-        self.diff_ppr = {
-            k
-            for k in set(self.src_ppr) | set(self.tgt_ppr)
-            if self.src_ppr.get(k) != self.tgt_ppr.get(k)
+        self.src_dd = {
+            "pPr": _docdefaults_props(src, "pPr"),
+            "rPr": _docdefaults_props(src, "rPr"),
         }
-        self.diff_rpr = {
-            k
-            for k in set(self.src_rpr) | set(self.tgt_rpr)
-            if self.src_rpr.get(k) != self.tgt_rpr.get(k)
+        self.tgt_dd = {
+            "pPr": _docdefaults_props(pkg, "pPr"),
+            "rPr": _docdefaults_props(pkg, "rPr"),
         }
-        # Source style definitions for inheritance-chain checks.
-        self.style_el: dict[str, etree._Element] = {}
-        self.based_on: dict[str, str] = {}
-        self.default_para_style: str | None = None
-        if src.has_part("word/styles.xml"):
-            for s in src.root("word/styles.xml").findall(qn("w:style")):
-                sid = s.get(qn("w:styleId"))
-                if not sid:
-                    continue
-                self.style_el[sid] = s
-                base = s.find(qn("w:basedOn"))
-                if base is not None and base.get(qn("w:val")):
-                    self.based_on[sid] = base.get(qn("w:val"))
-                if (
-                    s.get(qn("w:type")) == "paragraph"
-                    and s.get(qn("w:default")) in ("1", "true", "on")
-                ):
-                    self.default_para_style = sid
-        self._chain_cache: dict[tuple[str, str], set[tuple[str, str]]] = {}
+        self.src_el, self.src_based, self.default_para_style = _style_index(src)
+        self.tgt_el, self.tgt_based, self.tgt_default_para = _style_index(pkg)
+        self.src_id2name, _ = _style_maps(src)
+        _tgt_id2name, self.tgt_name2id = _style_maps(pkg)
+        self._src_chain: dict[tuple[str, str], dict] = {}
+        self._tgt_chain: dict[tuple[str, str], dict] = {}
+        self._para_diff: dict[tuple[str | None, str], dict] = {}
+        self._run_diff: dict[tuple, dict] = {}
         self.paragraphs_baked = 0
         self.runs_baked = 0
+        # Reporting: which tracked properties actually differed, and the
+        # shared style names responsible.
+        self.differing: set[tuple[str, tuple[str, str]]] = set()
+        self.style_diffs: dict[str, set[tuple[str, tuple[str, str]]]] = {}
+        self.not_baked: set[tuple[str, tuple[str, str]]] = set()
 
-    @property
-    def active(self) -> bool:
-        return bool(self.diff_ppr or self.diff_rpr)
+    # ---- chain resolution
 
-    def _chain_keys(self, sid: str | None, which: str) -> set[tuple[str, str]]:
-        """Tracked keys DEFINED anywhere along a source style's basedOn
-        chain (attribute-level; a defined key stops docDefaults
-        inheritance for that attribute)."""
-        if sid is None:
-            return set()
-        memo = self._chain_cache.get((sid, which))
-        if memo is not None:
-            return memo
-        keys: set[tuple[str, str]] = set()
-        table = _DD_PPR_ATTRS if which == "pPr" else _DD_RPR_ATTRS
+    @staticmethod
+    def _table(which: str) -> dict[str, tuple[str, ...]]:
+        return _DD_PPR_ATTRS if which == "pPr" else _DD_RPR_ATTRS
+
+    def _chain_props(
+        self,
+        sid: str | None,
+        which: str,
+        els: dict[str, etree._Element],
+        based: dict[str, str],
+        memo: dict,
+    ) -> dict[tuple[str, str], str]:
+        """Values DEFINED along a style's basedOn chain (ancestors first, so
+        the style's own values win). docDefaults are NOT included."""
+        if not sid:
+            return {}
+        hit = memo.get((sid, which))
+        if hit is not None:
+            return hit
+        chain: list[str] = []
         cur: str | None = sid
         seen: set[str] = set()
-        while cur is not None and cur not in seen:
+        while cur and cur not in seen and cur in els:
             seen.add(cur)
-            s = self.style_el.get(cur)
-            if s is None:
-                break
-            keys |= _direct_keys(s.find(qn(f"w:{which}")), table)
-            cur = self.based_on.get(cur)
-        self._chain_cache[(sid, which)] = keys
-        return keys
+            chain.append(cur)
+            cur = based.get(cur)
+        props: dict[tuple[str, str], str] = {}
+        for s in reversed(chain):
+            props.update(
+                _direct_props(els[s].find(qn(f"w:{which}")), self._table(which))
+            )
+        memo[(sid, which)] = props
+        return props
 
-    def _bake_value(self, key: tuple[str, str], from_rpr: bool) -> str | None:
-        """The source-effective value to write, or None when it cannot be
-        determined safely (run built-ins are theme-dependent)."""
-        src = self.src_rpr if from_rpr else self.src_ppr
-        if key in src:
-            return src[key]
-        if from_rpr:
-            return None
-        return _DD_BUILTIN.get(key)
+    def _src_style_props(self, sid: str | None, which: str) -> dict:
+        return self._chain_props(
+            sid, which, self.src_el, self.src_based, self._src_chain
+        )
+
+    def _tgt_style_props(self, sid: str | None, which: str) -> dict:
+        """Values a SOURCE style id will resolve to after transplant: a
+        name match hands the target's own chain over; an unmatched style is
+        cloned, so its own values survive and its basedOn is resolved the
+        same way, recursively."""
+        if not sid:
+            return {}
+        hit = self._tgt_chain.get((sid, which))
+        if hit is not None:
+            return hit
+        self._tgt_chain[(sid, which)] = {}  # cycle guard
+        name = self.src_id2name.get(sid)
+        tgt_id = self.tgt_name2id.get(name) if name else None
+        if tgt_id is None and sid in self.tgt_el:
+            tgt_id = sid  # id lands on a target style the source never defined
+        if tgt_id is not None:
+            props = self._chain_props(
+                tgt_id, which, self.tgt_el, self.tgt_based, self._tgt_chain
+            )
+        else:
+            props = dict(self._tgt_style_props(self.src_based.get(sid), which))
+            el = self.src_el.get(sid)
+            if el is not None:
+                props.update(
+                    _direct_props(
+                        el.find(qn(f"w:{which}")), self._table(which)
+                    )
+                )
+        self._tgt_chain[(sid, which)] = props
+        return props
+
+    def _paragraph_diff(self, pstyle: str | None) -> dict[tuple[str, str], str]:
+        """Tracked pPr keys whose resolved value changes for a paragraph
+        carrying `pstyle`, mapped to the value to bake."""
+        memo_key = (pstyle, "pPr")
+        hit = self._para_diff.get(memo_key)
+        if hit is not None:
+            return hit
+        src_eff = dict(self.src_dd["pPr"])
+        src_eff.update(
+            self._src_style_props(pstyle or self.default_para_style, "pPr")
+        )
+        tgt_eff = dict(self.tgt_dd["pPr"])
+        if pstyle:
+            tgt_eff.update(self._tgt_style_props(pstyle, "pPr"))
+        else:
+            tgt_eff.update(
+                self._chain_props(
+                    self.tgt_default_para, "pPr", self.tgt_el,
+                    self.tgt_based, self._tgt_chain,
+                )
+            )
+        out = self._diff(
+            src_eff, tgt_eff, "pPr", pstyle or self.default_para_style
+        )
+        self._para_diff[memo_key] = out
+        return out
+
+    def _run_diff_for(
+        self, pstyle: str | None, rstyle: str | None
+    ) -> dict[tuple[str, str], str]:
+        memo_key = (pstyle, rstyle)
+        hit = self._run_diff.get(memo_key)
+        if hit is not None:
+            return hit
+        src_eff = dict(self.src_dd["rPr"])
+        src_eff.update(
+            self._src_style_props(pstyle or self.default_para_style, "rPr")
+        )
+        src_eff.update(self._src_style_props(rstyle, "rPr"))
+        tgt_eff = dict(self.tgt_dd["rPr"])
+        if pstyle:
+            tgt_eff.update(self._tgt_style_props(pstyle, "rPr"))
+        else:
+            tgt_eff.update(
+                self._chain_props(
+                    self.tgt_default_para, "rPr", self.tgt_el,
+                    self.tgt_based, self._tgt_chain,
+                )
+            )
+        tgt_eff.update(self._tgt_style_props(rstyle, "rPr"))
+        out = self._diff(
+            src_eff, tgt_eff, "rPr",
+            pstyle or self.default_para_style, rstyle,
+        )
+        self._run_diff[memo_key] = out
+        return out
+
+    def _diff(
+        self,
+        src_eff: dict,
+        tgt_eff: dict,
+        which: str,
+        *styles: str | None,
+    ) -> dict[tuple[str, str], str]:
+        """Keys whose resolved value changes, mapped to the value to write.
+        A key the source never defines is baked from Word's built-in where
+        that is unambiguous (paragraph properties); run built-ins are
+        theme-dependent, so those are reported as not baked instead."""
+        out: dict[tuple[str, str], str] = {}
+        for key in set(src_eff) | set(tgt_eff):
+            sv, tv = src_eff.get(key), tgt_eff.get(key)
+            if sv == tv:
+                continue
+            value = sv if sv is not None else _DD_BUILTIN.get(key)
+            self.differing.add((which, key))
+            # Attribute the difference to a shared style name only when that
+            # style's chain actually defines the property (otherwise it came
+            # from docDefaults and naming a style would mislead).
+            for sid in styles:
+                name = self.src_id2name.get(sid) if sid else None
+                if not name or not self.tgt_name2id.get(name):
+                    continue
+                if key in self._src_style_props(
+                    sid, which
+                ) or key in self._tgt_style_props(sid, which):
+                    self.style_diffs.setdefault(name, set()).add((which, key))
+            if value is None:
+                self.not_baked.add((which, key))
+                continue
+            out[key] = value
+        return out
+
+    # ---- baking
 
     def bake_paragraph(self, p: etree._Element) -> None:
         ppr = p.find(qn("w:pPr"))
@@ -751,31 +901,23 @@ class _DefaultsBaker:
             ps = ppr.find(qn("w:pStyle"))
             if ps is not None:
                 pstyle = ps.get(qn("w:val"))
-        if pstyle is None:
-            pstyle = self.default_para_style
         # ---- paragraph properties
-        if self.diff_ppr:
-            skip = _direct_keys(ppr, _DD_PPR_ATTRS)
-            skip |= self._chain_keys(pstyle, "pPr")
+        to_bake = self._paragraph_diff(pstyle)
+        if to_bake:
+            direct = set(_direct_props(ppr, _DD_PPR_ATTRS))
             changed = False
-            for key in sorted(self.diff_ppr):
-                if key in skip:
-                    continue
-                value = self._bake_value(key, from_rpr=False)
-                if value is None:
-                    continue
+            for key in sorted(to_bake):
+                if key in direct:
+                    continue  # direct formatting already carries
                 if ppr is None:
                     ppr = etree.Element(qn("w:pPr"))
                     p.insert(0, ppr)
                 el = _ordered_get_or_add(ppr, key[0], _PPR_BAKE_ORDER)
-                el.set(qn(f"w:{key[1]}"), value)
+                el.set(qn(f"w:{key[1]}"), to_bake[key])
                 changed = True
             if changed:
                 self.paragraphs_baked += 1
         # ---- run properties
-        if not self.diff_rpr:
-            return
-        para_chain = self._chain_keys(pstyle, "rPr")
         for r in p.iter(qn("w:r")):
             if r.getparent() is ppr:
                 continue  # the paragraph-mark rPr holder is not a run
@@ -785,42 +927,63 @@ class _DefaultsBaker:
                 rs = rpr.find(qn("w:rStyle"))
                 if rs is not None:
                     rstyle = rs.get(qn("w:val"))
-            skip = _direct_keys(rpr, _DD_RPR_ATTRS)
-            skip |= para_chain
-            skip |= self._chain_keys(rstyle, "rPr")
+            run_bake = self._run_diff_for(pstyle, rstyle)
+            if not run_bake:
+                continue
+            direct = set(_direct_props(rpr, _DD_RPR_ATTRS))
             changed = False
-            for key in sorted(self.diff_rpr):
-                if key in skip:
-                    continue
-                value = self._bake_value(key, from_rpr=True)
-                if value is None:
+            for key in sorted(run_bake):
+                if key in direct:
                     continue
                 if rpr is None:
                     rpr = etree.Element(qn("w:rPr"))
                     r.insert(0, rpr)
                 el = _ordered_get_or_add(rpr, key[0], _RPR_ORDER)
-                el.set(qn(f"w:{key[1]}"), value)
+                el.set(qn(f"w:{key[1]}"), run_bake[key])
                 changed = True
             if changed:
                 self.runs_baked += 1
 
+    # ---- reporting
+
+    @property
+    def reportable(self) -> bool:
+        return bool(self.differing)
+
+    @staticmethod
+    def _fmt(items) -> list[str]:
+        return sorted(f"{which}.{e}.{a}" for (which, (e, a)) in items)
+
     def report(self) -> dict:
-        differing = sorted(
-            [f"pPr.{e}.{a}" for (e, a) in self.diff_ppr]
-            + [f"rPr.{e}.{a}" for (e, a) in self.diff_rpr]
-        )
-        return {
+        out = {
             "differ": True,
-            "differing_properties": differing,
+            "differing_properties": self._fmt(self.differing),
             "paragraphs_baked": self.paragraphs_baked,
             "runs_baked": self.runs_baked,
             "note": (
-                "the source and target files have different document "
-                "defaults; source paragraphs that inherited these "
-                "properties were given explicit values so they keep the "
-                "source appearance. The target's own content is untouched."
+                "the source and target resolve these properties differently "
+                "(document defaults, a style of the same name, or both); "
+                "carried paragraphs and runs that inherited them were given "
+                "explicit values so they keep the source appearance. The "
+                "target's own content is untouched."
             ),
         }
+        if self.style_diffs:
+            out["styles_reconciled"] = [
+                {
+                    "style_name": name,
+                    "differing_properties": self._fmt(keys),
+                }
+                for name, keys in sorted(self.style_diffs.items())
+            ]
+        if self.not_baked:
+            out["not_baked"] = self._fmt(self.not_baked)
+            out["not_baked_note"] = (
+                "the source never defines these, so its rendered value comes "
+                "from the theme and cannot be written explicitly; the target "
+                "defines them and they will govern the carried content"
+            )
+        return out
 
 
 # pPr insertion order for baked elements (CT_PPr child sequence, abridged).
@@ -1268,13 +1431,12 @@ def _transplant(
     dd_baker = None
     if formatting == "source":
         dd_baker = _DefaultsBaker(src, pkg)
-        if dd_baker.active:
-            for el, _story in units:
-                if el.tag == qn("w:p"):
-                    dd_baker.bake_paragraph(el)
-                for p in el.iterdescendants(qn("w:p")):
-                    dd_baker.bake_paragraph(p)
-        else:
+        for el, _story in units:
+            if el.tag == qn("w:p"):
+                dd_baker.bake_paragraph(el)
+            for p in el.iterdescendants(qn("w:p")):
+                dd_baker.bake_paragraph(p)
+        if not dd_baker.reportable:
             dd_baker = None
 
     # B1+B2. Styles and numbering, to a fixpoint (cloned styles can reference
