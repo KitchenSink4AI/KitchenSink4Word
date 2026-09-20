@@ -2591,16 +2591,22 @@ def _render_shaded_fill(tmp_path, base_hex, tint, shade):
     import pythoncom
     import win32com.client
 
+    from word_mcp.com import callargs
+
     pythoncom.CoInitialize()
     app = None
     try:
         app = win32com.client.DispatchEx("Word.Application")
         app.Visible = False
         app.DisplayAlerts = 0
-        doc = app.Documents.Open(
-            str(path), ReadOnly=False, AddToRecentFiles=False, Visible=False
+        # callargs, not keywords: pywin32 drops named arguments when it
+        # talks to Word late-bound, and a dropped visibility argument is a
+        # Word window on someone's desk.
+        doc = callargs.call(
+            app.Documents.Open, "Documents.Open", FileName=str(path),
+            ReadOnly=False, AddToRecentFiles=False, Visible=False,
         )
-        doc.ExportAsFixedFormat(str(pdf), 17)
+        doc.ExportAsFixedFormat(str(pdf), 17)  # positional: name, wdFormatPDF
         doc.Close(0)
     finally:
         if app is not None:
