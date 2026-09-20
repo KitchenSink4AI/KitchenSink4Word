@@ -2228,10 +2228,10 @@ def format_text(
     bold, italic, underline, strike, font, size_pt, color, highlight,
     small_caps, char_spacing_pt, language, east_asian_language, and more.
     case: upper | lower | title | sentence. Target: range={start,end},
-    find, or both; one of formatting or case per call. Auto-backup in
-    file mode (backup=False skips rotation); atomic validated save.
-    Formatting goes live on open documents (serialized); case is
-    file-mode only. For batches, use apply_edits.
+    find, or both; one of formatting or case per call. A range without
+    find formats whole paragraphs, mark included, several at once in file
+    mode. Auto-backup; atomic validated save. Formatting goes live on open
+    documents; case is file-mode only.
     """
     from .com import live_ops as _lo
 
@@ -2274,13 +2274,25 @@ def format_text(
         s, e = resolver()
         if s != e:
             raise WordMcpError(
-                "formatting mode takes a SINGLE-paragraph range (start == "
-                "end); make one call per paragraph"
+                "a multi-paragraph range formats whole paragraphs, so it "
+                "cannot be combined with find; drop find, or make one call "
+                "per paragraph"
+                if find is not None
+                else "multi-paragraph formatting is file-mode only; close "
+                "the document in Word, or make one call per paragraph"
             )
         return s
 
     def _file_call() -> dict:
+        import builtins
+
         def _do(pkg: DocxPackage) -> dict:
+            if range is not None and find is None:
+                # whole paragraphs by index, paragraph mark included (#864)
+                s, e = _expand_range(pkg, range)
+                return _tx.format_paragraphs(
+                    pkg, list(builtins.range(s, e + 1)), formatting
+                )
             idx = _single_index(lambda: _expand_range(pkg, range))
             return _tx.format_text(
                 pkg, paragraph_index=idx, find=find, occurrence=occ,
@@ -2298,8 +2310,8 @@ def format_text(
             )
             if rr.start_index != rr.end_index:
                 raise WordMcpError(
-                    "formatting mode takes a SINGLE-paragraph range (start "
-                    "== end); make one call per paragraph"
+                    "multi-paragraph formatting is file-mode only; close "
+                    "the document in Word, or make one call per paragraph"
                 )
             idx = rr.start_index
         return _lo.format_text(

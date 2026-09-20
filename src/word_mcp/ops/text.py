@@ -937,6 +937,44 @@ def format_text(
     )
 
 
+def format_paragraphs(
+    pkg: DocxPackage,
+    indices: list[int],
+    formatting: dict,
+    *,
+    include_paragraph_mark: bool = True,
+) -> dict:
+    """Apply character formatting to WHOLE paragraphs addressed by index,
+    paragraph mark included. This is the no-unique-find-string route:
+    de-italicising headings whose text also occurs in running prose
+    (field test 2026-09-20, punchlist #864)."""
+    _check_keys(formatting, _CHAR_FMT_KEYS, "character-formatting")
+    done: list[int] = []
+    runs_touched = 0
+    for index in indices:
+        p = _body_paragraph(pkg, index)
+        ppr = p.find(qn("w:pPr"))
+        for r in p.iter(qn("w:r")):
+            if r.getparent() is ppr:
+                continue  # the paragraph-mark holder is not a run
+            if _runmap._in_textbox(r, p):
+                continue  # text boxes are a separate story
+            rpr = r.find(qn("w:rPr"))
+            if rpr is None:
+                rpr = etree.Element(qn("w:rPr"))
+                r.insert(0, rpr)
+            _apply_fmt(rpr, formatting)
+            runs_touched += 1
+        if include_paragraph_mark:
+            if ppr is None:
+                ppr = etree.Element(qn("w:pPr"))
+                p.insert(0, ppr)
+            _apply_fmt(_ppr_get_or_add(ppr, "rPr"), formatting)
+        done.append(index)
+    pkg.mark_dirty()
+    return {"formatted_paragraphs": done, "runs_formatted": runs_touched}
+
+
 _ALIGN = {"left": "left", "center": "center", "right": "right", "justify": "both"}
 
 # Numeric bounds mirroring Word's own UI limits (Word caps spacing and
