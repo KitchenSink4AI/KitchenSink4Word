@@ -2290,3 +2290,103 @@ def test_m9_outline_level_reason_states_the_toc_consequence(tmp_path):
     assert "table of contents" in reason
     assert "navigation pane" in reason
     assert "set_paragraph_format" in reason
+
+
+# ==================================================================
+# ROUND 3 - the properties the round-2 completeness probe found still
+# silent: run border, text frame, fitText, eastAsianLayout, cnfStyle.
+# ==================================================================
+
+
+def _collision(tmp_path, *, src_rpr=None, tgt_rpr=None, src_ppr=None,
+               tgt_ppr=None):
+    source = _build(tmp_path / "src.docx", ("Body text.",))
+    pkg = DocxPackage(source)
+    _style(pkg, "Normal", "Normal", rpr=src_rpr, ppr=src_ppr)
+    pkg.save(do_backup=False)
+    target = _build(tmp_path / "tgt.docx", ("T1",))
+    pkg = DocxPackage(target)
+    _style(pkg, "Normal", "Normal", rpr=tgt_rpr, ppr=tgt_ppr)
+    pkg.save(do_backup=False)
+    return srv.insert_document(str(target), str(source)), target
+
+
+def test_run_border_is_carried(tmp_path):
+    """A visible box around text used to vanish with no report."""
+    out, target = _collision(
+        tmp_path,
+        src_rpr='<w:bdr w:val="single" w:sz="8" w:space="0" w:color="FF0000"/>',
+        tgt_rpr='<w:bdr w:val="none"/>',
+    )
+    assert "rPr.bdr.val" in out["document_defaults"]["differing_properties"]
+    paras, _pkg = _body_paras(target)
+    bdr = _rpr_of(paras[-1]).find(qn("w:bdr"))
+    assert bdr is not None and bdr.get(qn("w:val")) == "single"
+    assert bdr.get(qn("w:color")) == "FF0000"
+
+
+def test_run_border_removal_is_carried_as_none(tmp_path):
+    """The mirror: the source has no border and the target's style draws
+    one, so the carried run must say 'none' explicitly."""
+    out, target = _collision(
+        tmp_path,
+        src_rpr='<w:sz w:val="24"/>',
+        tgt_rpr='<w:bdr w:val="single" w:sz="8" w:space="0" w:color="000000"/>',
+    )
+    assert "rPr.bdr.val" in out["document_defaults"]["differing_properties"]
+    paras, _pkg = _body_paras(target)
+    bdr = _rpr_of(paras[-1]).find(qn("w:bdr"))
+    assert bdr is not None and bdr.get(qn("w:val")) == "none"
+
+
+def test_text_frame_is_carried_as_a_whole_element(tmp_path):
+    out, target = _collision(
+        tmp_path,
+        src_ppr='<w:framePr w:w="2880" w:h="1440" w:hRule="exact" '
+                'w:wrap="around" w:vAnchor="text" w:hAnchor="text"/>',
+        tgt_ppr='<w:jc w:val="both"/>',
+    )
+    assert "pPr.framePr" in out["document_defaults"]["differing_properties"]
+    paras, _pkg = _body_paras(target)
+    frame = paras[-1].find(f"{qn('w:pPr')}/{qn('w:framePr')}")
+    assert frame is not None and frame.get(qn("w:w")) == "2880"
+
+
+def test_text_frame_the_target_adds_is_reported_not_guessed(tmp_path):
+    out, _target = _collision(
+        tmp_path,
+        src_ppr='<w:jc w:val="left"/>',
+        tgt_ppr='<w:framePr w:w="2880" w:h="1440" w:hRule="exact"/>',
+    )
+    dd = out["document_defaults"]
+    assert "pPr.framePr" in dd["not_baked"]
+    assert any("not safe" in r for r in dd["not_baked_reasons"])
+
+
+def test_fit_text_and_east_asian_layout_are_carried(tmp_path):
+    out, target = _collision(
+        tmp_path,
+        src_rpr='<w:fitText w:val="1440" w:id="1"/>'
+                '<w:eastAsianLayout w:id="2" w:vert="1"/>',
+        tgt_rpr='<w:sz w:val="24"/>',
+    )
+    props = out["document_defaults"]["differing_properties"]
+    assert "rPr.fitText.val" in props
+    assert "rPr.eastAsianLayout.vert" in props
+    paras, _pkg = _body_paras(target)
+    rpr = _rpr_of(paras[-1])
+    assert rpr.find(qn("w:fitText")).get(qn("w:val")) == "1440"
+    assert rpr.find(qn("w:eastAsianLayout")).get(qn("w:vert")) == "1"
+
+
+def test_cnf_style_is_reported_but_never_baked(tmp_path):
+    out, target = _collision(
+        tmp_path,
+        src_ppr='<w:cnfStyle w:val="100000000000"/>',
+        tgt_ppr='<w:cnfStyle w:val="000000100000"/>',
+    )
+    dd = out["document_defaults"]
+    assert "pPr.cnfStyle.val" in dd["not_baked"]
+    assert any("conditional-formatting" in r for r in dd["not_baked_reasons"])
+    paras, _pkg = _body_paras(target)
+    assert paras[-1].find(f"{qn('w:pPr')}/{qn('w:cnfStyle')}") is None
