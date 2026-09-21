@@ -61,6 +61,7 @@ from .core import update_check as _upd
 from .core import star_nudge as _star_nudge
 from .core.locate import is_range_spec, resolve_location, resolve_range
 from .core.package import DocxPackage, qn
+from .core.schemas import Live
 from .ops import (
     batch as _batch,
     bibliography as _bib,
@@ -767,7 +768,7 @@ def set_document_properties(
 
 
 @_tool("lite")
-def get_document_info(file_path: str, live: str = "auto") -> dict:
+def get_document_info(file_path: str, live: Live = "auto") -> dict:
     """Read a one-call document overview: paragraph/table/footnote/comment/
     revision counts, sections, and package parts. Documents open in Word are
     read live (same key names; live adds 'words' from Word's own
@@ -829,7 +830,7 @@ def get_text(
     contains: str | None = None,
     include_textboxes: bool = False,
     textbox: bool | dict | None = None,
-    live: str = "auto",
+    live: Live = "auto",
 ) -> list | dict:
     """Read body paragraphs as [{index, text, style, ...}] with effective
     styles. start/end slice by paragraph index (0-based, end EXCLUSIVE);
@@ -908,7 +909,7 @@ def find_text(
     include_textboxes: bool = False,
     formatting: dict | None = None,
     scope: str = "body",
-    live: str = "auto",
+    live: Live = "auto",
 ) -> list | dict:
     """Find text in paragraphs and table cells; returns locations plus
     context. include_textboxes=True also searches text-box content as
@@ -966,7 +967,7 @@ def find_text(
 
 @_tool("lite")
 def get_outline(
-    file_path: str, detect_formatted: bool = False, live: str = "auto"
+    file_path: str, detect_formatted: bool = False, live: Live = "auto"
 ) -> list | dict:
     """List every heading with its paragraph index and level. Detects
     Heading styles AND w:outlineLvl overrides (direct or style-inherited);
@@ -1021,7 +1022,7 @@ def word_count(
     file_path: str,
     by_section: bool = True,
     exclusions: list[str] | None = None,
-    live: str = "auto",
+    live: Live = "auto",
 ) -> dict:
     """Count words, characters, and paragraphs, total and per heading section.
     Documents open in Word are counted live via Word's own statistics
@@ -1748,7 +1749,7 @@ def insert_paragraphs(
     track: bool = False,
     author: str = "Claude",
     backup: bool = True,
-    live: str = "auto",
+    live: Live = "auto",
 ) -> dict:
     """Insert paragraphs (items {text, style?, formatting?, heading_level?})
     at a location object (omitted = document end). heading_level 1-9 makes
@@ -1885,7 +1886,7 @@ def delete_paragraphs(
     expect_start: str | None = None,
     expect_end: str | None = None,
     backup: bool = True,
-    live: str = "auto",
+    live: Live = "auto",
 ) -> dict:
     """Delete body paragraphs by 0-based inclusive index (start, end; end
     defaults to start) or by range={start, end} location objects. Refuses
@@ -1944,7 +1945,7 @@ def set_paragraph_text(
     new_text: str,
     expect: str | None = None,
     backup: bool = True,
-    live: str = "auto",
+    live: Live = "auto",
 ) -> dict:
     """Replace one paragraph's full text, keeping style and base formatting;
     address it with a location object ({paragraph: N}, {search: ...},
@@ -1985,7 +1986,7 @@ def search_and_replace(
     track: bool = False,
     author: str = "Claude",
     backup: bool = True,
-    live: str = "auto",
+    live: Live = "auto",
 ) -> dict:
     """Batch find/replace, safe across Word's fragmented runs. Each item:
     {find, replace, regex?}; scope: body | footnotes | headers | all.
@@ -2171,7 +2172,7 @@ def apply_edits(
     edits: list[dict],
     atomic: bool = True,
     backup: bool = True,
-    live: str = "auto",
+    live: Live = "auto",
 ) -> dict:
     """Apply a batch of anchor-addressed edits in one call: one lock,
     backup, and validated save. Anchors come from get_document_view.
@@ -2231,16 +2232,16 @@ def format_text(
     find: str | None = None,
     occurrence: int | None = None,
     backup: bool = True,
-    live: str = "auto",
+    live: Live = "auto",
 ) -> dict:
-    """Apply character formatting or change case on a text range. formatting:
-    bold, italic, underline, strike, font, size_pt, color, highlight,
-    small_caps, char_spacing_pt, language, east_asian_language, and more.
-    case: upper | lower | title | sentence. Target: range={start,end},
-    find, or both; one of formatting or case per call. A range without
-    find formats whole paragraphs, mark included, several at once in file
-    mode. Auto-backup; atomic validated save. Formatting goes live on open
-    documents; case is file-mode only.
+    """Apply character formatting or change case. formatting: bold, italic,
+    underline, strike, font, size_pt, color, highlight and more (a wrong
+    key lists all). case: upper|lower|title|sentence. Target:
+    range={start,end}, find or both; one of formatting or case per call.
+    find formats just that SUBSTRING: the run splits at the matched
+    offsets, each fragment keeping its other formatting. A range without
+    find takes whole paragraphs, mark included. Auto-backup; atomic save.
+    Formatting is live-capable; case is file mode only.
     """
     from .com import live_ops as _lo
 
@@ -2335,7 +2336,7 @@ def format_text(
 def set_paragraph_format(
     file_path: str, indices: list[int] | None = None,
     formatting: dict | None = None, start: int | None = None,
-    end: int | None = None, backup: bool = True, live: str = "auto",
+    end: int | None = None, backup: bool = True, live: Live = "auto",
 ) -> dict:
     """Set paragraph formatting on a batch: indices (0-based list) OR
     start/end (inclusive range), exactly one form. Keys: alignment,
@@ -2483,12 +2484,12 @@ def create_table(
 ) -> dict:
     """Create a table from 2D string data with single-line borders and a bold
     repeating header row (header_row=False for none). location is the
-    standard location object ({paragraph}, {after_heading}, {outline},
-    {search}, {anchor}); omit it to append at the document end; position
-    'after' only. To build a table from a CSV or JSON file use
-    import_table (protection-io pack). Auto-backup: prev/anchor slots in .ks4w-backups
-    (backup=False skips rotation only); atomic validated save. Refuses
-    documents open in Word.
+    standard location object; omit it to append at the end; position
+    'after' only. Shading, column widths and repeat-header on an EXISTING
+    table: format_cells and set_table_properties (media-forms). From a
+    CSV or JSON file: import_table (protection-io). Auto-backup:
+    prev/anchor slots in .ks4w-backups (backup=False skips rotation
+    only); atomic save. Refuses documents open in Word.
     """
 
     def _do(pkg: DocxPackage) -> dict:
@@ -2542,11 +2543,11 @@ def get_table(
     """Read one table in full: every cell's text, the merge map, and
     column widths. table_index is 0-based among body-level tables in
     document order. has_merges=false returns rows of strings;
-    has_merges=true returns {text, grid_span, vmerge} cells. For a table
-    nested inside a cell, pass nested={row, cell, index} addressing the
-    host cell (index picks among several, default 0). Write with
-    set_cells; reshape with modify_table_structure (media-forms pack).
-    Read-only; reads the last-saved state of a document open in Word.
+    has_merges=true returns {text, grid_span, vmerge} cells. For a nested
+    table pass nested={row, cell, index} addressing the host cell (index
+    picks among several, default 0). Write with set_cells; shade with
+    format_cells; widths and repeat-header with set_table_properties;
+    reshape with modify_table_structure (media-forms). Read-only.
     """
     pkg = DocxPackage(file_path)
     if nested is None:
@@ -2814,16 +2815,16 @@ def set_cells(
     track: bool = False,
     author: str = "Claude",
     backup: bool = True,
-    live: str = "auto",
+    live: Live = "auto",
 ) -> dict:
     """Write many table cells in one call. Modes: edits=[{row, cell, text}]
     for scattered cells, or block={origin:{row, cell}, values:[[...]]} for
-    a 2D block. nested={row, cell, index} targets a table nested in that
-    host cell (edits mode only). track records tracked changes by author.
-    Live mode (plain edits only) refuses vertical merges; file mode is
-    merge-aware. Auto-backup in file mode (backup=False skips rotation);
-    atomic validated save. Documents open in Word edit live, serialized.
-    For batches, use apply_edits.
+    a 2D block. nested={row, cell, index} targets a nested table in that
+    host cell (edits mode only). track records changes by author. Cell
+    TEXT only: shading, bold and alignment are format_cells, widths and
+    repeat-header set_table_properties (media-forms). Live (plain
+    edits only) refuses vertical merges; file mode is merge-aware.
+    Auto-backup; atomic save. Batches: apply_edits.
     """
     if (edits is None) == (block is None):
         raise WordMcpError(
@@ -2911,12 +2912,13 @@ def format_cells(
     backup: bool = True,
 ) -> dict:
     """Format table cells in bulk. targets=[{row, cell?}], where {row} alone
-    selects the whole row; formatting applies shading, bold, italic,
-    alignment, valign, and padding_pt to every targeted cell. table_index
-    is 0-based among body-level tables. For cell values use set_cells; for
-    the whole-table style use set_table_properties. Auto-backup:
-    prev/anchor slots in .ks4w-backups (backup=False skips rotation only);
-    atomic validated save. Refuses documents open in Word.
+    selects the whole row and row is a 0-based index or "header" (the
+    repeating header rows, else row 0); formatting applies shading, bold,
+    italic, alignment, valign and padding_pt to every targeted cell.
+    table_index is 0-based among body-level tables. Cell values are
+    set_cells; whole-table style is set_table_properties. Auto-backup:
+    prev/anchor slots in .ks4w-backups (backup=False skips rotation
+    only); atomic save. Refuses documents open in Word.
     """
     return _edit(
         file_path,
@@ -3636,7 +3638,7 @@ def insert_zotero_citation(
 
 @_tool("review")
 def get_comments(
-    file_path: str, author: str | None = None, live: str = "auto"
+    file_path: str, author: str | None = None, live: Live = "auto"
 ) -> list | dict:
     """Comments with authors, anchored text, threading, and resolved state,
     optionally filtered by author. An anchor sitting inside a pending

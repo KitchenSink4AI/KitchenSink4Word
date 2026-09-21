@@ -77,6 +77,44 @@ SELECTORS = (
 POSITIONS = ("before", "after", "replace", "start", "end")
 DEFAULT_POSITION = "after"
 
+#: One worked form per selector, in SELECTORS order. The advertised schema
+#: for ``location`` is types-only by ruling (core/schemas.py explains the
+#: measured reason: enumerating the grammar on all eighteen parameters that
+#: take one is billed to every session, most of which never need it), so
+#: the grammar has to be taught at the moment a caller gets it wrong. These
+#: forms ride on every shape refusal this module raises, which is the one
+#: place the cost is paid only by the call that needed it.
+SELECTOR_FORMS = (
+    '{"paragraph": 15}',
+    '{"after_heading": {"text": "Chapter 3", "occurrence": 1, '
+    '"match": "exact"}}',
+    '{"outline": "3.2"}',
+    '{"bookmark": "methodology_section"}',
+    '{"search": {"text": "specific text", "occurrence": 1, '
+    '"match_case": false}}',
+    '{"anchor": "a3f9"}',
+    '{"cursor": true}',
+)
+
+
+def vocabulary() -> str:
+    """The whole location grammar in one sentence, appended to the refusals
+    a caller hits when the shape is wrong.
+
+    The 2026-09-21 field test spent a call learning that ``{"search":
+    "some text"}`` has to be ``{"search": {"text": ...}}``; the refusal it
+    got named the search form and nothing else, so the next unknown
+    selector would have cost another call. One failed call now teaches the
+    whole shape."""
+    return (
+        "a location object carries EXACTLY ONE selector key plus an "
+        f"optional 'position' ({list(POSITIONS)}, default "
+        f"{DEFAULT_POSITION!r}). Selector forms: "
+        + "; ".join(SELECTOR_FORMS)
+        + ". 'cursor' needs the document open in Word."
+    )
+
+
 _MATCH_MODES = ("exact", "contains")
 _ENTITY_RE = re.compile(r"&amp;|&lt;|&gt;|&quot;|&apos;")
 _QUOTE_MAP = str.maketrans(
@@ -222,12 +260,16 @@ def _spec_dict(
     optional: dict[str, type],
 ) -> dict:
     if not isinstance(value, dict):
-        raise WordMcpError(f"{name} selector takes an object like {example}")
+        raise WordMcpError(
+            f"{name} selector takes an object like {example}; "
+            + vocabulary()
+        )
     unknown = sorted(set(value) - set(required) - set(optional))
     if unknown:
         raise WordMcpError(
             f"{name} selector got unknown key(s) {unknown}; "
-            f"it takes {sorted(required)} plus optional {sorted(optional)}"
+            f"it takes {sorted(required)} plus optional {sorted(optional)}; "
+            + vocabulary()
         )
     for key, typ in required.items():
         if key not in value:
@@ -743,7 +785,7 @@ def resolve_location(
     if not isinstance(location, dict):
         raise WordMcpError(
             "location must be an object with exactly one selector key from "
-            f"{list(SELECTORS)} plus optional 'position'"
+            f"{list(SELECTORS)} plus optional 'position': " + vocabulary()
         )
     unknown = sorted(set(location) - set(SELECTORS) - {"position"})
     if unknown:
@@ -751,18 +793,18 @@ def resolve_location(
             raise WordMcpError(
                 "this looks like a {start, end} range, not a single "
                 "location; pass it to a range-taking parameter, or pass one "
-                "location object with a single selector key"
+                "location object with a single selector key: " + vocabulary()
             )
         raise WordMcpError(
             f"unknown location key(s) {unknown}; selectors are "
-            f"{list(SELECTORS)}, plus optional 'position'"
+            f"{list(SELECTORS)}, plus optional 'position'. " + vocabulary()
         )
     present = [k for k in SELECTORS if k in location]
     if len(present) != 1:
         raise WordMcpError(
             "location needs exactly one selector key, got "
             f"{len(present)} ({present if present else 'none'}); selectors "
-            f"are {list(SELECTORS)}"
+            f"are {list(SELECTORS)}. " + vocabulary()
         )
     position = location.get("position", DEFAULT_POSITION)
     if position not in POSITIONS:
