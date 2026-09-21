@@ -292,14 +292,43 @@ def validate_toggles() -> None:
         toggle(name)
 
 
+#: Every value KS4W_PACK_POLICY recognizes.
+_POLICIES = ("auto", "locked")
+
+
+def pack_policy() -> str:
+    """The validated KS4W_PACK_POLICY value.
+
+    A typo used to FAIL OPEN. resolve_lock asked only whether the value
+    equalled "locked", so KS4W_PACK_POLICY=lockedd served with the packs
+    freely unlockable, while its sibling KS4W_MODE=fulll refused to start
+    at all: the one env var whose whole purpose is a security pin was the
+    one that shrugged off a misspelling, and it did so silently. The host
+    that set it had no way to learn its lock was not in force.
+    KitchenSink4XL fixed the identical defect as M-4 of its fresh-eyes
+    round; this is the port. Unknown values now refuse loudly, at startup
+    and at every policy consultation."""
+    raw = os.environ.get(ENV_PACK_POLICY, "auto").strip().lower()
+    if not raw:
+        return "auto"
+    if raw not in _POLICIES:
+        raise WordMcpError(
+            f"{ENV_PACK_POLICY}={raw!r} is not a recognized policy; use "
+            f"one of {list(_POLICIES)}. Refusing rather than letting a typo "
+            "silently drop the host's lock."
+        )
+    return raw
+
+
 def resolve_lock() -> bool:
     """Is the tool surface fixed at startup?
 
     Precedence: an explicit KS4W_PACK_POLICY beats KS4W_LOCK_TOOLS beats
-    the unlocked default."""
-    explicit = _explicit(ENV_PACK_POLICY)
-    if explicit:
-        return explicit.lower() == "locked"
+    the unlocked default. An unrecognized policy value is not a third
+    answer, it is a refusal: see pack_policy."""
+    policy = pack_policy()
+    if _explicit(ENV_PACK_POLICY):
+        return policy == "locked"
     return toggle(ENV_LOCK_TOOLS)
 
 
@@ -335,11 +364,46 @@ def _validate(packs: list[str]) -> list[str]:
     return out
 
 
+#: The note every SUCCESSFUL enable_tools returns, including one that
+#: enabled nothing new (punch-list #887). The old sentence said only
+#: "tools/list_changed was sent; re-fetch the tool list if your client does
+#: not refresh automatically", which is true and useless: the clients that
+#: strand an agent are exactly the ones that never re-fetch, and the agent
+#: reading the note has no way to make them. A subagent in Claude Code
+#: enabled the graphics pack, was told to re-fetch, and then could not call
+#: one tool it had just turned on (2026-09-21 field test); the start-up
+#: route was the only thing that worked in every client tested. The note
+#: therefore leads with what always works and names the client-specific
+#: escape second. Wording is the owner's, verbatim; do not reword it here.
+LIST_CHANGED_NOTE = (
+    "tools/list_changed was sent. If the new tools are not in your tool "
+    "list, this client fixed its list when the session or worker started: "
+    "do not retry here. What works in every client: ask the user to add "
+    f"the packs to {ENV_MODE} (comma list) in this server's launch "
+    "settings, restart the app or session, then start a new worker if "
+    "needed. Claude Code only: the orchestrator can instead call "
+    "enable_tools in the main session and then start a new worker. If "
+    "enable_tools refuses a pack, an administrator locked the tool set: "
+    "do not retry."
+)
+
+#: The same fact, one sentence, for the places a client reads BEFORE it
+#: calls anything: the server instructions at handshake and the
+#: get_workflows index. Owner's wording, verbatim.
+WORKER_PACK_SENTENCE = (
+    "Workers and subagents only see the tools that were on when they "
+    f"started: start the server with {ENV_MODE} set to a comma list of "
+    "packs, or, in Claude Code, enable packs in the main session before "
+    "starting workers."
+)
+
+
 def enable(packs: list[str]) -> dict:
     """Idempotent enable. Reports what changed, the approx token cost added,
     and the resulting total surface."""
     if _policy_locked():
         err = WordMcpError(
+            "An administrator locked the tool packs for this install. "
             "the tool surface is fixed at startup by the host "
             "(KS4W_PACK_POLICY=locked, or the 'Lock the tool set at "
             "startup' setting). Only a human can change it: untick that "
@@ -368,11 +432,7 @@ def enable(packs: list[str]) -> dict:
         "approx_tokens_added": tokens_added,
         **surface_report(),
     }
-    if enabled_now:
-        result["note"] = (
-            "tools/list_changed was sent; re-fetch the tool list if your "
-            "client does not refresh automatically"
-        )
+    result["note"] = LIST_CHANGED_NOTE
     return result
 
 

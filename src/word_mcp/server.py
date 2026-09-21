@@ -135,7 +135,14 @@ mcp = FastMCP(
         "get_workflows task='live-editing' for the save-then-anchor "
         "cycle). list_elements enumerates any "
         "collection; validate runs any read-only check battery; "
-        "migration/v1_to_v2.json maps every v1 tool name here."
+        "migration/v1_to_v2.json maps every v1 tool name here. "
+        # Punch-list #887. This paragraph had no pack sentence to append to
+        # (the siblings' instructions carry one; this one never did), so
+        # the worker sentence lands here on its own, which is the first
+        # place a client reads and the only one that reaches a subagent
+        # before it calls anything.
+        "Sessions start on the lite core and enable_tools loads optional "
+        "packs. " + _packs.WORKER_PACK_SENTENCE
     ),
 )
 
@@ -5364,6 +5371,16 @@ def _startup_disabled_names() -> set[str]:
     }
 
 
+def _bad_policy_message(detail: str) -> str:
+    """The one line a bad KS4W_PACK_POLICY prints before the process exits.
+
+    A traceback here would be rendered by Desktop as "server failed to
+    start" with the one useful sentence buried under a file path the
+    operator does not recognize. Same refusal to serve, one readable
+    line."""
+    return f"[kitchensink4word] {detail} The server did not start."
+
+
 def main() -> None:
     # KS4W_MODE startup surface: bookkeeping first (a typo in the env
     # fails loudly BEFORE serving), then ONE global visibility transform
@@ -5371,6 +5388,14 @@ def main() -> None:
     # by enable_tools/disable_tools override this transform. Applied
     # here, not at import, so tests and measure_surface always see the
     # full registry.
+    # The policy pin is validated FIRST and on its own, so a
+    # KS4W_PACK_POLICY typo keeps a refusal of its own instead of failing
+    # open the way it did through 2.2.0.
+    try:
+        _packs.pack_policy()
+    except WordMcpError as exc:
+        _sys.stderr.write(_bad_policy_message(str(exc)) + "\n")
+        raise SystemExit(2) from None
     _packs.apply_startup_mode()
     _PENDING_VISIBILITY.clear()  # startup flips ride the global transform
     disabled = _startup_disabled_names()
