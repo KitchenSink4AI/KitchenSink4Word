@@ -43,7 +43,26 @@ below is a behavior you can rely on without testing it first.
 - File-mode tools refuse a document that is open in Word and name the `live_*` or `com_*` route that handles the open case.
 - Live edits land as one Ctrl+Z step per tool call and leave the user's cursor and selection where they were.
 - Tracked-changes authoring is a parameter, not a mode: pass `track=true` and an author name to a text mutation and the edit is written as a revision.
+- Removal is expressed through the corresponding setter: use `set_watermark(watermark="none")` to remove a watermark and `set_document_protection(protection="none")` to remove document protection. The old `remove_*` names do not exist in Version 2.
+- When deleting paragraphs by position, supply `expect_start` and `expect_end` whenever the surrounding text is known. A failed expectation is a stale-target refusal, not permission to delete the current occupant of that index.
+- On the live route, a requested backup may be unavailable. Inspect the result's `backup` and `backup_skipped` fields. Never tell the user a backup exists unless the response confirms it.
+- The Word registration probe has three outcomes: registered, absent, and could not determine. Treat `could not determine` as an unknown result, not as evidence that Word is absent. Use `get_server_info` for product and runtime identity.
+- The disclosed version check runs at most weekly and never downloads or installs an update. Set `KS4W_UPDATE_CHECK=off` to disable it.
 - Test evidence for v2.2.0: 2,068 tests, adversarial rounds driven through the raw MCP stdio transport, zero corruptions, outputs verified by opening them in invisible Word and failing on any repair prompt.
+
+### Result shapes changed in 2.2.0
+
+`validate(checks=["citation_parity"])` separates unresolved citations into `missing_references` and `missing_references_unparsed`. Read `missing_references_unparsed_reason` before deciding how to review the latter. The result also reports `reference_entries` and `reference_entries_parsed`. `passed` is false while either unresolved list is non-empty.
+
+`define_style` updates an existing style by merging the requested changes. When creating a style, omitting `based_on` uses `Normal`; when updating a style, omitting it leaves the parent unchanged. Use `based_on=""` to clear the parent. A style-type change is refused. An update that makes no change reports `unchanged: true`.
+
+`format_text` with a `range` and no `find` formats whole paragraphs and returns `{"formatted_paragraphs": [...], "runs_formatted": N}`. The `find` path keeps its earlier result shape. The same distinction applies to the `apply_edits` `format` operation.
+
+`apply_edits` adds the `move` operation. Set `allow_cross_section` only when the requested move may cross a section boundary and the caller has accepted the reported page-layout consequence.
+
+Inspect `insert_document` results before describing a merge as complete. `document_defaults`, including `not_baked` and its reasons, names source formatting that was not carried. `theme_colors` reports color handling. `styles.imported_renamed` and `styles.reused_imports` report style-name conflicts and reuse.
+
+`com_refresh_fields` reports `fields_by_story` and `tables_of_figures_updated`. `get_outline(detect_formatted=true)` gives each heuristic entry a `confidence`. `list_elements(type="toc")` returns entries separately for each table of contents.
 
 ## 3. Addressing model
 
@@ -68,6 +87,8 @@ below is a behavior you can rely on without testing it first.
 - `bulk-edit`: many addressed edits in one atomic pass.
 - `comment-partner`: the human leaves a Word comment addressed to the AI, the agent reads the anchored context, makes the fix as a tracked change, saves, then replies and resolves. Preview recipe on shipped tools.
 - `migrate-from-v1`: every v1.6 tool name mapped to its v2 home, returned in-session. Same data as `migration/v1_to_v2.json`; the prose version is `docs/MIGRATION_V2.md`.
+
+Use the new guides `merge-chapters`, `build-lists-without-heading-styles`, and `merge-reference-lists` for those workflows.
 
 ## 5. Documented refusals
 
