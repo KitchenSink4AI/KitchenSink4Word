@@ -702,6 +702,17 @@ _PPR_ORDER = [
     "pPrChange",
 ]
 
+# CT_RPr child sequence (the schema order Word writes and strict OOXML
+# validators enforce).
+_RPR_ORDER = [
+    "rStyle", "rFonts", "b", "bCs", "i", "iCs", "caps", "smallCaps",
+    "strike", "dstrike", "outline", "shadow", "emboss", "imprint",
+    "noProof", "snapToGrid", "vanish", "webHidden", "color", "spacing",
+    "w", "kern", "position", "sz", "szCs", "highlight", "u", "effect",
+    "bdr", "shd", "fitText", "vertAlign", "rtl", "cs", "em", "lang",
+    "eastAsianLayout", "specVanish", "oMath",
+]
+
 
 def _ppr_get_or_add(ppr, local: str):
     existing = ppr.find(qn(f"w:{local}"))
@@ -718,6 +729,39 @@ def _ppr_get_or_add(ppr, local: str):
     return el
 
 
+def _rpr_get_or_add(rpr, local: str):
+    """Get an rPr child, or create it in CT_RPr schema position. Appending
+    new children produced rPr elements that Word tolerates but a strict
+    OOXML validator rejects (field test 2026-09-20, punchlist #866)."""
+    existing = rpr.find(qn(f"w:{local}"))
+    if existing is not None:
+        return existing
+    el = etree.Element(qn(f"w:{local}"))
+    my_rank = _RPR_ORDER.index(local) if local in _RPR_ORDER else len(_RPR_ORDER)
+    for child in rpr:
+        name = etree.QName(child).localname
+        if name in _RPR_ORDER and _RPR_ORDER.index(name) > my_rank:
+            child.addprevious(el)
+            return el
+    rpr.append(el)
+    return el
+
+
+def _sort_rpr(rpr) -> None:
+    """Put an existing rPr's children back into schema order. Skipped when
+    a child is not in the table (extension elements have no defined slot
+    here and reordering around them is riskier than leaving them be)."""
+    children = list(rpr)
+    names = [etree.QName(c).localname for c in children]
+    if any(n not in _RPR_ORDER for n in names):
+        return
+    ranks = [_RPR_ORDER.index(n) for n in names]
+    if ranks == sorted(ranks):
+        return
+    for child in sorted(children, key=lambda c: _RPR_ORDER.index(etree.QName(c).localname)):
+        rpr.append(child)
+
+
 def _check_keys(fmt: dict, allowed: set, what: str) -> None:
     unknown = set(fmt) - allowed
     if unknown:
@@ -727,50 +771,64 @@ def _check_keys(fmt: dict, allowed: set, what: str) -> None:
         )
 
 
-def _make_rpr(fmt: dict) -> etree._Element:
+def _make_rpr(fmt: dict, *, explicit_off: bool = False) -> etree._Element:
     rpr = etree.Element(qn("w:rPr"))
-    _apply_fmt(rpr, fmt)
+    _apply_fmt(rpr, fmt, explicit_off=explicit_off)
     return rpr
 
 
-def _apply_fmt(rpr: etree._Element, fmt: dict) -> None:
-    """Apply formatting keys to an rPr, respecting the schema's element order
-    loosely (Word tolerates rPr child order in practice, but we keep toggles
-    first, then fonts/size/color, matching common output)."""
+def _apply_fmt(
+    rpr: etree._Element, fmt: dict, *, explicit_off: bool = False
+) -> None:
+    """Apply formatting keys to an rPr. Children are created in CT_RPr
+    schema order, and an rPr that is already out of order is sorted on the
+    way in (punchlist #866): Word tolerates any order, strict OOXML
+    validators and other consumers do not.
+
+    explicit_off writes the off form of a toggle (w:val="0", w:u val="none")
+    instead of removing the element. Direct run formatting removes, so the
+    run falls back to its style; a STYLE definition must state the off, or
+    it inherits the property from its parent and the call is a silent no-op
+    (adversarial review 2026-09-20, M2)."""
     _check_keys(fmt, _CHAR_FMT_KEYS, "character-formatting")
+    _sort_rpr(rpr)
     for key, tag in _TOGGLES.items():
         if key in fmt:
             el = rpr.find(qn(tag))
             if fmt[key]:
                 if el is None:
-                    el = etree.SubElement(rpr, qn(tag))
+                    el = _rpr_get_or_add(rpr, tag[2:])
                 if key == "underline":
                     el.set(qn("w:val"), "single")
                 else:
                     el.attrib.pop(qn("w:val"), None)
+            elif explicit_off:
+                if el is None:
+                    el = _rpr_get_or_add(rpr, tag[2:])
+                el.set(qn("w:val"), "none" if key == "underline" else "0")
             elif el is not None:
                 rpr.remove(el)
     if "font" in fmt:
         rfonts = rpr.find(qn("w:rFonts"))
         if rfonts is None:
-            rfonts = etree.SubElement(rpr, qn("w:rFonts"))
+            rfonts = _rpr_get_or_add(rpr, "rFonts")
         for attr in ("w:ascii", "w:hAnsi", "w:cs"):
             rfonts.set(qn(attr), fmt["font"])
     if "size_pt" in fmt:
         for tag in ("w:sz", "w:szCs"):
             el = rpr.find(qn(tag))
             if el is None:
-                el = etree.SubElement(rpr, qn(tag))
+                el = _rpr_get_or_add(rpr, tag[2:])
             el.set(qn("w:val"), str(int(fmt["size_pt"] * 2)))
     if "color" in fmt:
         el = rpr.find(qn("w:color"))
         if el is None:
-            el = etree.SubElement(rpr, qn("w:color"))
+            el = _rpr_get_or_add(rpr, "color")
         el.set(qn("w:val"), fmt["color"].lstrip("#"))
     if "highlight" in fmt:
         el = rpr.find(qn("w:highlight"))
         if el is None:
-            el = etree.SubElement(rpr, qn("w:highlight"))
+            el = _rpr_get_or_add(rpr, "highlight")
         el.set(qn("w:val"), fmt["highlight"])
     for key, tag in (
         ("small_caps", "w:smallCaps"),
@@ -780,29 +838,35 @@ def _apply_fmt(rpr: etree._Element, fmt: dict) -> None:
     ):
         if key in fmt:
             el = rpr.find(qn(tag))
-            if fmt[key] and el is None:
-                etree.SubElement(rpr, qn(tag))
-            elif not fmt[key] and el is not None:
+            if fmt[key]:
+                if el is None:
+                    el = _rpr_get_or_add(rpr, tag[2:])
+                el.attrib.pop(qn("w:val"), None)
+            elif explicit_off:
+                if el is None:
+                    el = _rpr_get_or_add(rpr, tag[2:])
+                el.set(qn("w:val"), "0")
+            elif el is not None:
                 rpr.remove(el)
     if "char_spacing_pt" in fmt:
         el = rpr.find(qn("w:spacing"))
         if el is None:
-            el = etree.SubElement(rpr, qn("w:spacing"))
+            el = _rpr_get_or_add(rpr, "spacing")
         el.set(qn("w:val"), str(int(fmt["char_spacing_pt"] * 20)))
     if "kerning_pt" in fmt:
         el = rpr.find(qn("w:kern"))
         if el is None:
-            el = etree.SubElement(rpr, qn("w:kern"))
+            el = _rpr_get_or_add(rpr, "kern")
         el.set(qn("w:val"), str(int(fmt["kerning_pt"] * 2)))
     if "position_pt" in fmt:
         el = rpr.find(qn("w:position"))
         if el is None:
-            el = etree.SubElement(rpr, qn("w:position"))
+            el = _rpr_get_or_add(rpr, "position")
         el.set(qn("w:val"), str(int(fmt["position_pt"] * 2)))
     if "language" in fmt or "east_asian_language" in fmt:
         el = rpr.find(qn("w:lang"))
         if el is None:
-            el = etree.SubElement(rpr, qn("w:lang"))
+            el = _rpr_get_or_add(rpr, "lang")
         if fmt.get("language"):
             el.set(qn("w:val"), fmt["language"])
         if fmt.get("east_asian_language"):
@@ -814,7 +878,7 @@ def _apply_fmt(rpr: etree._Element, fmt: dict) -> None:
             )
         el = rpr.find(qn("w:vertAlign"))
         if el is None:
-            el = etree.SubElement(rpr, qn("w:vertAlign"))
+            el = _rpr_get_or_add(rpr, "vertAlign")
         el.set(
             qn("w:val"),
             "superscript" if fmt.get("superscript") else "subscript",
@@ -889,6 +953,44 @@ def format_text(
             else " anywhere in the document (body and table cells searched)"
         )
     )
+
+
+def format_paragraphs(
+    pkg: DocxPackage,
+    indices: list[int],
+    formatting: dict,
+    *,
+    include_paragraph_mark: bool = True,
+) -> dict:
+    """Apply character formatting to WHOLE paragraphs addressed by index,
+    paragraph mark included. This is the no-unique-find-string route:
+    de-italicising headings whose text also occurs in running prose
+    (field test 2026-09-20, punchlist #864)."""
+    _check_keys(formatting, _CHAR_FMT_KEYS, "character-formatting")
+    done: list[int] = []
+    runs_touched = 0
+    for index in indices:
+        p = _body_paragraph(pkg, index)
+        ppr = p.find(qn("w:pPr"))
+        for r in p.iter(qn("w:r")):
+            if r.getparent() is ppr:
+                continue  # the paragraph-mark holder is not a run
+            if _runmap._in_textbox(r, p):
+                continue  # text boxes are a separate story
+            rpr = r.find(qn("w:rPr"))
+            if rpr is None:
+                rpr = etree.Element(qn("w:rPr"))
+                r.insert(0, rpr)
+            _apply_fmt(rpr, formatting)
+            runs_touched += 1
+        if include_paragraph_mark:
+            if ppr is None:
+                ppr = etree.Element(qn("w:pPr"))
+                p.insert(0, ppr)
+            _apply_fmt(_ppr_get_or_add(ppr, "rPr"), formatting)
+        done.append(index)
+    pkg.mark_dirty()
+    return {"formatted_paragraphs": done, "runs_formatted": runs_touched}
 
 
 _ALIGN = {"left": "left", "center": "center", "right": "right", "justify": "both"}
@@ -1076,10 +1178,16 @@ def set_paragraph_format(
                 ind.set(qn("w:right"), str(int(formatting["indent_right_pt"] * 20)))
             if "first_line_indent_pt" in formatting:
                 val = formatting["first_line_indent_pt"]
+                # firstLine and hanging are the two halves of one setting and
+                # hanging wins when both are present, so writing one must
+                # clear the other or a pre-existing hanging indent survives a
+                # first_line_indent_pt of 0 (field test 2026-09-20, #865).
                 if val >= 0:
                     ind.set(qn("w:firstLine"), str(int(val * 20)))
+                    ind.attrib.pop(qn("w:hanging"), None)
                 else:
                     ind.set(qn("w:hanging"), str(int(-val * 20)))
+                    ind.attrib.pop(qn("w:firstLine"), None)
         if "keep_with_next" in formatting:
             kn = ppr.find(qn("w:keepNext"))
             if formatting["keep_with_next"] and kn is None:

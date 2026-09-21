@@ -144,9 +144,9 @@ FIGURE_SURFACES = (
 #: measurement at the commit that adds this guard. Change one only together
 #: with a re-run of the named script.
 PUBLISHED_FIGURES = (
-    ('221', 'document operations', 'scripts/count_operations.py'),
+    ('222', 'document operations', 'scripts/count_operations.py'),
     ('110', 'tools', 'scripts/measure_surface.py'),
-    ('1,846', 'tests', 'pytest --collect-only'),
+    ('2,068', 'tests', 'pytest --collect-only'),
     ('9,900', 'tokens at lite start', 'scripts/measure_surface.py'),
     ('35,200', 'tokens at full surface', 'scripts/measure_surface.py'),
 )
@@ -171,6 +171,12 @@ SUPERSEDED_FIGURES = (
     ('34 400', 'the same figure with a french separator'),
     ('1.842', 'the same count with a german or spanish separator'),
     ('1 842', 'the same count with a french separator'),
+    ('1,846', 'the 2.1.x test count'),
+    ('1.846', 'the same count with a german or spanish separator'),
+    ('1 846', 'the same count with a french separator'),
+    ('221 operations', 'the 2.1.x operation count, before the move op'),
+    ('221 document operations', 'the same count on the README and the meta description'),
+    ('221 across 110', 'the same count in the v1.6 comparison'),
 )
 
 

@@ -61,7 +61,9 @@ and refusal classes as insert_document.
 
 from __future__ import annotations
 
+import colorsys
 import copy
+import math
 import posixpath
 import re
 
@@ -348,10 +350,60 @@ def _resolve_position(
 # --------------------------------------------------------- style / numbering
 
 
+# Style children that are identity or housekeeping, not formatting: two
+# definitions that differ only in these are the same style.
+_STYLE_IDENTITY_CHILDREN = frozenset({
+    "name", "aliases", "rsid", "uiPriority", "semiHidden",
+    "unhideWhenUsed", "qFormat", "locked", "autoRedefine", "hidden",
+    "personal", "personalCompose", "personalReply",
+})
+
+
+def _style_signature(el: etree._Element, *, ignore_refs: bool = False) -> str:
+    """Canonical serialization of a style's FORMATTING, ignoring its id,
+    name and housekeeping children. ignore_refs also drops basedOn/link/
+    next, whose values are style IDS and therefore differ between a source
+    definition and the copy of it a previous insert already imported."""
+    clone = copy.deepcopy(el)
+    for attr in list(clone.attrib):
+        if _localname_of_attr(attr) in ("styleId", "rsid"):
+            clone.attrib.pop(attr)
+    drop = _STYLE_IDENTITY_CHILDREN
+    if ignore_refs:
+        drop = drop | {"basedOn", "link", "next"}
+    for child in list(clone):
+        if _localname(child) in drop:
+            clone.remove(child)
+    return etree.tostring(clone, method="c14n").decode()
+
+
+_IMPORTED_SUFFIX = re.compile(r"^(?P<base>.+?) \(imported(?: \d+)?\)$")
+
+
+def _imported_base_name(name: str | None) -> str | None:
+    """'Table Grid (imported 2)' -> 'Table Grid'."""
+    if not name:
+        return None
+    m = _IMPORTED_SUFFIX.match(name)
+    return m.group("base") if m else name
+
+
+def _localname_of_attr(attr: str) -> str:
+    return attr.rsplit("}", 1)[-1]
+
+
 class _StyleResolver:
     """By-name style reconciliation (the apply_template model): matching
     names remap ids to the target's; unmatched styles are cloned with their
-    dependency chains under fresh ids."""
+    dependency chains under fresh ids.
+
+    TABLE styles are the exception (adversarial review 2026-09-20, M3): a
+    table style carries conditional formatting per region (tblStylePr), so
+    a same-named definition that differs cannot be baked onto the carried
+    cells the way a paragraph or character style can. Such a style is
+    imported under a fresh id AND a fresh name, and the carried tables are
+    re-pointed at it. Paragraph and character styles are NEVER renamed:
+    that would break heading-based TOCs and the by-name contract."""
 
     def __init__(self, src: DocxPackage, pkg: DocxPackage):
         self.pkg = pkg
@@ -363,12 +415,60 @@ class _StyleResolver:
                 sid = s.get(qn("w:styleId"))
                 if sid:
                     self.src_defs[sid] = s
+        self.tgt_defs: dict[str, etree._Element] = {}
+        if pkg.has_part("word/styles.xml"):
+            for s in pkg.root("word/styles.xml").findall(qn("w:style")):
+                sid = s.get(qn("w:styleId"))
+                if sid:
+                    self.tgt_defs[sid] = s
         self.remap: dict[str, str] = {}  # src id -> different target id
         self.matched: list[dict] = []
         self.cloned: list[dict] = []
+        self.imported_renamed: list[dict] = []
         self.cloned_defs: list[etree._Element] = []
         self.unresolved: list[str] = []
         self._done: set[str] = set()
+
+    def _free_name(self, name: str) -> str:
+        candidate = f"{name} (imported)"
+        n = 2
+        while candidate in self.tgt_name2id:
+            candidate = f"{name} (imported {n})"
+            n += 1
+        return candidate
+
+    def _already_imported(
+        self, name: str, src_def: etree._Element
+    ) -> str | None:
+        """The id of an "X (imported…)" style a PREVIOUS insert created from
+        this same definition, or None. Identity is the formatting signature
+        (ids and names stripped) plus the parent's name, so a style is
+        imported once however many times its source is inserted."""
+        want = _style_signature(src_def, ignore_refs=True)
+        want_parent = self._parent_name(src_def, self.src_id2name)
+        for cand_id, cand_name in self.tgt_id2name.items():
+            if cand_id == name or cand_name == name:
+                continue
+            if _imported_base_name(cand_name) != name:
+                continue
+            cand = self.tgt_defs.get(cand_id)
+            if cand is None or cand.get(qn("w:type")) != src_def.get(
+                qn("w:type")
+            ):
+                continue
+            if _style_signature(cand, ignore_refs=True) != want:
+                continue
+            if self._parent_name(cand, self.tgt_id2name) != want_parent:
+                continue
+            return cand_id
+        return None
+
+    @staticmethod
+    def _parent_name(el: etree._Element, id2name: dict) -> str | None:
+        base = el.find(qn("w:basedOn"))
+        if base is None or not base.get(qn("w:val")):
+            return None
+        return _imported_base_name(id2name.get(base.get(qn("w:val"))))
 
     def resolve(self, sid: str) -> None:
         if not sid or sid in self._done:
@@ -382,7 +482,30 @@ class _StyleResolver:
             if sid not in self.tgt_id2name:
                 self.unresolved.append(sid)
             return
+        src_def = self.src_defs[sid]
+        is_table = src_def.get(qn("w:type")) == "table"
         tgt_id = self.tgt_name2id.get(name)
+        rename_to = None
+        if tgt_id is not None and is_table:
+            tgt_def = self.tgt_defs.get(tgt_id)
+            if tgt_def is not None and _style_signature(
+                tgt_def
+            ) != _style_signature(src_def):
+                already = self._already_imported(name, src_def)
+                if already is not None:
+                    # A previous insert of this source already imported it;
+                    # re-point at that copy instead of stacking another
+                    # "(imported N)" in the user's gallery (review m8).
+                    if already != sid:
+                        self.remap[sid] = already
+                    self.matched.append({
+                        "name": self.tgt_id2name.get(already, name),
+                        "source_id": sid, "target_id": already,
+                        "reused_import": True,
+                    })
+                    return
+                rename_to = self._free_name(name)
+                tgt_id = None  # import it instead of matching by name
         if tgt_id is not None:
             # Name match: the target's definition (formatting) governs.
             if tgt_id != sid:
@@ -399,15 +522,30 @@ class _StyleResolver:
             n += 1
         d = copy.deepcopy(self.src_defs[sid])
         d.set(qn("w:styleId"), new_id)
+        new_name = rename_to or name
+        if rename_to:
+            name_el = d.find(qn("w:name"))
+            if name_el is None:
+                name_el = etree.Element(qn("w:name"))
+                d.insert(0, name_el)
+            name_el.set(qn("w:val"), rename_to)
         _ensure_styles_part(self.pkg)
         root = self.pkg.root("word/styles.xml")
         root.append(d)
         self.pkg.mark_dirty("word/styles.xml")
-        self.tgt_id2name[new_id] = name
-        self.tgt_name2id[name] = new_id
+        self.tgt_id2name[new_id] = new_name
+        self.tgt_name2id[new_name] = new_id
+        self.tgt_defs[new_id] = d
         if new_id != sid:
             self.remap[sid] = new_id
-        self.cloned.append({"id": new_id, "name": name, "source_id": sid})
+        if rename_to:
+            self.imported_renamed.append({
+                "source_name": name, "source_id": sid,
+                "imported_as": rename_to, "style_id": new_id,
+                "type": "table",
+            })
+        else:
+            self.cloned.append({"id": new_id, "name": name, "source_id": sid})
         self.cloned_defs.append(d)
         for dep_tag in ("w:basedOn", "w:link", "w:next"):
             dep = d.find(qn(dep_tag))
@@ -477,6 +615,20 @@ class _NumberingResolver:
                 new_abs_id = str(max(existing_abs, default=-1) + 1)
                 clone = copy.deepcopy(abstract)
                 clone.set(qn("w:abstractNumId"), new_abs_id)
+                # w:nsid identifies a list ACROSS documents: two files made
+                # from the same template share it, and Word treats two
+                # abstractNums with one nsid as one list, which merges their
+                # numbering. Drop a colliding nsid so the carried list keeps
+                # its own sequence (adversarial review 2026-09-20).
+                nsid = clone.find(qn("w:nsid"))
+                if nsid is not None:
+                    taken = {
+                        n.get(qn("w:val"))
+                        for a in tgt_root.findall(qn("w:abstractNum"))
+                        if (n := a.find(qn("w:nsid"))) is not None
+                    }
+                    if nsid.get(qn("w:val")) in taken:
+                        clone.remove(nsid)
                 nums = tgt_root.findall(qn("w:num"))
                 if nums:  # schema order: abstractNum before num
                     nums[0].addprevious(clone)
@@ -548,51 +700,131 @@ def _apply_num_remap(elements, num_map: dict[str, str], unresolved: set[str]):
     return stripped
 
 
-# ------------------------------- document-defaults reconciliation (source)
+# ------------------------------- inherited-formatting reconciliation (source)
 #
 # The half-single-spaced-dissertation bug (field test, 2026-09-03): with
 # formatting="source", paragraphs that carried NO explicit line_spacing or
 # space_after relied on their SOURCE file's docDefaults for those values.
 # After transplant they resolved against the TARGET's docDefaults instead,
-# silently changing the rendered spacing. formatting="source" promises the
-# source look, so for every tracked property where the two files'
-# docDefaults differ, the source-effective value is baked as an explicit
-# property onto carried paragraphs/runs that inherited it (direct values
-# and style-chain values are left alone: direct already wins, and style
-# values follow the documented by-name reconciliation contract).
+# silently changing the rendered spacing.
+#
+# The same bug one layer up (field test, 2026-09-20, punchlist #860):
+# python-docx sources define their body look on the Normal STYLE, not on
+# docDefaults. Styles reconcile BY NAME with the target's definition
+# governing, so a carried paragraph that inherited 12pt/double from its own
+# Normal silently inherited the target's Normal instead, and the
+# docDefaults-only check reported nothing wrong.
+#
+# So the whole inheritance chain is resolved on both sides — run/paragraph
+# direct values, the style basedOn chain as it will resolve AFTER by-name
+# reconciliation, then docDefaults — and every tracked property whose
+# resolved value would change is baked explicit onto the carried copy.
+# Direct values are left alone (they already win and already carry).
 
-# Attribute-level tracked properties (OOXML merges these attribute-wise).
-_DD_PPR_ATTRS: dict[str, tuple[str, ...]] = {
-    "spacing": (
-        "after", "before", "line", "lineRule",
-        "afterAutospacing", "beforeAutospacing",
-    ),
-    "ind": ("left", "start", "right", "end", "firstLine", "hanging"),
-    "jc": ("val",),
+# --------------------------------------------------------------------------
+# Tracked properties. Round 1 tracked six attributes, so a same-named style
+# that differed in bold, italic or colour changed the rendered text with
+# nothing baked and nothing reported (adversarial review 2026-09-20, B3).
+# The sets below cover the run and paragraph properties that change how
+# text looks. Every one of them is DETECTED; the ones with a safe explicit
+# form are baked, the rest are reported under not_baked with a reason.
+#
+# Toggles: presence = on, w:val="0"/"false"/"off" = off, absent = inherit.
+_TOGGLE_RPR: dict[str, str] = {  # toggle -> built-in value
+    "b": "0", "bCs": "0", "i": "0", "iCs": "0", "caps": "0",
+    "smallCaps": "0", "strike": "0", "dstrike": "0", "outline": "0",
+    "shadow": "0", "emboss": "0", "imprint": "0", "vanish": "0",
+    "webHidden": "0", "specVanish": "0", "oMath": "0", "rtl": "0",
 }
-_DD_RPR_ATTRS: dict[str, tuple[str, ...]] = {
-    "rFonts": ("ascii", "hAnsi", "eastAsia", "cs"),
-    "sz": ("val",),
-    "szCs": ("val",),
+# Attribute-carrying run properties: attr -> built-in ("" = no safe
+# built-in, so a source that defines nothing is reported, never guessed).
+_ATTR_RPR: dict[str, dict[str, str]] = {
+    "rFonts": {
+        "ascii": "", "hAnsi": "", "eastAsia": "", "cs": "",
+        "asciiTheme": "", "hAnsiTheme": "", "eastAsiaTheme": "",
+        "cstheme": "", "hint": "",
+    },
+    "sz": {"val": ""},
+    "szCs": {"val": ""},
+    "color": {"val": "auto", "themeColor": "", "themeShade": "",
+              "themeTint": ""},
+    "highlight": {"val": "none"},
+    "u": {"val": "none", "color": ""},
+    "vertAlign": {"val": "baseline"},
+    "position": {"val": "0"},
+    "spacing": {"val": "0"},
+    "kern": {"val": "0"},
+    "w": {"val": "100"},
+    "em": {"val": "none"},
+    "effect": {"val": "none"},
+    "shd": {"val": "clear", "color": "auto", "fill": "auto"},
+    "lang": {"val": "", "eastAsia": "", "bidi": ""},
+    # A visible box around text used to vanish in silence (round-2 review).
+    "bdr": {"val": "none", "sz": "", "space": "", "color": "auto",
+            "frame": "", "shadow": ""},
+    "fitText": {"val": "", "id": ""},
+    "eastAsianLayout": {
+        "id": "", "combine": "", "combineBrackets": "", "vert": "",
+        "vertCompress": "",
+    },
 }
+_TOGGLE_PPR: dict[str, str] = {
+    "keepNext": "0", "keepLines": "0", "pageBreakBefore": "0",
+    "contextualSpacing": "0", "suppressLineNumbers": "0",
+    "suppressAutoHyphens": "0", "mirrorIndents": "0", "topLinePunct": "0",
+    "widowControl": "1", "kinsoku": "1", "wordWrap": "1",
+    "overflowPunct": "1", "autoSpaceDE": "1", "autoSpaceDN": "1",
+    "adjustRightInd": "1", "snapToGrid": "1",
+}
+_ATTR_PPR: dict[str, dict[str, str]] = {
+    "jc": {"val": "left"},
+    "ind": {"left": "0", "start": "0", "right": "0", "end": "0",
+            "firstLine": "0", "hanging": "0"},
+    "spacing": {"after": "0", "before": "0", "line": "240",
+                "lineRule": "auto", "afterAutospacing": "0",
+                "beforeAutospacing": "0", "afterLines": "0",
+                "beforeLines": "0"},
+    "textAlignment": {"val": "auto"},
+    "shd": {"val": "clear", "color": "auto", "fill": "auto"},
+    "textDirection": {"val": "lrTb"},
+    # Detected but never baked: outlineLvl is structure (TOC membership),
+    # not appearance, so a difference is reported instead of written.
+    "outlineLvl": {"val": ""},
+    # Table conditional-formatting marker: meaningless outside a table and
+    # carried with the cell anyway, so it is reported, never written.
+    "cnfStyle": {"val": ""},
+}
+_NEVER_BAKE_PPR = {("outlineLvl", "val"), ("cnfStyle", "val")}
+# Multi-child properties compared and carried as whole elements (an
+# attribute-wise diff is meaningless for them).
+_COMPLEX_PPR = ("pBdr", "tabs", "framePr")
 
-# Word's built-in value when NEITHER file's docDefaults define an attribute
-# the other file does define. Only pPr attributes with well-defined
-# built-ins are bakeable from absence; run attributes (fonts, size) have
-# theme-dependent built-ins and are baked only when the source defines them.
-_DD_BUILTIN: dict[tuple[str, str], str] = {
-    ("spacing", "after"): "0",
-    ("spacing", "before"): "0",
-    ("spacing", "line"): "240",
-    ("spacing", "lineRule"): "auto",
-    ("ind", "left"): "0",
-    ("ind", "start"): "0",
-    ("ind", "right"): "0",
-    ("ind", "end"): "0",
-    ("ind", "firstLine"): "0",
-    ("ind", "hanging"): "0",
-    ("jc", "val"): "left",
-}
+_REASON_NO_BUILTIN = (
+    "the source defines no value anywhere in its chain, so its rendered "
+    "value comes from the theme or from Word's own default and cannot be "
+    "written explicitly"
+)
+_REASON_STRUCTURAL = (
+    "the carried heading keeps the TARGET style's outline level, so its "
+    "level in the table of contents and its position in the navigation "
+    "pane follow the target, not the source. Outline level is structure "
+    "rather than appearance: writing the source's level would put two "
+    "competing heading hierarchies in one outline. Set it deliberately "
+    "with set_paragraph_format(outline_level=...) if the source's level "
+    "is the one you want."
+)
+_REASON_NUMBERED = (
+    "the paragraph's indent comes from its numbering level, and a direct "
+    "indent would override the list geometry"
+)
+_REASON_COMPLEX = (
+    "the target defines this multi-part property and the source does not; "
+    "writing an empty one to cancel it is not safe"
+)
+_REASON_CONDITIONAL = (
+    "a table conditional-formatting marker has no meaning outside the "
+    "table it belongs to, and the carried cells keep their own"
+)
 
 _RPR_ORDER = [
     "rStyle", "rFonts", "b", "bCs", "i", "iCs", "caps", "smallCaps",
@@ -619,130 +851,850 @@ def _ordered_get_or_add(parent: etree._Element, local: str, order: list[str]):
     return el
 
 
-def _docdefaults_props(
-    pkg: DocxPackage, which: str
+def _toggle_value(el: etree._Element) -> str:
+    return "0" if el.get(qn("w:val")) in ("0", "false", "off") else "1"
+
+
+def _complex_signature(
+    el: etree._Element, themes: tuple | None = None
+) -> str:
+    """A whole-element property as a comparable, writable string.
+
+    Detached from its package first: inclusive c14n of an element still in
+    its tree emits every namespace its ANCESTORS declare, so the same
+    w:pBdr serialised out of two packages whose roots declare different
+    namespace sets compared unequal and baked a border nobody asked for.
+    Only the namespaces the element itself uses survive here.
+    """
+    clone = copy.deepcopy(el)
+    if themes is not None:
+        _freeze_theme_colors([clone], themes[0], themes[1])
+    clone = etree.fromstring(etree.tostring(clone))
+    etree.cleanup_namespaces(clone)
+    return etree.tostring(clone, method="c14n").decode()
+
+
+def _direct_props(
+    holder: etree._Element | None, which: str, themes: tuple | None = None,
 ) -> dict[tuple[str, str], str]:
-    """Tracked (element, attribute) -> value pairs from styles.xml
-    docDefaults. which: 'pPr' | 'rPr'."""
-    out: dict[tuple[str, str], str] = {}
-    if not pkg.has_part("word/styles.xml"):
-        return out
-    dd = pkg.root("word/styles.xml").find(qn("w:docDefaults"))
-    if dd is None:
-        return out
-    if which == "pPr":
-        holder = dd.find(f"{qn('w:pPrDefault')}/{qn('w:pPr')}")
-        table = _DD_PPR_ATTRS
-    else:
-        holder = dd.find(f"{qn('w:rPrDefault')}/{qn('w:rPr')}")
-        table = _DD_RPR_ATTRS
+    """Tracked (element, attribute) -> value pairs explicitly present on a
+    pPr or rPr. Toggles report under the pseudo-attribute "val"; complex
+    properties report their canonical serialization under "_xml".
+
+    `themes` is (this package's theme, the other package's theme). When
+    given, theme references inside a complex property are resolved against
+    this package's theme wherever the two disagree about the slot, so two
+    byte-identical w:pBdr elements that the two themes paint different
+    colours no longer compare equal (round-3 review, m10). Slots the two
+    themes agree on are left as live references, so an in-template merge
+    still follows the merged document's theme.
+    """
+    props: dict[tuple[str, str], str] = {}
     if holder is None:
-        return out
-    for elem_name, attrs in table.items():
+        return props
+    toggles = _TOGGLE_PPR if which == "pPr" else _TOGGLE_RPR
+    attrs_table = _ATTR_PPR if which == "pPr" else _ATTR_RPR
+    for name in toggles:
+        el = holder.find(qn(f"w:{name}"))
+        if el is not None:
+            props[(name, "val")] = _toggle_value(el)
+    for elem_name, attrs in attrs_table.items():
         el = holder.find(qn(f"w:{elem_name}"))
         if el is None:
             continue
         for a in attrs:
             v = el.get(qn(f"w:{a}"))
             if v is not None:
-                out[(elem_name, a)] = v
-    return out
+                props[(elem_name, a)] = v
+        for base, trio in _THEME_ASPECTS.get(elem_name, {}).items():
+            packed = _pack_theme_ref(el, base, trio)
+            if packed is not None:
+                props[(elem_name, _THEME_KEY + base)] = packed
+    if which == "pPr":
+        for name in _COMPLEX_PPR:
+            el = holder.find(qn(f"w:{name}"))
+            if el is not None:
+                props[(name, "_xml")] = _complex_signature(el, themes)
+    return props
 
 
-def _direct_keys(
-    holder: etree._Element | None, table: dict[str, tuple[str, ...]]
-) -> set[tuple[str, str]]:
-    """Tracked (element, attribute) keys explicitly present on a pPr/rPr."""
-    keys: set[tuple[str, str]] = set()
-    if holder is None:
-        return keys
-    for elem_name, attrs in table.items():
-        el = holder.find(qn(f"w:{elem_name}"))
-        if el is None:
-            continue
-        for a in attrs:
-            if el.get(qn(f"w:{a}")) is not None:
-                keys.add((elem_name, a))
+def _docdefaults_props(
+    pkg: DocxPackage, which: str, themes: tuple | None = None,
+) -> dict[tuple[str, str], str]:
+    """Tracked property values from styles.xml docDefaults."""
+    if not pkg.has_part("word/styles.xml"):
+        return {}
+    dd = pkg.root("word/styles.xml").find(qn("w:docDefaults"))
+    if dd is None:
+        return {}
+    if which == "pPr":
+        holder = dd.find(f"{qn('w:pPrDefault')}/{qn('w:pPr')}")
+    else:
+        holder = dd.find(f"{qn('w:rPrDefault')}/{qn('w:rPr')}")
+    return _direct_props(holder, which, themes)
+
+
+def _builtin(key: tuple[str, str], which: str) -> str:
+    """Word's value when no layer defines the property; "" when there is
+    no safe one."""
+    elem, attr = key
+    toggles = _TOGGLE_PPR if which == "pPr" else _TOGGLE_RPR
+    if elem in toggles:
+        return toggles[elem]
+    table = _ATTR_PPR if which == "pPr" else _ATTR_RPR
+    return table.get(elem, {}).get(attr, "")
+
+
+# ------------------------------------------------------------- theme colours
+#
+# Two packages can carry byte-identical <w:color w:val="4472C4"
+# w:themeColor="accent1"/> and still render different colours, because the
+# colour lives in word/theme/theme1.xml and the theme is never transplanted:
+# the carried text silently takes the TARGET's accent (adversarial review
+# round 2, M6). Two chapters from two Word templates is the ordinary case.
+#
+# So the two colour schemes are compared slot by slot, and wherever carried
+# content references a slot that resolves differently, the SOURCE's resolved
+# RGB is baked into w:val and the themeColor/themeTint/themeShade attributes
+# are dropped, so Word cannot re-resolve it against its own theme.
+
+_A = "http://schemas.openxmlformats.org/drawingml/2006/main"
+_THEME_SLOTS = (
+    "dk1", "lt1", "dk2", "lt2", "accent1", "accent2", "accent3",
+    "accent4", "accent5", "accent6", "hlink", "folHlink",
+)
+# ST_ThemeColor (w:themeColor) -> clrScheme slot. text1/text2/background1/
+# background2 go through settings.xml's w:clrSchemeMapping first.
+_THEME_NAME_TO_SLOT = {
+    "dark1": "dk1", "light1": "lt1", "dark2": "dk2", "light2": "lt2",
+    "accent1": "accent1", "accent2": "accent2", "accent3": "accent3",
+    "accent4": "accent4", "accent5": "accent5", "accent6": "accent6",
+    "hyperlink": "hlink", "followedHyperlink": "folHlink",
+}
+_MAPPED_NAMES = {
+    "text1": ("t1", "dk1"), "text2": ("t2", "dk2"),
+    "background1": ("bg1", "lt1"), "background2": ("bg2", "lt2"),
+}
+_SYS_COLOR_FALLBACK = {"windowText": "000000", "window": "FFFFFF"}
+
+# Colour-bearing aspects: element -> {base attribute: (theme, tint, shade)}.
+# Each one becomes its own tracked pseudo-property.
+_THEME_ASPECTS: dict[str, dict[str, tuple[str, str, str]]] = {
+    "color": {"val": ("themeColor", "themeTint", "themeShade")},
+    "u": {"color": ("themeColor", "themeTint", "themeShade")},
+    "bdr": {"color": ("themeColor", "themeTint", "themeShade")},
+    "shd": {
+        "fill": ("themeFill", "themeFillTint", "themeFillShade"),
+        "color": ("themeColor", "themeTint", "themeShade"),
+    },
+}
+_THEME_KEY = "_theme:"
+
+
+def _apply_tint_shade(hex_rgb: str, tint: str | None, shade: str | None) -> str:
+    """Word's themeTint/themeShade, applied to HSL LUMINANCE.
+
+    A per-channel RGB blend toward white is the obvious reading and it is
+    wrong: Word converts the theme colour to HSL, scales the luminance and
+    converts back, so the hue and the saturation survive the tint. The
+    difference is invisible on a fully saturated hue and large everywhere
+    else (adversarial review round 3, M7). Measured against Word's own
+    rendering: accent1 = C00000 with themeFillTint="99" renders as
+    (255, 64, 64), not the (217, 102, 102) an RGB blend produces.
+
+    With the hex byte read as f = value / 255:
+
+        themeTint   L' = L * f + (1 - f)     lighter as f falls
+        themeShade  L' = L * f               darker as f falls
+
+    ECMA-376 is self-contradictory here: the w:color subclause (17.3.2.6)
+    describes a per-channel blend while w:u, w:bdr and w:shd describe the
+    HSL conversion. [MS-OI29500] 2.1.72 names that as a defect and states
+    that Word uses the HSL luminance algorithm for w:color too, which is
+    what the measurements show.
+
+    When both attributes are present Word renders the TINT and ignores the
+    shade: [MS-OI29500] 2.1.72 and 2.1.144 both say "the standard does not
+    state which setting is applied when both the themeShade and the
+    themeTint attributes are present. Word applies the themeTint setting",
+    and 12 of 12 measured fixtures agree.
+
+    Rounding is round-half-away-from-zero on the way back to 8-bit RGB,
+    which makes f = 1.0 an exact identity; every measured value agrees
+    with Word's render to within the 2-unit tolerance the PDF rasteriser
+    itself carries on an untinted control.
+    """
+    try:
+        rgb = tuple(int(hex_rgb[i:i + 2], 16) / 255.0 for i in (0, 2, 4))
+    except (ValueError, IndexError):
+        return hex_rgb
+    attr = tint or shade
+    if not attr:
+        return hex_rgb.upper()
+    try:
+        f = int(attr, 16) / 255.0
+    except ValueError:
+        return hex_rgb
+    h, lum, sat = colorsys.rgb_to_hls(*rgb)
+    lum = lum * f + (1.0 - f) if tint else lum * f
+    out = colorsys.hls_to_rgb(h, max(0.0, min(1.0, lum)), sat)
+    return "".join(
+        f"{max(0, min(255, int(math.floor(c * 255.0 + 0.5)))):02X}"
+        for c in out
+    )
+
+
+class _ThemeColors:
+    """One package's theme colour scheme, with its settings.xml mapping."""
+
+    def __init__(self, pkg: DocxPackage):
+        self.slots: dict[str, str] = {}
+        self.mapping: dict[str, str] = {}
+        self.part: str | None = None
+        for name in pkg.part_names():
+            if re.fullmatch(r"word/theme/theme\d+\.xml", name):
+                self.part = name
+                break
+        if self.part:
+            scheme = pkg.root(self.part).find(
+                f"{{{_A}}}themeElements/{{{_A}}}clrScheme"
+            )
+            if scheme is not None:
+                for slot in _THEME_SLOTS:
+                    el = scheme.find(f"{{{_A}}}{slot}")
+                    if el is None:
+                        continue
+                    srgb = el.find(f"{{{_A}}}srgbClr")
+                    if srgb is not None and srgb.get("val"):
+                        self.slots[slot] = srgb.get("val").upper()
+                        continue
+                    sys_clr = el.find(f"{{{_A}}}sysClr")
+                    if sys_clr is not None:
+                        last = sys_clr.get("lastClr") or _SYS_COLOR_FALLBACK.get(
+                            sys_clr.get("val") or "", ""
+                        )
+                        if last:
+                            self.slots[slot] = last.upper()
+        if pkg.has_part("word/settings.xml"):
+            m = pkg.root("word/settings.xml").find(qn("w:clrSchemeMapping"))
+            if m is not None:
+                for key in ("t1", "t2", "bg1", "bg2"):
+                    v = m.get(qn(f"w:{key}"))
+                    if v:
+                        self.mapping[key] = v
+
+    @property
+    def defined(self) -> bool:
+        return bool(self.slots)
+
+    def slot_for(self, theme_color: str) -> str | None:
+        if theme_color in _MAPPED_NAMES:
+            key, default = _MAPPED_NAMES[theme_color]
+            mapped = self.mapping.get(key)
+            return _THEME_NAME_TO_SLOT.get(mapped, default) if mapped else default
+        return _THEME_NAME_TO_SLOT.get(theme_color)
+
+    def resolve(
+        self, theme_color: str, tint: str | None, shade: str | None
+    ) -> str | None:
+        slot = self.slot_for(theme_color)
+        if slot is None:
+            return None
+        base = self.slots.get(slot)
+        if not base:
+            return None
+        return _apply_tint_shade(base, tint, shade)
+
+    def differing_slots(self, other: "_ThemeColors") -> list[str]:
+        if not self.defined or not other.defined:
+            return []
+        return sorted(
+            slot for slot in _THEME_SLOTS
+            if self.slots.get(slot) != other.slots.get(slot)
+        )
+
+    def differing_mappings(self, other: "_ThemeColors") -> list[str]:
+        """The ST_ThemeColor names that the two packages send to DIFFERENT
+        slots. text1/text2/background1/background2 go through
+        settings.xml's w:clrSchemeMapping, which does not travel either, so
+        a dark-mode source and a light-mode target resolve text1 to
+        opposite ends of the same colour scheme. Reported separately
+        because the two colour schemes can be identical while the rendered
+        colour still changes (round-3 review, m11)."""
+        if not self.defined or not other.defined:
+            return []
+        return sorted(
+            name for name in _MAPPED_NAMES
+            if self.slot_for(name) != other.slot_for(name)
+        )
+
+
+# The two theme trios, by the attribute that names the slot. Every
+# colour-bearing WordprocessingML element uses one or both of them, so a
+# descent keyed on these finds the ones no aspect table lists: the CT_Border
+# children of w:pBdr, w:tblBorders, w:tcBorders and w:pgBorders, and
+# w:background (round-3 review, m10).
+_THEME_TRIOS = (
+    ("themeColor", "themeTint", "themeShade"),
+    ("themeFill", "themeFillTint", "themeFillShade"),
+)
+
+
+def _theme_base_attr(el: etree._Element, theme_attr: str) -> str:
+    """Which attribute the theme reference resolves INTO. CT_Color keeps
+    its colour in w:val; every other colour-bearing type keeps it in
+    w:color, and a fill always lands in w:fill."""
+    if theme_attr == "themeFill":
+        return "fill"
+    return "val" if el.tag == qn("w:color") else "color"
+
+
+def _pack_theme_ref(el: etree._Element, base: str, trio: tuple) -> str | None:
+    """The raw colour reference on one element, as a packed string, or None
+    when it names no theme colour (a plain hex needs no resolution)."""
+    theme = el.get(qn(f"w:{trio[0]}"))
+    if not theme or theme == "none":
+        return None
+    return "|".join(
+        el.get(qn(f"w:{a}")) or ""
+        for a in (base, trio[0], trio[1], trio[2])
+    )
+
+
+def _direct_skip(direct: dict) -> set:
+    """Keys a paragraph or run already carries directly. A colour aspect
+    counts as carried when EITHER its plain attribute or its theme
+    reference is present, so the two halves never fight each other."""
+    keys = set(direct)
+    for elem, aspects in _THEME_ASPECTS.items():
+        for base in aspects:
+            if (elem, base) in keys or (elem, _THEME_KEY + base) in keys:
+                keys.add((elem, base))
+                keys.add((elem, _THEME_KEY + base))
     return keys
 
 
+def _freeze_theme_colors(
+    elements, src_theme: _ThemeColors, tgt_theme: _ThemeColors
+) -> int:
+    """Resolve theme colour references in CARRIED xml against the source
+    theme and write the result as a plain value, dropping the theme
+    attributes so Word cannot re-resolve them against its own theme.
+
+    The theme part is never transplanted, so every reference in carried
+    content (direct formatting, and the definitions of cloned or imported
+    styles) would otherwise take the target's colours (round-2 review, M6).
+    Only references whose slot actually resolves differently are touched.
+
+    The descent is keyed on the theme ATTRIBUTES rather than on a list of
+    element names, so it reaches the colour carriers no aspect table names:
+    a themed bottom rule under a heading (w:pBdr/w:bottom), the borders of
+    a carried table (w:tblBorders, w:tcBorders), page borders, and
+    w:background. Those used to pass through untouched and silently
+    re-theme (round-3 review, m10).
+    """
+    if not src_theme.defined or not tgt_theme.defined:
+        return 0
+    frozen = 0
+    for root in elements:
+        for el in root.iter():
+            if not isinstance(el.tag, str):
+                continue
+            for trio in _THEME_TRIOS:
+                base = _theme_base_attr(el, trio[0])
+                packed = _pack_theme_ref(el, base, trio)
+                if packed is None:
+                    continue
+                src_hex = _resolve_theme_ref(packed, src_theme)
+                tgt_hex = _resolve_theme_ref(packed, tgt_theme)
+                if src_hex is None or src_hex == tgt_hex:
+                    continue
+                el.set(qn(f"w:{base}"), src_hex)
+                for gone in trio:
+                    el.attrib.pop(qn(f"w:{gone}"), None)
+                frozen += 1
+    return frozen
+
+
+def _resolve_theme_ref(packed: str | None, theme: _ThemeColors) -> str | None:
+    """A packed reference resolved against one package's theme."""
+    if not packed:
+        return None
+    val, name, tint, shade = (packed.split("|") + ["", "", "", ""])[:4]
+    hit = theme.resolve(name, tint or None, shade or None)
+    if hit:
+        return hit
+    return (val or "").upper() or None
+
+
+# ----------------------------------------------------------- numbering layer
+#
+# A list paragraph's indent comes from numbering.xml (abstractNum -> lvl ->
+# pPr -> ind), NOT from its style, and a direct w:ind overrides it. Round 1
+# resolved the style chain only, so it baked the style's indent onto list
+# paragraphs and pushed their bullets out into the left margin (adversarial
+# review 2026-09-20, B2). Numbering is transplanted definition-for-
+# definition, so the layer resolves identically on both sides and its
+# properties never differ; resolving it is what keeps them out of the bake.
+
+
+class _NumberingIndex:
+    """numId/ilvl -> the level's pPr and rPr, honouring w:lvlOverride."""
+
+    def __init__(self, pkg: DocxPackage):
+        self.abstract: dict[str, dict[str, etree._Element]] = {}
+        self.num_to_abstract: dict[str, str] = {}
+        self.overrides: dict[tuple[str, str], etree._Element] = {}
+        if not pkg.has_part("word/numbering.xml"):
+            return
+        root = pkg.root("word/numbering.xml")
+        for a in root.findall(qn("w:abstractNum")):
+            aid = a.get(qn("w:abstractNumId"))
+            if aid is None:
+                continue
+            self.abstract[aid] = {
+                lvl.get(qn("w:ilvl")): lvl for lvl in a.findall(qn("w:lvl"))
+            }
+        for n in root.findall(qn("w:num")):
+            nid = n.get(qn("w:numId"))
+            ref = n.find(qn("w:abstractNumId"))
+            if nid is None or ref is None:
+                continue
+            self.num_to_abstract[nid] = ref.get(qn("w:val"))
+            for ov in n.findall(qn("w:lvlOverride")):
+                lvl = ov.find(qn("w:lvl"))
+                if lvl is not None:
+                    self.overrides[(nid, ov.get(qn("w:ilvl")))] = lvl
+
+    def level(self, num_id: str | None, ilvl: str) -> etree._Element | None:
+        if not num_id or num_id == "0":
+            return None
+        hit = self.overrides.get((num_id, ilvl))
+        if hit is not None:
+            return hit
+        aid = self.num_to_abstract.get(num_id)
+        if aid is None:
+            return None
+        return self.abstract.get(aid, {}).get(ilvl)
+
+    def props(self, num_id: str | None, ilvl: str, which: str) -> dict:
+        lvl = self.level(num_id, ilvl)
+        if lvl is None:
+            return {}
+        return _direct_props(lvl.find(qn(f"w:{which}")), which)
+
+
+def _style_index(pkg: DocxPackage):
+    """styleId -> element, styleId -> basedOn, default paragraph styleId."""
+    els: dict[str, etree._Element] = {}
+    based: dict[str, str] = {}
+    default_para: str | None = None
+    if pkg.has_part("word/styles.xml"):
+        for s in pkg.root("word/styles.xml").findall(qn("w:style")):
+            sid = s.get(qn("w:styleId"))
+            if not sid:
+                continue
+            els[sid] = s
+            b = s.find(qn("w:basedOn"))
+            if b is not None and b.get(qn("w:val")):
+                based[sid] = b.get(qn("w:val"))
+            if (
+                s.get(qn("w:type")) == "paragraph"
+                and s.get(qn("w:default")) in ("1", "true", "on")
+            ):
+                default_para = sid
+    if default_para is None and "Normal" in els:
+        # No style is marked w:default: Word falls back to Normal, and so
+        # must the resolver, or a paragraph with no pStyle resolves against
+        # docDefaults alone.
+        default_para = "Normal"
+    return els, based, default_para
+
+
 class _DefaultsBaker:
-    """Bakes source-docDefaults-inherited properties onto carried copies
-    (formatting='source' only). See the section comment above."""
+    """Bakes inherited formatting onto carried copies (formatting='source'
+    only) wherever the source's and the post-transplant target's resolved
+    values differ. Layers, in Word's own precedence: docDefaults, the style
+    basedOn chain (as it will resolve AFTER by-name reconciliation), the
+    numbering level, then direct formatting, which is never overwritten.
+    See the section comment above."""
 
     def __init__(self, src: DocxPackage, pkg: DocxPackage):
-        self.src_ppr = _docdefaults_props(src, "pPr")
-        self.tgt_ppr = _docdefaults_props(pkg, "pPr")
-        self.src_rpr = _docdefaults_props(src, "rPr")
-        self.tgt_rpr = _docdefaults_props(pkg, "rPr")
-        self.diff_ppr = {
-            k
-            for k in set(self.src_ppr) | set(self.tgt_ppr)
-            if self.src_ppr.get(k) != self.tgt_ppr.get(k)
+        # Built first: the complex-property comparison needs both themes to
+        # tell a themed border apart from an identical one (review m10).
+        src_theme, tgt_theme = _ThemeColors(src), _ThemeColors(pkg)
+        self.src_themes = (src_theme, tgt_theme)
+        self.tgt_themes = (tgt_theme, src_theme)
+        self.src_dd = {
+            "pPr": _docdefaults_props(src, "pPr", self.src_themes),
+            "rPr": _docdefaults_props(src, "rPr", self.src_themes),
         }
-        self.diff_rpr = {
-            k
-            for k in set(self.src_rpr) | set(self.tgt_rpr)
-            if self.src_rpr.get(k) != self.tgt_rpr.get(k)
+        self.tgt_dd = {
+            "pPr": _docdefaults_props(pkg, "pPr", self.tgt_themes),
+            "rPr": _docdefaults_props(pkg, "rPr", self.tgt_themes),
         }
-        # Source style definitions for inheritance-chain checks.
-        self.style_el: dict[str, etree._Element] = {}
-        self.based_on: dict[str, str] = {}
-        self.default_para_style: str | None = None
-        if src.has_part("word/styles.xml"):
-            for s in src.root("word/styles.xml").findall(qn("w:style")):
-                sid = s.get(qn("w:styleId"))
-                if not sid:
-                    continue
-                self.style_el[sid] = s
-                base = s.find(qn("w:basedOn"))
-                if base is not None and base.get(qn("w:val")):
-                    self.based_on[sid] = base.get(qn("w:val"))
-                if (
-                    s.get(qn("w:type")) == "paragraph"
-                    and s.get(qn("w:default")) in ("1", "true", "on")
-                ):
-                    self.default_para_style = sid
-        self._chain_cache: dict[tuple[str, str], set[tuple[str, str]]] = {}
+        self.src_el, self.src_based, self.default_para_style = _style_index(src)
+        self.tgt_el, self.tgt_based, self.tgt_default_para = _style_index(pkg)
+        self.src_id2name, _ = _style_maps(src)
+        _tgt_id2name, self.tgt_name2id = _style_maps(pkg)
+        # Numbering travels definition-for-definition, so the SOURCE's
+        # levels describe both sides of the diff.
+        self.numbering = _NumberingIndex(src)
+        self.src_theme, self.tgt_theme = src_theme, tgt_theme
+        self.theme_slots_differ = self.src_theme.differing_slots(self.tgt_theme)
+        self.theme_colors_baked = 0
+        self._src_chain: dict[tuple[str, str], dict] = {}
+        # Two DIFFERENT mappings, so two memos: _tgt_own is "values along
+        # the TARGET's own basedOn chain", _tgt_chain is "values a SOURCE
+        # style id resolves to after transplant". Sharing one dict made the
+        # post-transplant cycle guard shadow the target's own chain
+        # whenever the two files use the same styleId, which is the normal
+        # case for Heading1.
+        self._tgt_own: dict[tuple[str, str], dict] = {}
+        self._tgt_chain: dict[tuple[str, str], dict] = {}
+        self._style_numpr: dict[str, tuple[str | None, str]] = {}
+        self._para_diff: dict[tuple, tuple[dict, set]] = {}
+        self._run_diff: dict[tuple, dict] = {}
         self.paragraphs_baked = 0
         self.runs_baked = 0
+        self.marks_baked = 0
+        # Reporting: what actually differed, which shared style names were
+        # responsible, and what could not be written explicitly.
+        self.differing: set[tuple[str, tuple[str, str]]] = set()
+        self.style_diffs: dict[str, set[tuple[str, tuple[str, str]]]] = {}
+        self.not_baked: dict[tuple[str, tuple[str, str]], str] = {}
 
-    @property
-    def active(self) -> bool:
-        return bool(self.diff_ppr or self.diff_rpr)
+    # ---- chain resolution
 
-    def _chain_keys(self, sid: str | None, which: str) -> set[tuple[str, str]]:
-        """Tracked keys DEFINED anywhere along a source style's basedOn
-        chain (attribute-level; a defined key stops docDefaults
-        inheritance for that attribute)."""
-        if sid is None:
-            return set()
-        memo = self._chain_cache.get((sid, which))
-        if memo is not None:
-            return memo
-        keys: set[tuple[str, str]] = set()
-        table = _DD_PPR_ATTRS if which == "pPr" else _DD_RPR_ATTRS
+    def _chain_props(
+        self,
+        sid: str | None,
+        which: str,
+        els: dict[str, etree._Element],
+        based: dict[str, str],
+        memo: dict,
+        themes: tuple | None = None,
+    ) -> dict[tuple[str, str], str]:
+        """Values DEFINED along a style's basedOn chain (ancestors first, so
+        the style's own values win). docDefaults are NOT included."""
+        if not sid:
+            return {}
+        hit = memo.get((sid, which))
+        if hit is not None:
+            return hit
+        chain: list[str] = []
         cur: str | None = sid
         seen: set[str] = set()
-        while cur is not None and cur not in seen:
+        while cur and cur not in seen and cur in els:
             seen.add(cur)
-            s = self.style_el.get(cur)
-            if s is None:
-                break
-            keys |= _direct_keys(s.find(qn(f"w:{which}")), table)
-            cur = self.based_on.get(cur)
-        self._chain_cache[(sid, which)] = keys
-        return keys
+            chain.append(cur)
+            cur = based.get(cur)
+        props: dict[tuple[str, str], str] = {}
+        for s in reversed(chain):
+            props.update(
+                _direct_props(els[s].find(qn(f"w:{which}")), which, themes)
+            )
+        memo[(sid, which)] = props
+        return props
 
-    def _bake_value(self, key: tuple[str, str], from_rpr: bool) -> str | None:
-        """The source-effective value to write, or None when it cannot be
-        determined safely (run built-ins are theme-dependent)."""
-        src = self.src_rpr if from_rpr else self.src_ppr
-        if key in src:
-            return src[key]
-        if from_rpr:
-            return None
-        return _DD_BUILTIN.get(key)
+    def _src_style_props(self, sid: str | None, which: str) -> dict:
+        return self._chain_props(
+            sid, which, self.src_el, self.src_based, self._src_chain,
+            self.src_themes,
+        )
+
+    def _tgt_style_props(self, sid: str | None, which: str) -> dict:
+        """Values a SOURCE style id will resolve to after transplant.
+
+        A name match hands the TARGET's own chain over (the documented
+        by-name contract). A source style whose name does NOT match is
+        cloned, so its own definition survives and its basedOn resolves the
+        same way, recursively. An id with no source definition at all falls
+        through to the target's style of that id, which is what the
+        reference will land on (adversarial review, m2: the id fallback
+        used to fire for name-unmatched styles too, and reported
+        differences that did not exist)."""
+        if not sid:
+            return {}
+        hit = self._tgt_chain.get((sid, which))
+        if hit is not None:
+            return hit
+        self._tgt_chain[(sid, which)] = {}  # cycle guard
+        name = self.src_id2name.get(sid)
+        if name is None:
+            tgt_id = sid if sid in self.tgt_el else None
+        else:
+            tgt_id = self.tgt_name2id.get(name)
+        if tgt_id is not None:
+            props = self._chain_props(
+                tgt_id, which, self.tgt_el, self.tgt_based, self._tgt_own,
+                self.tgt_themes,
+            )
+        else:
+            # A name-unmatched source style is CLONED, and the clone's own
+            # theme references are frozen against the source theme, so the
+            # source's resolution is what the carried content will see.
+            props = dict(self._tgt_style_props(self.src_based.get(sid), which))
+            el = self.src_el.get(sid)
+            if el is not None:
+                props.update(
+                    _direct_props(
+                        el.find(qn(f"w:{which}")), which, self.src_themes
+                    )
+                )
+        self._tgt_chain[(sid, which)] = props
+        return props
+
+    # ---- numbering
+
+    def _style_numbering(self, sid: str | None) -> tuple[str | None, str]:
+        """(numId, ilvl) a style chain supplies, nearest definition first."""
+        if not sid:
+            return None, "0"
+        hit = self._style_numpr.get(sid)
+        if hit is not None:
+            return hit
+        num_id: str | None = None
+        ilvl = "0"
+        cur: str | None = sid
+        seen: set[str] = set()
+        while cur and cur not in seen and cur in self.src_el:
+            seen.add(cur)
+            numpr = self.src_el[cur].find(f"{qn('w:pPr')}/{qn('w:numPr')}")
+            if numpr is not None:
+                nid = numpr.find(qn("w:numId"))
+                lvl = numpr.find(qn("w:ilvl"))
+                if num_id is None and nid is not None:
+                    num_id = nid.get(qn("w:val"))
+                if lvl is not None and lvl.get(qn("w:val")):
+                    ilvl = lvl.get(qn("w:val"))
+                if num_id is not None:
+                    break
+            cur = self.src_based.get(cur)
+        self._style_numpr[sid] = (num_id, ilvl)
+        return num_id, ilvl
+
+    def _paragraph_numbering(
+        self, ppr: etree._Element | None, pstyle: str | None
+    ) -> tuple[str | None, str]:
+        numpr = ppr.find(qn("w:numPr")) if ppr is not None else None
+        if numpr is not None:
+            nid = numpr.find(qn("w:numId"))
+            lvl = numpr.find(qn("w:ilvl"))
+            num_id = nid.get(qn("w:val")) if nid is not None else None
+            ilvl = lvl.get(qn("w:val")) if lvl is not None else "0"
+            if num_id is not None:
+                return num_id, ilvl or "0"
+        return self._style_numbering(pstyle or self.default_para_style)
+
+    # ---- diffs
+
+    def _paragraph_diff(
+        self, pstyle: str | None, num_id: str | None, ilvl: str
+    ) -> tuple[dict[tuple[str, str], str], set]:
+        """(properties to bake, keys the numbering level supplies) for a
+        paragraph carrying this style and numbering."""
+        memo_key = (pstyle, num_id, ilvl)
+        hit = self._para_diff.get(memo_key)
+        if hit is not None:
+            return hit
+        num_props = self.numbering.props(num_id, ilvl, "pPr")
+        src_eff = dict(self.src_dd["pPr"])
+        src_eff.update(
+            self._src_style_props(pstyle or self.default_para_style, "pPr")
+        )
+        tgt_eff = dict(self.tgt_dd["pPr"])
+        if pstyle:
+            tgt_eff.update(self._tgt_style_props(pstyle, "pPr"))
+        else:
+            tgt_eff.update(
+                self._chain_props(
+                    self.tgt_default_para, "pPr", self.tgt_el,
+                    self.tgt_based, self._tgt_own, self.tgt_themes,
+                )
+            )
+        # The numbering layer sits above both style chains and travels
+        # unchanged, so it resolves identically on both sides.
+        src_eff.update(num_props)
+        tgt_eff.update(num_props)
+        out = self._diff(
+            src_eff, tgt_eff, "pPr", pstyle or self.default_para_style
+        )
+        # Belt and braces for B2: never write an indent onto a paragraph
+        # whose list geometry supplies one, even if some other layer made
+        # the attribute differ.
+        if any(e == "ind" for (e, _a) in num_props):
+            for key in [k for k in out if k[0] == "ind"]:
+                out.pop(key)
+                self.not_baked.setdefault(("pPr", key), _REASON_NUMBERED)
+        self._para_diff[memo_key] = (out, set(num_props))
+        return self._para_diff[memo_key]
+
+    def _run_diff_for(
+        self, pstyle: str | None, rstyle: str | None
+    ) -> dict[tuple[str, str], str]:
+        memo_key = (pstyle, rstyle)
+        hit = self._run_diff.get(memo_key)
+        if hit is not None:
+            return hit
+        src_eff = dict(self.src_dd["rPr"])
+        src_eff.update(
+            self._src_style_props(pstyle or self.default_para_style, "rPr")
+        )
+        src_eff.update(self._src_style_props(rstyle, "rPr"))
+        tgt_eff = dict(self.tgt_dd["rPr"])
+        if pstyle:
+            tgt_eff.update(self._tgt_style_props(pstyle, "rPr"))
+        else:
+            tgt_eff.update(
+                self._chain_props(
+                    self.tgt_default_para, "rPr", self.tgt_el,
+                    self.tgt_based, self._tgt_own, self.tgt_themes,
+                )
+            )
+        tgt_eff.update(self._tgt_style_props(rstyle, "rPr"))
+        out = self._diff(
+            src_eff, tgt_eff, "rPr",
+            pstyle or self.default_para_style, rstyle,
+        )
+        self._run_diff[memo_key] = out
+        return out
+
+    def _diff(
+        self,
+        src_eff: dict,
+        tgt_eff: dict,
+        which: str,
+        *styles: str | None,
+    ) -> dict[tuple[str, str], str]:
+        """Keys whose resolved value changes, mapped to the value to write.
+        A key the source never defines is baked from Word's built-in where
+        there is a safe one; where there is not, it is recorded in
+        not_baked WITH a reason rather than dropped in silence."""
+        out: dict[tuple[str, str], str] = {}
+        # An aspect with a theme reference on either side is decided by the
+        # RESOLVED colour, so its plain attribute is not compared twice.
+        themed = {
+            (k[0], k[1][len(_THEME_KEY):])
+            for k in set(src_eff) | set(tgt_eff)
+            if k[1].startswith(_THEME_KEY)
+        }
+        for key in set(src_eff) | set(tgt_eff):
+            sv, tv = src_eff.get(key), tgt_eff.get(key)
+            if key in themed:
+                continue
+            if key[1].startswith(_THEME_KEY):
+                base = (key[0], key[1][len(_THEME_KEY):])
+                sv_hex = (
+                    _resolve_theme_ref(sv, self.src_theme) if sv
+                    else (src_eff.get(base) or "").upper() or None
+                )
+                tv_hex = (
+                    _resolve_theme_ref(tv, self.tgt_theme) if tv
+                    else (tgt_eff.get(base) or "").upper() or None
+                )
+                if sv_hex is None or sv_hex == tv_hex:
+                    continue
+                self.differing.add((which, key))
+                self._attribute(key, which, styles)
+                out[key] = sv_hex
+                self.theme_colors_baked += 1
+                continue
+            if sv == tv:
+                continue
+            self.differing.add((which, key))
+            self._attribute(key, which, styles)
+            if which == "pPr" and key in _NEVER_BAKE_PPR:
+                self.not_baked.setdefault(
+                    (which, key),
+                    _REASON_CONDITIONAL if key[0] == "cnfStyle"
+                    else _REASON_STRUCTURAL,
+                )
+                continue
+            if key[1] == "_xml":
+                if sv is None:
+                    self.not_baked.setdefault((which, key), _REASON_COMPLEX)
+                    continue
+                out[key] = sv
+                continue
+            value = sv if sv is not None else _builtin(key, which)
+            if not value:
+                self.not_baked.setdefault((which, key), _REASON_NO_BUILTIN)
+                continue
+            out[key] = value
+        return out
+
+    def _attribute(self, key, which: str, styles) -> None:
+        """Name the shared style responsible for a difference, but only when
+        that style's chain actually defines the property (otherwise it came
+        from docDefaults and naming a style would mislead)."""
+        for sid in styles:
+            name = self.src_id2name.get(sid) if sid else None
+            if not name or not self.tgt_name2id.get(name):
+                continue
+            if key in self._src_style_props(
+                sid, which
+            ) or key in self._tgt_style_props(sid, which):
+                self.style_diffs.setdefault(name, set()).add((which, key))
+
+    # ---- baking
+
+    def _write(
+        self, holder: etree._Element, key: tuple[str, str], value: str,
+        which: str, source_el: etree._Element | None = None,
+    ) -> None:
+        order = _PPR_BAKE_ORDER if which == "pPr" else _RPR_ORDER
+        toggles = _TOGGLE_PPR if which == "pPr" else _TOGGLE_RPR
+        elem, attr = key
+        if attr.startswith(_THEME_KEY):
+            base = attr[len(_THEME_KEY):]
+            el = _ordered_get_or_add(holder, elem, order)
+            el.set(qn(f"w:{base}"), value)
+            for gone in _THEME_ASPECTS.get(elem, {}).get(base, ()):
+                el.attrib.pop(qn(f"w:{gone}"), None)
+            return
+        if attr == "_xml":
+            existing = holder.find(qn(f"w:{elem}"))
+            if existing is not None:
+                holder.remove(existing)
+            new = etree.fromstring(value.encode())
+            ref = _ordered_get_or_add(holder, elem, order)
+            holder.replace(ref, new)
+            return
+        el = _ordered_get_or_add(holder, elem, order)
+        if elem in toggles:
+            if value == "0":
+                el.set(qn("w:val"), "0")
+            else:
+                el.attrib.pop(qn("w:val"), None)
+            return
+        el.set(qn(f"w:{attr}"), value)
+
+    def _bake_run_props(
+        self, holder_owner: etree._Element, rpr: etree._Element | None,
+        pstyle: str | None, insert_at: int,
+    ) -> bool:
+        """Bake run properties onto one rPr (a run's, or a paragraph
+        mark's). Returns True when anything was written."""
+        rstyle = None
+        if rpr is not None:
+            rs = rpr.find(qn("w:rStyle"))
+            if rs is not None:
+                rstyle = rs.get(qn("w:val"))
+        run_bake = self._run_diff_for(pstyle, rstyle)
+        if not run_bake:
+            return False
+        direct = _direct_skip(_direct_props(rpr, "rPr"))
+        changed = False
+        for key in sorted(run_bake):
+            if key in direct:
+                continue  # direct formatting already carries it
+            if rpr is None:
+                rpr = etree.Element(qn("w:rPr"))
+                holder_owner.insert(insert_at, rpr)
+            self._write(rpr, key, run_bake[key], "rPr")
+            changed = True
+        return changed
 
     def bake_paragraph(self, p: etree._Element) -> None:
         ppr = p.find(qn("w:pPr"))
@@ -751,76 +1703,119 @@ class _DefaultsBaker:
             ps = ppr.find(qn("w:pStyle"))
             if ps is not None:
                 pstyle = ps.get(qn("w:val"))
-        if pstyle is None:
-            pstyle = self.default_para_style
+        num_id, ilvl = self._paragraph_numbering(ppr, pstyle)
         # ---- paragraph properties
-        if self.diff_ppr:
-            skip = _direct_keys(ppr, _DD_PPR_ATTRS)
-            skip |= self._chain_keys(pstyle, "pPr")
+        to_bake, _num_keys = self._paragraph_diff(pstyle, num_id, ilvl)
+        if to_bake:
+            direct = _direct_skip(_direct_props(ppr, "pPr"))
             changed = False
-            for key in sorted(self.diff_ppr):
-                if key in skip:
-                    continue
-                value = self._bake_value(key, from_rpr=False)
-                if value is None:
-                    continue
+            for key in sorted(to_bake):
+                if key in direct:
+                    continue  # direct formatting already carries it
                 if ppr is None:
                     ppr = etree.Element(qn("w:pPr"))
                     p.insert(0, ppr)
-                el = _ordered_get_or_add(ppr, key[0], _PPR_BAKE_ORDER)
-                el.set(qn(f"w:{key[1]}"), value)
+                self._write(ppr, key, to_bake[key], "pPr")
                 changed = True
             if changed:
                 self.paragraphs_baked += 1
-        # ---- run properties
-        if not self.diff_rpr:
-            return
-        para_chain = self._chain_keys(pstyle, "rPr")
+        # ---- run properties, runs first
         for r in p.iter(qn("w:r")):
             if r.getparent() is ppr:
                 continue  # the paragraph-mark rPr holder is not a run
-            rpr = r.find(qn("w:rPr"))
-            rstyle = None
-            if rpr is not None:
-                rs = rpr.find(qn("w:rStyle"))
-                if rs is not None:
-                    rstyle = rs.get(qn("w:val"))
-            skip = _direct_keys(rpr, _DD_RPR_ATTRS)
-            skip |= para_chain
-            skip |= self._chain_keys(rstyle, "rPr")
-            changed = False
-            for key in sorted(self.diff_rpr):
-                if key in skip:
-                    continue
-                value = self._bake_value(key, from_rpr=True)
-                if value is None:
-                    continue
-                if rpr is None:
-                    rpr = etree.Element(qn("w:rPr"))
-                    r.insert(0, rpr)
-                el = _ordered_get_or_add(rpr, key[0], _RPR_ORDER)
-                el.set(qn(f"w:{key[1]}"), value)
-                changed = True
-            if changed:
+            if self._bake_run_props(r, r.find(qn("w:rPr")), pstyle, 0):
                 self.runs_baked += 1
+        # ---- the paragraph MARK's own run properties: an empty paragraph
+        # is rendered entirely by its mark, so a spacer took the target's
+        # line height (adversarial review, M4).
+        if ppr is None and self._run_diff_for(pstyle, None):
+            ppr = etree.Element(qn("w:pPr"))
+            p.insert(0, ppr)
+        if ppr is not None:
+            mark_rpr = ppr.find(qn("w:rPr"))
+            owner_index = len(ppr)
+            if mark_rpr is None:
+                mark_rpr = _ordered_get_or_add(ppr, "rPr", _PPR_BAKE_ORDER)
+            if self._bake_run_props(ppr, mark_rpr, pstyle, owner_index):
+                self.marks_baked += 1
+            if len(mark_rpr) == 0:
+                ppr.remove(mark_rpr)
+            if len(ppr) == 0:
+                p.remove(ppr)
+
+    # ---- reporting
+
+    @property
+    def reportable(self) -> bool:
+        return bool(self.differing)
+
+    @staticmethod
+    def _fmt(items) -> list[str]:
+        return sorted(
+            f"{which}.{e}" if a == "_xml"
+            else f"{which}.{e}.{a[len(_THEME_KEY):]}(theme)"
+            if a.startswith(_THEME_KEY)
+            else f"{which}.{e}.{a}"
+            for (which, (e, a)) in items
+        )
 
     def report(self) -> dict:
-        differing = sorted(
-            [f"pPr.{e}.{a}" for (e, a) in self.diff_ppr]
-            + [f"rPr.{e}.{a}" for (e, a) in self.diff_rpr]
-        )
-        return {
+        baked = self.paragraphs_baked + self.runs_baked + self.marks_baked
+        # The note is a function of what actually happened: round 1 claimed
+        # the source appearance was kept even when nothing was baked and
+        # differences were left unresolved (adversarial review, B3, m3).
+        if self.not_baked and baked:
+            note = (
+                "the source and target resolve these properties differently "
+                "(document defaults, a style of the same name, or both). "
+                "Most were given explicit values on the carried content so "
+                "it keeps the source appearance; the ones under not_baked "
+                "were NOT, and will render the target's way."
+            )
+        elif self.not_baked:
+            note = (
+                "the source and target resolve these properties differently, "
+                "and NONE of them could be written explicitly (see "
+                "not_baked); the carried content will render the target's "
+                "way for them."
+            )
+        else:
+            note = (
+                "the source and target resolve these properties differently "
+                "(document defaults, a style of the same name, or both); "
+                "carried paragraphs, runs and paragraph marks that inherited "
+                "them were given explicit values so they keep the source "
+                "appearance. The target's own content is untouched."
+            )
+        out = {
             "differ": True,
-            "differing_properties": differing,
+            "differing_properties": self._fmt(self.differing),
+            **(
+                {
+                    "theme_colors_baked": self.theme_colors_baked,
+                    "theme_slots_differing": self.theme_slots_differ,
+                }
+                if self.theme_colors_baked or self.theme_slots_differ
+                else {}
+            ),
             "paragraphs_baked": self.paragraphs_baked,
             "runs_baked": self.runs_baked,
-            "note": (
-                "the source and target files have different document "
-                "defaults; source paragraphs that inherited these "
-                "properties were given explicit values so they keep the "
-                "source appearance. The target's own content is untouched."
-            ),
+            "paragraph_marks_baked": self.marks_baked,
+            "note": note,
         }
+        if self.style_diffs:
+            out["styles_reconciled"] = [
+                {
+                    "style_name": name,
+                    "differing_properties": self._fmt(keys),
+                }
+                for name, keys in sorted(self.style_diffs.items())
+            ]
+        if self.not_baked:
+            out["not_baked"] = self._fmt(self.not_baked)
+            reasons = sorted({r for r in self.not_baked.values()})
+            out["not_baked_reasons"] = reasons
+        return out
 
 
 # pPr insertion order for baked elements (CT_PPr child sequence, abridged).
@@ -1268,13 +2263,12 @@ def _transplant(
     dd_baker = None
     if formatting == "source":
         dd_baker = _DefaultsBaker(src, pkg)
-        if dd_baker.active:
-            for el, _story in units:
-                if el.tag == qn("w:p"):
-                    dd_baker.bake_paragraph(el)
-                for p in el.iterdescendants(qn("w:p")):
-                    dd_baker.bake_paragraph(p)
-        else:
+        for el, _story in units:
+            if el.tag == qn("w:p"):
+                dd_baker.bake_paragraph(el)
+            for p in el.iterdescendants(qn("w:p")):
+                dd_baker.bake_paragraph(p)
+        if not dd_baker.reportable:
             dd_baker = None
 
     # B1+B2. Styles and numbering, to a fixpoint (cloned styles can reference
@@ -1307,6 +2301,21 @@ def _transplant(
     lists_stripped = _apply_num_remap(
         remap_targets, numbering.map, set(numbering.unresolved)
     )
+
+    # B2b. formatting="source": theme colour references in the carried xml
+    # (direct formatting and the definitions of cloned or imported styles)
+    # are resolved against the SOURCE theme and frozen, because the theme
+    # part never travels and the target's colours would take over (M6).
+    theme_refs_frozen = 0
+    theme_slots_differ: list[str] = []
+    theme_mappings_differ: list[str] = []
+    if formatting == "source":
+        src_theme, tgt_theme = _ThemeColors(src), _ThemeColors(pkg)
+        theme_slots_differ = src_theme.differing_slots(tgt_theme)
+        theme_mappings_differ = src_theme.differing_mappings(tgt_theme)
+        theme_refs_frozen = _freeze_theme_colors(
+            remap_targets, src_theme, tgt_theme
+        )
 
     # B3. Notes: ensure parts/styles exist, assign fresh ids, retag, append.
     notes_carried = {"footnote": 0, "endnote": 0}
@@ -1630,6 +2639,37 @@ def _transplant(
             "matched_by_name": len(styles.matched),
             "remapped_ids": dict(sorted(styles.remap.items())),
             "cloned": styles.cloned,
+            **(
+                {
+                    "reused_imports": [
+                        {k: v for k, v in m.items() if k != "reused_import"}
+                        for m in styles.matched if m.get("reused_import")
+                    ],
+                    "reused_imports_note": (
+                        "an earlier insert already imported this table "
+                        "style under a new name because the target defines "
+                        "a different style of the same name; the tables "
+                        "carried this time point at that existing copy "
+                        "rather than adding another one to the gallery"
+                    ),
+                }
+                if any(m.get("reused_import") for m in styles.matched)
+                else {}
+            ),
+            **(
+                {
+                    "imported_renamed": styles.imported_renamed,
+                    "imported_renamed_note": (
+                        "a table style of this name exists in the target with "
+                        "a different definition; its conditional formatting "
+                        "cannot be baked onto the carried cells, so the "
+                        "source's table style was imported under a new name "
+                        "and the carried tables point at it"
+                    ),
+                }
+                if styles.imported_renamed
+                else {}
+            ),
         },
         "bookmarks_carried": bookmarks_carried,
         "bookmarks_renamed": bm_renames,
@@ -1638,6 +2678,30 @@ def _transplant(
         "section_breaks_stripped": section_breaks_stripped,
         "formatting_mode": formatting,
     }
+    if theme_refs_frozen or (
+        dd_baker is not None and dd_baker.theme_colors_baked
+    ):
+        result["theme_colors"] = {
+            "differing_slots": theme_slots_differ,
+            **(
+                {"differing_mappings": theme_mappings_differ}
+                if theme_mappings_differ
+                else {}
+            ),
+            "references_frozen": theme_refs_frozen,
+            "resolved_from_styles": (
+                dd_baker.theme_colors_baked if dd_baker is not None else 0
+            ),
+            "note": (
+                "the two files resolve these theme colours differently "
+                "(a different colour scheme in the theme part, a different "
+                "clrSchemeMapping in settings.xml, or both) and neither the "
+                "theme part nor the mapping travels, so theme colour "
+                "references in the carried content were resolved against "
+                "the SOURCE theme and written as plain values; they will "
+                "not follow the target's theme from here on"
+            ),
+        }
     if formatting != "source":
         result["runs_stripped"] = runs_stripped
         result["paragraphs_stripped"] = paras_stripped

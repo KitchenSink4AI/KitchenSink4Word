@@ -193,6 +193,51 @@ def _find_toc_field(pkg: DocxPackage):
     return None
 
 
+def _is_toc_entry(p: etree._Element) -> bool:
+    ps = p.find(f"{qn('w:pPr')}/{qn('w:pStyle')}")
+    style = ps.get(qn("w:val")) if ps is not None else None
+    if not style:
+        return False
+    return (
+        style.startswith("TOC") and style != "TOCHeading"
+    ) or style.startswith("TableofFigures")
+
+
+def _field_entry_paragraphs(field_p: etree._Element) -> list[etree._Element]:
+    """The TOC-styled paragraphs belonging to THIS field: its own field
+    range (begin..end), plus any entry paragraphs immediately following it.
+
+    Scoping to the field paragraph's PARENT reported every TOC-styled
+    paragraph in the document whenever the field was not wrapped in its
+    own content control, so a main TOC and a List of Tables came back with
+    identical cached_entries (field test 2026-09-20, punchlist #868)."""
+    container = field_p.getparent()
+    if container is None:
+        return []
+    sibs = list(container)
+    try:
+        start = sibs.index(field_p)
+    except ValueError:
+        return []
+    entries: list[etree._Element] = []
+    depth = 0
+    for el in sibs[start:]:
+        if el.tag == qn("w:p"):
+            if _is_toc_entry(el):
+                entries.append(el)
+            for fc in el.iter(qn("w:fldChar")):
+                kind = fc.get(qn("w:fldCharType"))
+                if kind == "begin":
+                    depth += 1
+                elif kind == "end":
+                    depth = max(0, depth - 1)
+        if el is field_p:
+            continue  # the field paragraph is always part of the field
+        if depth == 0 and not (el.tag == qn("w:p") and _is_toc_entry(el)):
+            break  # the field has closed and this block is not an entry
+    return entries
+
+
 def read_toc(pkg: DocxPackage) -> dict:
     """Report every TOC-family field and its cached entries. A document can
     hold several (main TOC, List of Tables, List of Figures)."""
@@ -213,32 +258,37 @@ def read_toc(pkg: DocxPackage) -> dict:
             if local == "instrText":
                 instr_parts.append(el.text or "")
         instr = " ".join(instr_parts).strip()
-        entries = []
-        scope = field_p.getparent()
-        for p in scope.iter(qn("w:p")):
-            ps = p.find(f"{qn('w:pPr')}/{qn('w:pStyle')}")
-            style = ps.get(qn("w:val")) if ps is not None else None
-            if style and (
-                (style.startswith("TOC") and style != "TOCHeading")
-                or style.startswith("TableofFigures")
-            ):
-                entries.append({"style": style, "text": paragraph_text(p)})
+        entries = [
+            {
+                "style": p.find(f"{qn('w:pPr')}/{qn('w:pStyle')}").get(
+                    qn("w:val")
+                ),
+                "text": paragraph_text(p),
+            }
+            for p in _field_entry_paragraphs(field_p)
+        ]
         kind = "caption_list" if "\\c" in instr else "main"
         tocs.append(
             {
                 "index": i,
                 "kind": kind,
                 "instruction": instr,
-                "cached_entries": entries if i == 0 or kind != "main" else entries,
+                "cached_entries": entries,
             }
         )
     first = tocs[0]
-    return {
+    out = {
         "present": True,
         "instruction": first["instruction"],
         "cached_entries": first["cached_entries"],
         "tocs": tocs,
     }
+    if len(tocs) > 1:
+        out["note"] = (
+            f"{len(tocs)} TOC-family fields; the top-level instruction and "
+            "cached_entries describe tocs[0] only, the rest are in tocs"
+        )
+    return out
 
 
 def delete_toc(pkg: DocxPackage, *, which: int = 0) -> dict:

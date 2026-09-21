@@ -277,11 +277,63 @@ def word_status() -> dict:
 word_status._com_serialized = "com_word_status"  # bounded try-acquire form
 
 
+# wdStoryType -> the name reported in fields_by_story.
+_STORY_NAMES = {
+    1: "body",
+    2: "footnotes",
+    3: "endnotes",
+    4: "comments",
+    5: "text_frames",
+    6: "even_pages_header",
+    7: "primary_header",
+    8: "even_pages_footer",
+    9: "primary_footer",
+    10: "first_page_header",
+    11: "first_page_footer",
+}
+
+
+def _merge_counts(a: dict, b: dict) -> dict:
+    """Per-story field counts across two update passes over the SAME fields:
+    the larger count per story, never the sum."""
+    return {k: max(a.get(k, 0), b.get(k, 0)) for k in set(a) | set(b)}
+
+
+def _update_every_story(doc) -> dict:
+    """Update fields in EVERY story, walking NextStoryRange so each
+    section's header and footer is reached and not just the first story of
+    each type (punchlist #862). Returns per-story field counts."""
+    counts: dict[str, int] = {}
+    for story in doc.StoryRanges:
+        rng = story
+        hops = 0
+        while rng is not None and hops < 500:
+            hops += 1
+            try:
+                story_type = int(rng.StoryType)
+            except Exception:
+                story_type = 0
+            name = _STORY_NAMES.get(story_type, f"story_{story_type}")
+            try:
+                n = int(rng.Fields.Count)
+                if n:
+                    rng.Fields.Update()
+                    counts[name] = counts.get(name, 0) + n
+            except Exception:
+                pass  # a story that refuses enumeration blocks nothing
+            try:
+                rng = rng.NextStoryRange
+            except Exception:
+                rng = None
+    return counts
+
+
 @_bounded_op("com_refresh_fields", default=300.0)
 def refresh_fields(path: str) -> dict:
-    """Open invisibly, update every field (TOC page numbers, PAGEREF, SEQ),
-    update TOC-family tables explicitly, save, close. This is the immediate
-    alternative to the update-on-open flag."""
+    """Open invisibly, update every field in every story (body, headers,
+    footers, notes, text frames), update TOC-family tables explicitly,
+    save, close. This is the immediate alternative to the update-on-open
+    flag."""
     path = check_path(path, "refresh fields")
     p = Path(path)
     if not p.exists():
@@ -300,17 +352,27 @@ def refresh_fields(path: str) -> dict:
     with _word() as app:
         doc = _open(app, p, read_only=False)
         try:
-            for story in doc.StoryRanges:
-                story.Fields.Update()
+            by_story = _update_every_story(doc)
             for i in range(1, doc.TablesOfContents.Count + 1):
                 doc.TablesOfContents(i).Update()
             for i in range(1, doc.TablesOfFigures.Count + 1):
                 doc.TablesOfFigures(i).Update()
             toc_count = doc.TablesOfContents.Count
+            tof_count = doc.TablesOfFigures.Count
+            # Page-dependent fields (PAGE, NUMPAGES, PAGEREF) resolve off the
+            # layout, so repaginate and update the page furniture again.
+            with contextlib.suppress(Exception):
+                doc.Repaginate()
+            by_story = _merge_counts(by_story, _update_every_story(doc))
             doc.Save()
         finally:
             doc.Close(_WD_DO_NOT_SAVE)
-    return {"fields_refreshed": True, "tocs_updated": toc_count}
+    return {
+        "fields_refreshed": True,
+        "tocs_updated": toc_count,
+        "tables_of_figures_updated": tof_count,
+        "fields_by_story": by_story,
+    }
 
 
 @_bounded_op("com_export_pdf", default=300.0)

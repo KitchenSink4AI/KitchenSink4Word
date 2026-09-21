@@ -309,6 +309,132 @@ WORKFLOWS: dict[str, dict] = {
             "via manage_backups restore.",
         ],
     },
+    "merge-chapters": {
+        "summary": (
+            "Assemble several chapter files into one manuscript with the "
+            "source formatting intact, then rebuild the generated lists."
+        ),
+        "steps": [
+            {"tool": "copy_document",
+             "why": "the base of the merged file is a DTG-stamped copy of "
+                    "one chapter, never one of the sources in place"},
+            {"tool": "get_document_info",
+             "why": "run it on every source: paragraph counts to check the "
+                    "insertion against afterwards"},
+            {"tool": "delete_paragraphs",
+             "why": "per-chapter reference lists come out before the merge "
+                    "if the manuscript takes one combined list"},
+            {"tool": "insert_document",
+             "why": "one call per chapter, formatting='source', inserting "
+                    "back to front so the earlier insertion points keep "
+                    "their indices; read document_defaults in the result"},
+            {"tool": "get_paragraph_format",
+             "why": "sample inserted paragraphs from each chapter: spacing "
+                    "and indents against the ones they had in the source"},
+            {"tool": "format_text",
+             "why": "a range per inserted block fixes character formatting "
+                    "the merge reconciled away (no find string needed)"},
+            {"tool": "set_paragraph_format",
+             "why": "outline_level tags chapter and section headings when "
+                    "the sources style headings directly"},
+            {"tool": "insert_reference_list",
+             "why": "type='toc' (and 'table_list' / 'figure_list') after "
+                    "the content is in place"},
+            {"tool": "com_refresh_fields",
+             "why": "fills the TOC and every field with real page numbers; "
+                    "reports the field count per story"},
+            {"tool": "validate",
+             "why": "checks=['core', 'citation_parity', 'cross_references'] "
+                    "on the assembled file"},
+        ],
+        "notes": [
+            "insert_document's document_defaults block names the properties "
+            "whose resolved value differed between source and target and "
+            "the shared style names responsible; read it every time.",
+            "Insert back to front (last chapter first) so each insertion "
+            "point index stays valid for the next call.",
+            "com_refresh_fields recomputes PAGE and NUMPAGES at layout "
+            "time, so the cached values inside headers and footers stay as "
+            "they were; the printed output is still correct.",
+        ],
+    },
+    "build-lists-without-heading-styles": {
+        "summary": (
+            "Build a TOC or a caption list on a document that formats its "
+            "headings directly instead of using Heading styles."
+        ),
+        "steps": [
+            {"tool": "get_outline",
+             "why": "detect_formatted=true returns heading CANDIDATES with "
+                    "a confidence and an inferred level, not a declared "
+                    "outline; read it before acting on it"},
+            {"tool": "set_paragraph_format",
+             "why": "outline_level per candidate makes the structure "
+                    "durable: Word's navigation pane and the TOC field "
+                    "both honor it without restyling the text"},
+            {"tool": "define_style",
+             "why": "a caption list keys on a paragraph style, so define "
+                    "one for the captions the list should collect"},
+            {"tool": "apply_style",
+             "why": "apply that style to the caption paragraphs"},
+            {"tool": "insert_caption",
+             "why": "SEQ-numbered captions are what a caption list "
+                    "collects; plain bold text is not"},
+            {"tool": "insert_reference_list",
+             "why": "type='toc' reads outline levels; 'table_list' / "
+                    "'figure_list' read the SEQ captions"},
+            {"tool": "com_refresh_fields",
+             "why": "the lists stay empty until a field update runs"},
+            {"tool": "list_elements",
+             "why": "type='toc' shows each field's own cached entries, so "
+                    "check what each list actually collected"},
+        ],
+        "notes": [
+            "The heuristic infers levels from formatting: centered bold "
+            "scores level 1 with high confidence, bold level 2, italic "
+            "level 3, centered alone level 1 with low confidence. Numbered "
+            "captions are excluded.",
+            "outline_level changes structure only; the text keeps the "
+            "formatting the author gave it.",
+        ],
+    },
+    "merge-reference-lists": {
+        "summary": (
+            "Combine several chapters' reference lists into one list "
+            "without losing run formatting or duplicating entries."
+        ),
+        "steps": [
+            {"tool": "get_text",
+             "why": "per chapter, the reference block as plain text for "
+                    "comparison and dedupe"},
+            {"tool": "parse_references",
+             "why": "the parsed entries per chapter, for spotting the same "
+                    "work cited in two chapters"},
+            {"tool": "insert_document",
+             "why": "carry a chapter's reference block into the combined "
+                    "list with its italics and hanging indents intact; "
+                    "harvesting the text and retyping it loses both"},
+            {"tool": "apply_edits",
+             "why": "one batch of delete ops removes the duplicates, and "
+                    "move ops re-alphabetise entries verbatim"},
+            {"tool": "set_paragraph_format",
+             "why": "one hanging-indent pass over the combined list; "
+                    "first_line_indent_pt clears the opposite attribute"},
+            {"tool": "validate",
+             "why": "checks=['citation_parity'] on the merged manuscript: "
+                    "missing_references is the actionable list, "
+                    "missing_references_unparsed holds the authors the "
+                    "heuristic could not resolve"},
+        ],
+        "notes": [
+            "Entries carry run-level formatting (italic journal titles), "
+            "so move and insert them as elements; never rebuild them from "
+            "harvested text.",
+            "citation_parity keys on an author phrase, so organizational "
+            "authors resolve, but check missing_references_unparsed before "
+            "treating the list as clean.",
+        ],
+    },
 }
 
 

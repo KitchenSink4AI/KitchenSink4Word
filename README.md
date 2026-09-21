@@ -1,7 +1,3 @@
-<!-- mcp-name: io.github.nometalalchemist/kitchensink4word -->
-<!-- The line above verifies the name server.json declares today. The line below
-     is the org namespace the next version bump moves to; both may sit here, because
-     the registry looks for the one string that matches server.json. -->
 <!-- mcp-name: io.github.KitchenSink4AI/kitchensink4word -->
 
 # 🚰 KitchenSink4Word Community Edition
@@ -79,7 +75,7 @@ The tools run on your computer, and KitchenSink4AI receives no documents and no 
 Not affiliated with, endorsed by, or sponsored by Microsoft Corporation.
 Microsoft and Word are trademarks of the Microsoft group of companies.
 
-## What the 221 operations cover
+## What the 222 operations cover
 
 The everyday core covers text and formatting, tables (including merge-aware
 column insert/delete and one-call bulk cell edits), footnotes and endnotes
@@ -201,14 +197,14 @@ schema).
 
 ## Two numbers that matter
 
-- **221 document operations, 110 tools.** The operation count went up and the
+- **222 document operations, 110 tools.** The operation count went up and the
   tool count came down on purpose. v1 spread similar jobs across many
   competing names; v2 gives each concept exactly one name built from a small
   verb table (`insert_`, `set_`, `manage_`, `list_elements`, `validate`,
   `delete_element`), so an agent picks the right tool the first time and
   carries less schema to do it. Fewer tools, more reach. Measured with one
   yardstick on both trees, v1.6 performed 200 operations across its 189
-  tools and v2.0 performs 221 across 110: every v1.6 capability survived the
+  tools and v2.0 performs 222 across 110: every v1.6 capability survived the
   consolidation (the migration map covers all 189, test-guarded) and v2 adds
   the anchored batch editor, the anchored document view, deletion parity,
   and wider dispatch on the multiplexers. Both figures come from
@@ -303,7 +299,7 @@ runs against untrusted or semi-trusted agent traffic.
 
 ## Testing
 
-1,846 tests (1,776 run everywhere; 70 live-marked tests drive a real Word
+2,068 tests (1,974 run everywhere; 94 live-marked tests drive a real Word
 instance on Windows): the suite was developed against a private corpus of
 real-world documents (book-length chapters, a document with 171 footnotes, a
 manuscript with 126 tracked changes and reviewer comments), and CI

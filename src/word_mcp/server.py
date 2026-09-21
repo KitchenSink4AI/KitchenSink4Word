@@ -622,17 +622,18 @@ def insert_document(
     collisions renamed), tracked changes, equations. Styles reconcile BY
     NAME (target wins on a match; unmatched styles are cloned in). The
     source's section setup is never carried; mid-content section breaks
-    and comment references are stripped and reported.
-    OLE/ActiveX/subdocuments/altChunks refuse the whole insertion (nothing
-    half-applied). formatting mirrors Word's paste modes: 'source' keeps
-    direct formatting; 'merge' keeps emphasis but strips
+    and comment refs are stripped and reported.
+    OLE/ActiveX/subdocuments/altChunks refuse the whole insertion.
+    formatting mirrors Word's paste modes: 'source' keeps direct
+    formatting; 'merge' keeps emphasis but strips
     font/size/color/spacing/indent overrides; 'destination' strips all but
-    structural properties. With 'source', properties inherited from the
-    source's document defaults become explicit when the files' defaults
-    differ (reported under document_defaults), so carried text keeps its
-    source spacing. The source file is never modified. Auto-backup:
-    prev/anchor slots in .ks4w-backups (backup=False skips rotation only);
-    atomic validated save. Refuses documents open in Word.
+    structural properties. With 'source', what the two files resolve
+    differently is made explicit on the carried content: document defaults
+    and same-name styles (document_defaults), and theme colours, written
+    as fixed values that no longer follow the target's theme
+    (theme_colors). The source file is never modified. Auto-backup
+    (backup=False skips rotation only); atomic validated save. Refuses
+    documents open in Word.
     """
 
     def _do(pkg: DocxPackage) -> dict:
@@ -963,11 +964,11 @@ def get_outline(
     """List every heading with its paragraph index and level. Detects
     Heading styles AND w:outlineLvl overrides (direct or style-inherited);
     detected_via names which. detect_formatted=True adds a heuristic scan
-    for direct-formatted headings (short bold/centered paragraphs). When
-    nothing is detected, returns a note plus flat structure counts, not an
-    empty list. The indices feed the location object's paragraph and
-    outline selectors. Open documents are read live. Read-only. TOC
-    generation and heading surgery: academic pack.
+    for direct-formatted headings (short bold, italic or centered;
+    numbered captions excluded): CANDIDATES with an INFERRED level and a
+    confidence. Detecting nothing returns a note plus flat structure
+    counts. The indices feed the location object's paragraph and outline
+    selectors. Read-only. TOC building: academic pack.
     """
     from .com import live_ops as _lo
 
@@ -1310,8 +1311,11 @@ _VALIDATE_CHECKS: dict[str, tuple] = {
                          lambda f: not f["broken"]),
     "notes": (lambda pkg, o: _nt.validate_notes(pkg), _notes_ok),
     "forms": (_check_forms, lambda f: bool(f["complete"])),
+    # An unresolved author means the citation was never checked, so it
+    # cannot pass the gate (round-4 MAJOR-1).
     "citation_parity": (lambda pkg, o: _cc.check_citation_parity(pkg),
-                        lambda f: not f["missing_references"]),
+                        lambda f: not f["missing_references"]
+                        and not f["missing_references_unparsed"]),
     "defined_terms": (_check_defined_terms, _dt_passed),
     "brand": (_check_brand, lambda f: bool(f["compliant"])),
     "template": (_check_template, lambda f: bool(f["compliant"])),
@@ -2163,28 +2167,26 @@ def apply_edits(
     live: str = "auto",
 ) -> dict:
     """Apply a batch of anchor-addressed edits in one call: one lock,
-    backup, and validated save for the batch. Anchors come from
-    get_document_view. Ops (each edit has "op"): replace {anchor, find,
-    text, occurrence?} (omitted = every match); set_text {anchor, text}
-    (whole paragraph); insert {location, markdown} (headings, plain
-    paragraphs, lists, and pipe tables become real Word structures;
-    location is the standard object); delete {anchor or anchors};
-    set_style {anchor, style}; format {anchor, formatting,
-    find?, occurrence?}; set_paragraph_format {anchor, format}; set_cell
-    {anchor: "t:hex:rNcN", text}. The whole batch validates BEFORE
+    backup, and validated save. Anchors come from get_document_view.
+    Ops (each edit has "op"): replace {anchor, find, text, occurrence?}
+    (omitted = every match); set_text {anchor, text};
+    insert {location, markdown} (headings, paragraphs, lists and pipe
+    tables become real structures); delete {anchor or anchors};
+    move {anchor or anchors, location, allow_cross_section?} (verbatim
+    relocation, file mode only; refuses a paragraph holding a section
+    break, and a landing in another section unless allowed); set_style
+    {anchor, style}; format {anchor, formatting, find?, occurrence?} (no
+    find = whole paragraph, mark included); set_paragraph_format {anchor,
+    format};
+    set_cell {anchor: "t:hex:rNcN", text}. The whole batch validates BEFORE
     anything mutates, against BATCH-START text (never reference text an
     earlier op creates); one stale anchor refuses it all (STALE_ANCHOR
-    lists failed ops: re-view, resend). The changed map carries per-op
-    results, with fresh anchors for inserted paragraphs, so follow-up
-    batches chain without re-viewing. Ops run in order; keep deletes
-    last. Auto-backup in file mode (backup=False skips rotation); atomic
-    validated save. A document open in Word is edited live as ONE undo
-    step: serialized, validated before any write, rolled back on
-    mid-batch failure. Markdown lists/tables are file-mode only there;
-    stale targets refuse: com_save_document (com-live pack) first,
-    re-view, resend.
-    Use this when a change needs two or more edits; for one, use
-    the standalone tool.
+    lists the failed ops). changed carries per-op results plus fresh
+    anchors for inserted paragraphs, so batches chain without re-viewing.
+    Ops run in order; keep deletes last. Edits are applied directly, so
+    under track changes they warn rather than record a revision. Auto-backup in file mode; atomic validated save. A document
+    open in Word is edited live as ONE undo step, rolled back on mid-batch
+    failure; markdown lists/tables and move are file-mode only there.
     """
     if atomic is not True:
         raise WordMcpError(
@@ -2228,10 +2230,10 @@ def format_text(
     bold, italic, underline, strike, font, size_pt, color, highlight,
     small_caps, char_spacing_pt, language, east_asian_language, and more.
     case: upper | lower | title | sentence. Target: range={start,end},
-    find, or both; one of formatting or case per call. Auto-backup in
-    file mode (backup=False skips rotation); atomic validated save.
-    Formatting goes live on open documents (serialized); case is
-    file-mode only. For batches, use apply_edits.
+    find, or both; one of formatting or case per call. A range without
+    find formats whole paragraphs, mark included, several at once in file
+    mode. Auto-backup; atomic validated save. Formatting goes live on open
+    documents; case is file-mode only.
     """
     from .com import live_ops as _lo
 
@@ -2274,13 +2276,25 @@ def format_text(
         s, e = resolver()
         if s != e:
             raise WordMcpError(
-                "formatting mode takes a SINGLE-paragraph range (start == "
-                "end); make one call per paragraph"
+                "a multi-paragraph range formats whole paragraphs, so it "
+                "cannot be combined with find; drop find, or make one call "
+                "per paragraph"
+                if find is not None
+                else "multi-paragraph formatting is file-mode only; close "
+                "the document in Word, or make one call per paragraph"
             )
         return s
 
     def _file_call() -> dict:
+        import builtins
+
         def _do(pkg: DocxPackage) -> dict:
+            if range is not None and find is None:
+                # whole paragraphs by index, paragraph mark included (#864)
+                s, e = _expand_range(pkg, range)
+                return _tx.format_paragraphs(
+                    pkg, list(builtins.range(s, e + 1)), formatting
+                )
             idx = _single_index(lambda: _expand_range(pkg, range))
             return _tx.format_text(
                 pkg, paragraph_index=idx, find=find, occurrence=occ,
@@ -2298,8 +2312,8 @@ def format_text(
             )
             if rr.start_index != rr.end_index:
                 raise WordMcpError(
-                    "formatting mode takes a SINGLE-paragraph range (start "
-                    "== end); make one call per paragraph"
+                    "multi-paragraph formatting is file-mode only; close "
+                    "the document in Word, or make one call per paragraph"
                 )
             idx = rr.start_index
         return _lo.format_text(
@@ -2421,19 +2435,20 @@ def define_style(
     style_id: str,
     name: str,
     style_type: str = "paragraph",
-    based_on: str | None = "Normal",
+    based_on: str | None = None,
     next_style: str | None = None,
     character_formatting: dict | None = None,
     paragraph_formatting: dict | None = None,
     backup: bool = True,
 ) -> dict:
-    """Create or replace a custom style (paragraph or character) with full
-    formatting control; character_formatting takes the format_text keys,
-    paragraph_formatting the set_paragraph_format keys. get_styles returns
-    definitions in this exact input shape, so cloning is one read plus one
-    define. Auto-backup: prev/anchor slots in .ks4w-backups (backup=False
-    skips rotation only); atomic validated save. Refuses documents open in
-    Word.
+    """Create a custom style (paragraph or character), or update one in
+    place: addressed properties are replaced, the rest of the style
+    (w:default, rsid, other formatting) is kept. based_on omitted means
+    "Normal" on create and "leave the parent alone" on update; "" clears
+    it. bold: false writes an explicit off. character_formatting takes the
+    format_text keys, paragraph_formatting the set_paragraph_format keys.
+    get_styles returns this input shape, so cloning is one read plus one
+    define. Auto-backup; atomic validated save.
     """
     return _edit(
         file_path,
@@ -4997,14 +5012,13 @@ def com_word_status() -> dict:
 
 @_tool("com-live")
 def com_refresh_fields(file_path: str) -> dict:
-    """Update every field in the document (TOC page numbers, PAGEREF,
-    NUMPAGES, SEQ, cross-references) via an invisible Word instance, giving
-    correct page numbers and computed values immediately. Use after
-    inserting a TOC, index, or caption list for real page numbers, or after
-    any edit that shifts pages. The source file is modified in place and
-    saved by the invisible instance; open-in-Word copies are untouched
-    (Option C: COM saves only what it is asked to). Requires Word
-    installed.
+    """Update every field in every story (body, each section's headers and
+    footers, notes: TOC page numbers, PAGEREF, SEQ, cross-references) via
+    an invisible Word instance, reporting the field count per story. Use after inserting a TOC or caption list, or after
+    any edit that shifts pages. PAGE and NUMPAGES in headers and footers
+    are recomputed by Word at layout time, so their cached values in the
+    file stay as they were. The file is modified in place and saved by the
+    invisible instance. Requires Word installed.
     """
     from .com import bridge
 

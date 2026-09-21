@@ -48,3 +48,72 @@ jobs:
       # and this is the one step in the repository that can write to PyPI.
       # v1.14.2, the release/v1 head as of 2026-07-28.
       - uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33
+
+  # ---------------------------------------------------------------- registry
+  # The MCP Registry entry, published after PyPI and never in front of it.
+  #
+  # NON-BLOCKING BY CONSTRUCTION. `continue-on-error: true` is on the job, so
+  # a registry outage, an expired OIDC audience or a slow PyPI page cannot
+  # turn a successful PyPI release red. The package is the release; the
+  # registry listing is how people find it.
+  #
+  # ORDER MATTERS. The registry verifies ownership of a PyPI package by
+  # looking for the `mcp-name:` marker on the published project page, so the
+  # new version has to be live on PyPI before `publish` runs. The wait step
+  # polls for it and the publish step retries, because "live on the JSON API"
+  # and "rendered on the project page" are not the same instant.
+  #
+  # Steps follow the registry's own GitHub Actions example (OIDC variant) in
+  # docs/modelcontextprotocol-io/github-actions.mdx, with the tool pinned to a
+  # release rather than `latest`. If a run ever fails with "invalid audience",
+  # that is the pin being too old for the deployed registry: bump PUBLISHER_VERSION.
+  registry:
+    needs: publish
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    permissions:
+      id-token: write  # required for OIDC authentication
+      contents: read
+    env:
+      PUBLISHER_VERSION: v1.8.1
+      PYPI_PACKAGE: kitchensink4word
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Wait for the new version to be live on PyPI
+        run: |
+          set -euo pipefail
+          version=$(python -c "import json;print(json.load(open('server.json'))['version'])")
+          echo "waiting for $PYPI_PACKAGE $version"
+          for attempt in $(seq 1 30); do
+            if curl -sfL -o /dev/null                  "https://pypi.org/pypi/$PYPI_PACKAGE/$version/json"; then
+              echo "live after $attempt attempt(s)"
+              exit 0
+            fi
+            echo "attempt $attempt: not on PyPI yet"
+            sleep 20
+          done
+          echo "gave up waiting for PyPI"
+          exit 1
+
+      - name: Install mcp-publisher
+        run: |
+          set -euo pipefail
+          curl -L "https://github.com/modelcontextprotocol/registry/releases/download/${PUBLISHER_VERSION}/mcp-publisher_$(uname -s | tr '[:upper:]' '[:lower:]')_$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/').tar.gz" | tar xz mcp-publisher
+
+      - name: Authenticate to MCP Registry
+        run: ./mcp-publisher login github-oidc
+
+      - name: Publish server to MCP Registry
+        run: |
+          set -uo pipefail
+          for attempt in 1 2 3 4 5; do
+            if ./mcp-publisher publish; then
+              echo "published on attempt $attempt"
+              exit 0
+            fi
+            echo "attempt $attempt failed; the PyPI page may not carry the"
+            echo "new mcp-name marker yet. Waiting before the next try."
+            sleep 60
+          done
+          exit 1
