@@ -346,8 +346,9 @@ def insert_paragraphs(
     track: bool = False,
     author: str = "Claude",
 ) -> dict:
-    """Insert paragraphs. Each item: {text, style?, formatting?}. With track,
-    content and paragraph marks are recorded as insertions by `author`.
+    """Insert paragraphs. Each item: {text, style?, formatting?,
+    paragraph_format?}. With track, content and paragraph marks are
+    recorded as insertions by `author`.
 
     inherit_format=True clones the ANCHOR paragraph's direct formatting (its
     pPr minus numPr/sectPr, plus its terminal run's rPr) onto every inserted
@@ -356,7 +357,16 @@ def insert_paragraphs(
     by after_index/after_anchor; with before_index or at_end use
     copy_format_from=<body paragraph index> instead (same clone, explicit
     source; mutually exclusive with inherit_format). Explicit per-item
-    style/formatting values still win over the clone."""
+    style/formatting values still win over the clone.
+
+    paragraph_format is the per-item pPr overlay, taking the same keys as
+    set_paragraph_format (alignment, spacing, indents, keep_with_next,
+    outline_level and the rest), applied AFTER the clone so it wins. It
+    exists because a clone is all-or-nothing and one paragraph in a batch
+    usually differs from its neighbors in one respect: the 2026-09-21 field
+    test needed a centered heading and left-aligned body inserted together,
+    which took a whole lxml pass because `formatting` reaches runs only and
+    jc lives on the paragraph."""
     specified = sum(
         x is not None for x in (after_index, before_index, after_anchor)
     ) + bool(at_end)
@@ -390,6 +400,16 @@ def insert_paragraphs(
                 "paragraph; with before_index or at_end use "
                 "copy_format_from=<body paragraph index> instead"
             )
+    for item in paragraphs:
+        # Validate every item BEFORE any element is built: a batch that
+        # refuses halfway would leave the caller guessing which half landed.
+        if item.get("paragraph_format") is not None:
+            if not isinstance(item["paragraph_format"], dict):
+                raise WordMcpError(
+                    "paragraph_format takes an object of paragraph-format "
+                    "keys, the same ones set_paragraph_format takes"
+                )
+            validate_paragraph_format(item["paragraph_format"])
     new_els = [
         _make_paragraph(
             item["text"],
@@ -424,6 +444,14 @@ def insert_paragraphs(
                     if old_rpr is not None:
                         run.remove(old_rpr)
                     run.insert(0, new_rpr)
+    # After the clone, so an explicit per-item key wins over an inherited
+    # one, exactly as style/formatting already do.
+    applied_formats = 0
+    for item, el in zip(paragraphs, new_els):
+        fmt = item.get("paragraph_format")
+        if fmt:
+            apply_paragraph_format(el, fmt)
+            applied_formats += 1
     body = pkg.body()
     if at_end:
         # Before the trailing sectPr if present.
@@ -462,6 +490,8 @@ def insert_paragraphs(
     result = {"inserted": len(new_els)}
     if fmt_source is not None:
         result["format_cloned_from"] = fmt_source_index
+    if applied_formats:
+        result["paragraph_formats_applied"] = applied_formats
     if track:
         result["tracked_as"] = author
     return result
@@ -1047,6 +1077,152 @@ def validate_paragraph_numeric(formatting: dict) -> None:
             )
 
 
+def validate_paragraph_format(formatting: dict) -> None:
+    """Reject an unknown or out-of-range paragraph-formatting key.
+
+    Split out of set_paragraph_format so insert_paragraphs can take the
+    SAME vocabulary per item and refuse it the same way; two copies of a
+    key list is how a tool ends up accepting a key that does nothing."""
+    _check_keys(formatting, _PARA_FMT_KEYS, "paragraph-formatting")
+    validate_paragraph_numeric(formatting)
+    if "outline_level" in formatting:
+        lvl = formatting["outline_level"]
+        if lvl is not None and (
+            isinstance(lvl, bool) or not isinstance(lvl, int)
+            or not 0 <= lvl <= 8
+        ):
+            raise WordMcpError(
+                "outline_level must be an integer 0-8 (0 = top level, as in "
+                "Heading 1) or null to remove the direct outlineLvl override"
+            )
+
+
+def apply_paragraph_format(p: etree._Element, formatting: dict) -> None:
+    """Write one paragraph's direct pPr from the formatting dict.
+
+    Element-level, so it serves both the batch tool (by index) and
+    insert_paragraphs (on an element that is not in the body yet).
+    Callers validate first; see validate_paragraph_format."""
+    ppr = p.find(qn("w:pPr"))
+    if ppr is None:
+        ppr = etree.Element(qn("w:pPr"))
+        p.insert(0, ppr)
+    if "alignment" in formatting:
+        val = _ALIGN.get(formatting["alignment"])
+        if val is None:
+            raise WordMcpError(f"alignment must be one of {list(_ALIGN)}")
+        _ppr_get_or_add(ppr, "jc").set(qn("w:val"), val)
+    for key, tag in (
+        ("keep_lines_together", "keepLines"),
+        ("page_break_before", "pageBreakBefore"),
+    ):
+        if key in formatting:
+            el = ppr.find(qn(f"w:{tag}"))
+            if formatting[key] and el is None:
+                _ppr_get_or_add(ppr, tag)
+            elif not formatting[key] and el is not None:
+                ppr.remove(el)
+    if "widow_control" in formatting:
+        el = _ppr_get_or_add(ppr, "widowControl")
+        el.set(qn("w:val"), "1" if formatting["widow_control"] else "0")
+    if "outline_level" in formatting:
+        lvl = formatting["outline_level"]
+        if lvl is None:
+            existing = ppr.find(qn("w:outlineLvl"))
+            if existing is not None:
+                ppr.remove(existing)
+        else:
+            _ppr_get_or_add(ppr, "outlineLvl").set(qn("w:val"), str(lvl))
+    if "shading" in formatting:
+        shd = _ppr_get_or_add(ppr, "shd")
+        shd.set(qn("w:val"), "clear")
+        shd.set(qn("w:color"), "auto")
+        shd.set(qn("w:fill"), formatting["shading"].lstrip("#"))
+    if "borders" in formatting:
+        spec = formatting["borders"]
+        sides = (
+            ["top", "bottom", "left", "right"]
+            if spec in (True, "all")
+            else list(spec)
+        )
+        bad = set(sides) - {"top", "bottom", "left", "right", "between", "bar"}
+        if bad:
+            raise WordMcpError(f"unknown border side(s): {sorted(bad)}")
+        pbdr = _ppr_get_or_add(ppr, "pBdr")
+        for child in list(pbdr):
+            pbdr.remove(child)
+        for side in ("top", "left", "bottom", "right", "between", "bar"):
+            if side in sides:
+                b = etree.SubElement(pbdr, qn(f"w:{side}"))
+                b.set(qn("w:val"), "single")
+                b.set(qn("w:sz"), "4")
+                b.set(qn("w:space"), "4")
+                b.set(qn("w:color"), "auto")
+    if "tab_stops" in formatting:
+        tabs = _ppr_get_or_add(ppr, "tabs")
+        for child in list(tabs):
+            tabs.remove(child)
+        leaders = {"none", "dot", "hyphen", "underscore", "middleDot"}
+        aligns = {"left", "center", "right", "decimal", "bar"}
+        for stop in formatting["tab_stops"]:
+            align = stop.get("alignment", "left")
+            leader = stop.get("leader", "none")
+            if align not in aligns:
+                raise WordMcpError(f"tab alignment must be one of {sorted(aligns)}")
+            if leader not in leaders:
+                raise WordMcpError(f"tab leader must be one of {sorted(leaders)}")
+            t = etree.SubElement(tabs, qn("w:tab"))
+            t.set(qn("w:val"), align)
+            if leader != "none":
+                t.set(qn("w:leader"), leader)
+            t.set(qn("w:pos"), str(int(stop["position_pt"] * 20)))
+    if any(
+        k in formatting
+        for k in ("space_before_pt", "space_after_pt", "line_spacing")
+    ):
+        spacing = _ppr_get_or_add(ppr, "spacing")
+        if "space_before_pt" in formatting:
+            spacing.set(
+                qn("w:before"), str(int(formatting["space_before_pt"] * 20))
+            )
+        if "space_after_pt" in formatting:
+            spacing.set(
+                qn("w:after"), str(int(formatting["space_after_pt"] * 20))
+            )
+        if "line_spacing" in formatting:
+            spacing.set(
+                qn("w:line"), str(int(formatting["line_spacing"] * 240))
+            )
+            spacing.set(qn("w:lineRule"), "auto")
+    if any(
+        k in formatting
+        for k in ("indent_left_pt", "indent_right_pt", "first_line_indent_pt")
+    ):
+        ind = _ppr_get_or_add(ppr, "ind")
+        if "indent_left_pt" in formatting:
+            ind.set(qn("w:left"), str(int(formatting["indent_left_pt"] * 20)))
+        if "indent_right_pt" in formatting:
+            ind.set(qn("w:right"), str(int(formatting["indent_right_pt"] * 20)))
+        if "first_line_indent_pt" in formatting:
+            val = formatting["first_line_indent_pt"]
+            # firstLine and hanging are the two halves of one setting and
+            # hanging wins when both are present, so writing one must
+            # clear the other or a pre-existing hanging indent survives a
+            # first_line_indent_pt of 0 (field test 2026-09-20, #865).
+            if val >= 0:
+                ind.set(qn("w:firstLine"), str(int(val * 20)))
+                ind.attrib.pop(qn("w:hanging"), None)
+            else:
+                ind.set(qn("w:hanging"), str(int(-val * 20)))
+                ind.attrib.pop(qn("w:firstLine"), None)
+    if "keep_with_next" in formatting:
+        kn = ppr.find(qn("w:keepNext"))
+        if formatting["keep_with_next"] and kn is None:
+            etree.SubElement(ppr, qn("w:keepNext"))
+        elif not formatting["keep_with_next"] and kn is not None:
+            ppr.remove(kn)
+
+
 def set_paragraph_format(
     pkg: DocxPackage, indices: list[int], formatting: dict
 ) -> dict:
@@ -1062,138 +1238,9 @@ def set_paragraph_format(
     here is what puts such headings into the outline and the TOC, where
     apply_style('Heading N') would wreck the template's look. 0 is the top
     level (Heading 1 equivalent); body text simply has no outlineLvl."""
-    _check_keys(formatting, _PARA_FMT_KEYS, "paragraph-formatting")
-    validate_paragraph_numeric(formatting)
-    if "outline_level" in formatting:
-        lvl = formatting["outline_level"]
-        if lvl is not None and (
-            isinstance(lvl, bool) or not isinstance(lvl, int)
-            or not 0 <= lvl <= 8
-        ):
-            raise WordMcpError(
-                "outline_level must be an integer 0-8 (0 = top level, as in "
-                "Heading 1) or null to remove the direct outlineLvl override"
-            )
+    validate_paragraph_format(formatting)
     for index in indices:
-        p = _body_paragraph(pkg, index)
-        ppr = p.find(qn("w:pPr"))
-        if ppr is None:
-            ppr = etree.Element(qn("w:pPr"))
-            p.insert(0, ppr)
-        if "alignment" in formatting:
-            val = _ALIGN.get(formatting["alignment"])
-            if val is None:
-                raise WordMcpError(f"alignment must be one of {list(_ALIGN)}")
-            _ppr_get_or_add(ppr, "jc").set(qn("w:val"), val)
-        for key, tag in (
-            ("keep_lines_together", "keepLines"),
-            ("page_break_before", "pageBreakBefore"),
-        ):
-            if key in formatting:
-                el = ppr.find(qn(f"w:{tag}"))
-                if formatting[key] and el is None:
-                    _ppr_get_or_add(ppr, tag)
-                elif not formatting[key] and el is not None:
-                    ppr.remove(el)
-        if "widow_control" in formatting:
-            el = _ppr_get_or_add(ppr, "widowControl")
-            el.set(qn("w:val"), "1" if formatting["widow_control"] else "0")
-        if "outline_level" in formatting:
-            lvl = formatting["outline_level"]
-            if lvl is None:
-                existing = ppr.find(qn("w:outlineLvl"))
-                if existing is not None:
-                    ppr.remove(existing)
-            else:
-                _ppr_get_or_add(ppr, "outlineLvl").set(qn("w:val"), str(lvl))
-        if "shading" in formatting:
-            shd = _ppr_get_or_add(ppr, "shd")
-            shd.set(qn("w:val"), "clear")
-            shd.set(qn("w:color"), "auto")
-            shd.set(qn("w:fill"), formatting["shading"].lstrip("#"))
-        if "borders" in formatting:
-            spec = formatting["borders"]
-            sides = (
-                ["top", "bottom", "left", "right"]
-                if spec in (True, "all")
-                else list(spec)
-            )
-            bad = set(sides) - {"top", "bottom", "left", "right", "between", "bar"}
-            if bad:
-                raise WordMcpError(f"unknown border side(s): {sorted(bad)}")
-            pbdr = _ppr_get_or_add(ppr, "pBdr")
-            for child in list(pbdr):
-                pbdr.remove(child)
-            for side in ("top", "left", "bottom", "right", "between", "bar"):
-                if side in sides:
-                    b = etree.SubElement(pbdr, qn(f"w:{side}"))
-                    b.set(qn("w:val"), "single")
-                    b.set(qn("w:sz"), "4")
-                    b.set(qn("w:space"), "4")
-                    b.set(qn("w:color"), "auto")
-        if "tab_stops" in formatting:
-            tabs = _ppr_get_or_add(ppr, "tabs")
-            for child in list(tabs):
-                tabs.remove(child)
-            leaders = {"none", "dot", "hyphen", "underscore", "middleDot"}
-            aligns = {"left", "center", "right", "decimal", "bar"}
-            for stop in formatting["tab_stops"]:
-                align = stop.get("alignment", "left")
-                leader = stop.get("leader", "none")
-                if align not in aligns:
-                    raise WordMcpError(f"tab alignment must be one of {sorted(aligns)}")
-                if leader not in leaders:
-                    raise WordMcpError(f"tab leader must be one of {sorted(leaders)}")
-                t = etree.SubElement(tabs, qn("w:tab"))
-                t.set(qn("w:val"), align)
-                if leader != "none":
-                    t.set(qn("w:leader"), leader)
-                t.set(qn("w:pos"), str(int(stop["position_pt"] * 20)))
-        if any(
-            k in formatting
-            for k in ("space_before_pt", "space_after_pt", "line_spacing")
-        ):
-            spacing = _ppr_get_or_add(ppr, "spacing")
-            if "space_before_pt" in formatting:
-                spacing.set(
-                    qn("w:before"), str(int(formatting["space_before_pt"] * 20))
-                )
-            if "space_after_pt" in formatting:
-                spacing.set(
-                    qn("w:after"), str(int(formatting["space_after_pt"] * 20))
-                )
-            if "line_spacing" in formatting:
-                spacing.set(
-                    qn("w:line"), str(int(formatting["line_spacing"] * 240))
-                )
-                spacing.set(qn("w:lineRule"), "auto")
-        if any(
-            k in formatting
-            for k in ("indent_left_pt", "indent_right_pt", "first_line_indent_pt")
-        ):
-            ind = _ppr_get_or_add(ppr, "ind")
-            if "indent_left_pt" in formatting:
-                ind.set(qn("w:left"), str(int(formatting["indent_left_pt"] * 20)))
-            if "indent_right_pt" in formatting:
-                ind.set(qn("w:right"), str(int(formatting["indent_right_pt"] * 20)))
-            if "first_line_indent_pt" in formatting:
-                val = formatting["first_line_indent_pt"]
-                # firstLine and hanging are the two halves of one setting and
-                # hanging wins when both are present, so writing one must
-                # clear the other or a pre-existing hanging indent survives a
-                # first_line_indent_pt of 0 (field test 2026-09-20, #865).
-                if val >= 0:
-                    ind.set(qn("w:firstLine"), str(int(val * 20)))
-                    ind.attrib.pop(qn("w:hanging"), None)
-                else:
-                    ind.set(qn("w:hanging"), str(int(-val * 20)))
-                    ind.attrib.pop(qn("w:firstLine"), None)
-        if "keep_with_next" in formatting:
-            kn = ppr.find(qn("w:keepNext"))
-            if formatting["keep_with_next"] and kn is None:
-                etree.SubElement(ppr, qn("w:keepNext"))
-            elif not formatting["keep_with_next"] and kn is not None:
-                ppr.remove(kn)
+        apply_paragraph_format(_body_paragraph(pkg, index), formatting)
     pkg.mark_dirty()
     return {"formatted_paragraphs": indices}
 

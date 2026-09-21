@@ -1751,14 +1751,15 @@ def insert_paragraphs(
     backup: bool = True,
     live: Live = "auto",
 ) -> dict:
-    """Insert paragraphs (items {text, style?, formatting?, heading_level?})
-    at a location object (omitted = document end). heading_level 1-9 makes
-    the item a heading (level 1 = outline 0).
-    inherit_format/copy_format_from clone neighbor formatting minus
-    outline level (file mode only); track records insertions by
-    author. Auto-backup in file mode; atomic validated save. Open
-    documents edit live, serialized; a stale text-selector target
-    refuses: save in Word, retry. For batches, use apply_edits.
+    """Insert paragraphs (items {text, style?, formatting?, heading_level?,
+    paragraph_format?}) at a location object (omitted = document end).
+    heading_level 1-9 makes it a heading (1 = outline 0).
+    paragraph_format takes set_paragraph_format keys; it and
+    inherit_format/copy_format_from (clone neighbor formatting minus
+    outline level) are file mode only. track records insertions by author.
+    Auto-backup; atomic save. Open documents edit live; a stale
+    text-selector target refuses: save in Word, retry. Batches:
+    apply_edits.
     """
     from .com import live_ops as _lo
 
@@ -1844,6 +1845,17 @@ def insert_paragraphs(
                 "inherit_format/copy_format_from are file-mode features and "
                 "this document is open in Word: close it in Word and retry, "
                 "or insert without format cloning"
+            )
+        if any(item.get("paragraph_format") for item in cleaned
+               if isinstance(item, dict)):
+            # A silent no-op is not something this family ships: the live
+            # insertion path writes text and a style, and has no route to a
+            # per-item pPr.
+            raise WordMcpError(
+                "per-item paragraph_format is a file-mode feature and this "
+                "document is open in Word: close it in Word and retry, or "
+                "insert first and follow with set_paragraph_format, which "
+                "has a live route"
             )
         verify = None
         if location is None:
