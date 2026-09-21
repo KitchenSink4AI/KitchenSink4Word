@@ -18,9 +18,12 @@ the report's 30-minute silent hang into a clean structured error.
 
 from __future__ import annotations
 
+import atexit
+import collections
 import contextlib
 import functools
 import subprocess
+import sys
 import threading
 import time
 from pathlib import Path
@@ -50,6 +53,29 @@ _WD_SAVE = -1
 # the timeout kill-switch terminates exactly these, never the user's Word
 _INVISIBLE_PIDS: dict[int, set] = {}
 
+#: Nothing this module spawns may flash a console on the user's desktop
+#: (author directive 2026-09-06). tasklist and taskkill are console
+#: programs, so every launch carries the flag on Windows and 0 elsewhere.
+_NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+
+#: How long to wait for a PID to actually leave the process table after
+#: Quit. Word exits in well under a second when Quit is honored; the
+#: budget is for the case where it is not.
+_EXIT_WAIT_SECONDS = 6.0
+
+#: The last few lifecycle diagnostics, for tests and for com_word_status.
+#: A failed Quit used to be swallowed by contextlib.suppress, which is how
+#: an orphan could exist with nothing anywhere recording that it did.
+_LIFECYCLE_NOTES: collections.deque = collections.deque(maxlen=20)
+
+
+def _note(message: str) -> None:
+    """Record and announce one lifecycle event. stderr, never stdout:
+    stdout carries the MCP protocol."""
+    _LIFECYCLE_NOTES.append(message)
+    with contextlib.suppress(Exception):
+        sys.stderr.write(f"[kitchensink4word] {message}\n")
+
 
 def _winword_pids() -> set:
     try:
@@ -59,6 +85,7 @@ def _winword_pids() -> set:
             capture_output=True,
             text=True,
             timeout=30,
+            creationflags=_NO_WINDOW,
         )
     except Exception:
         return set()
@@ -73,20 +100,119 @@ def _winword_pids() -> set:
     return pids
 
 
-def _kill_invisible_for_thread(tid) -> bool:
-    """Terminate the invisible instance(s) the given worker thread spawned.
-    PID-precise: only processes recorded by _word() at DispatchEx time."""
-    pids = _INVISIBLE_PIDS.get(tid) or set()
-    killed = False
-    for pid in pids:
-        with contextlib.suppress(Exception):
+def _is_automation_instance(pid: int) -> bool | None:
+    """Is this PID a Word started for automation, rather than the user's?
+
+    True / False when the command line settles it, None when it cannot be
+    read. An interactive WINWORD.EXE never carries /Automation, and the
+    one started by DispatchEx always does, so this is the check that keeps
+    a kill off the user's Word if the PID bookkeeping were ever wrong (the
+    author may have the dissertation open while a com-live tool runs). The
+    policy at every call site is: refuse to kill only on a definite False.
+    None must not block the timeout kill switch, which exists to end a
+    hang.
+    """
+    if sys.platform != "win32":
+        return None
+    try:
+        out = subprocess.run(
+            ["powershell", "-NoProfile", "-NonInteractive", "-Command",
+             "(Get-CimInstance Win32_Process -Filter "
+             f"\"ProcessId={int(pid)}\").CommandLine"],
+            capture_output=True, text=True, timeout=20,
+            creationflags=_NO_WINDOW,
+        )
+    except Exception:
+        return None
+    if out.returncode != 0:
+        return None
+    line = (out.stdout or "").strip()
+    if not line:
+        return None  # already gone, or unreadable: not a definite "no"
+    return "/automation" in line.lower()
+
+
+def _kill_pids(pids, *, why: str) -> set:
+    """Force-terminate exactly these PIDs. Returns the ones killed.
+
+    Every caller passes PIDs recorded by _word() at DispatchEx time. The
+    command-line check is a second, independent gate: a PID that is
+    positively NOT an automation instance is left alone and said so, out
+    loud, because killing the user's open Word is the one failure this
+    module must never have."""
+    killed = set()
+    for pid in sorted(pids):
+        if _is_automation_instance(pid) is False:
+            _note(
+                f"refusing to terminate WINWORD.EXE pid {pid}: its command "
+                "line carries no /Automation flag, so it is not an instance "
+                "this server created"
+            )
+            continue
+        try:
             subprocess.run(
                 ["taskkill", "/PID", str(pid), "/F"],
                 capture_output=True,
                 timeout=15,
+                creationflags=_NO_WINDOW,
             )
-            killed = True
+        except Exception as exc:  # noqa: BLE001
+            _note(f"could not terminate WINWORD.EXE pid {pid} ({why}): {exc}")
+            continue
+        killed.add(pid)
+    if killed:
+        _note(
+            f"terminated invisible WINWORD.EXE {sorted(killed)} ({why})"
+        )
     return killed
+
+
+def _survivors(pids, timeout: float = _EXIT_WAIT_SECONDS) -> set:
+    """Which of these PIDs are still in the process table after a bounded
+    wait. Quit is asynchronous: Word acknowledges it and then takes a
+    moment, so checking once would report a false orphan."""
+    remaining = {int(p) for p in pids}
+    if not remaining:
+        return remaining
+    deadline = time.monotonic() + timeout
+    while True:
+        remaining &= _winword_pids()
+        if not remaining or time.monotonic() >= deadline:
+            return remaining
+        time.sleep(0.25)
+
+
+def _kill_invisible_for_thread(tid) -> bool:
+    """Terminate the invisible instance(s) the given worker thread spawned.
+    PID-precise: only processes recorded by _word() at DispatchEx time."""
+    pids = _INVISIBLE_PIDS.get(tid) or set()
+    return bool(_kill_pids(pids, why="operation timed out"))
+
+
+def _close_open_documents(app) -> None:
+    """Close whatever this instance still has open, before Quit.
+
+    This is where the orphan came from. Individual operations close their
+    own document, but any path that raised before its close left one open,
+    and Word will not Quit an instance holding a document it considers
+    unsaved. The refusal was swallowed, the PID record was dropped on the
+    very next line, and the invisible WINWORD.EXE then had no owner and no
+    way to be killed: exactly the two /Automation orphans the 2026-09-21
+    field test found still running.
+
+    wdDoNotSaveChanges, always: this instance is private to one operation
+    and everything it was asked to persist was persisted by that operation.
+    """
+    try:
+        count = int(app.Documents.Count)
+    except Exception:  # noqa: BLE001 - a dead app has nothing to close
+        return
+    for _ in range(count):
+        try:
+            app.Documents(1).Close(_WD_DO_NOT_SAVE)
+        except Exception as exc:  # noqa: BLE001
+            _note(f"could not close a document before Quit: {exc}")
+            return  # one refusal is enough; do not spin on the same doc
 
 
 @contextlib.contextmanager
@@ -111,11 +237,48 @@ def _word():
         app.DisplayAlerts = _WD_ALERTS_NONE
         yield app
     finally:
+        # Take the PID record BEFORE anything can fail, and put it back if
+        # the instance is still alive at the end. Dropping it unverified is
+        # what made an orphan unkillable.
+        pids = _INVISIBLE_PIDS.pop(tid, None) or set()
         if app is not None:
-            with contextlib.suppress(Exception):
+            _close_open_documents(app)
+            try:
                 app.Quit(_WD_DO_NOT_SAVE)
-        _INVISIBLE_PIDS.pop(tid, None)
+            except Exception as exc:  # noqa: BLE001
+                _note(
+                    f"Word.Quit failed on the invisible instance {sorted(pids) or '(pid unknown)'}: "
+                    f"{exc}"
+                )
+        if pids:
+            alive = _survivors(pids)
+            if alive:
+                _note(
+                    f"invisible WINWORD.EXE {sorted(alive)} did not exit "
+                    f"within {_EXIT_WAIT_SECONDS:.0f}s of Quit; terminating"
+                )
+                unkilled = alive - _kill_pids(alive, why="Quit did not take")
+                if unkilled:
+                    # Still ours, still running: keep the record so the
+                    # atexit sweep gets another attempt rather than losing
+                    # the only handle that can end it.
+                    _INVISIBLE_PIDS.setdefault(tid, set()).update(unkilled)
         pythoncom.CoUninitialize()
+
+
+@atexit.register
+def _sweep_invisible_instances() -> None:
+    """Process-exit backstop over every PID still on the books.
+
+    _word() is the normal owner and cleans up in its own finally block;
+    this catches the paths it cannot, a hard interpreter exit during a COM
+    call among them. It touches ONLY PIDs recorded at DispatchEx time and
+    confirmed to carry /Automation, never the user's Word."""
+    for tid in list(_INVISIBLE_PIDS):
+        pids = _INVISIBLE_PIDS.pop(tid, None) or set()
+        alive = {p for p in pids if p in _winword_pids()}
+        if alive:
+            _kill_pids(alive, why="server exit sweep")
 
 
 def _run_bounded(name: str, timeout: float, fn):
