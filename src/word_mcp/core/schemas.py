@@ -49,14 +49,22 @@ from pydantic.json_schema import WithJsonSchema
 
 #: The dual-mode route selector every tool with a live path takes. The
 #: values are the ones server._route_live enforces; keep the two in step.
-#: One line, on purpose: it is billed on fourteen parameters.
+#:
+#: FORTY-FOUR CHARACTERS, and that is the budget, not a style choice. This
+#: is billed on fourteen parameters, twelve of them on the lite surface,
+#: so every character here costs about twelve times what it looks like.
+#: The enum alone takes lite from 9,909 to about 10,011 tokens against the
+#: 10,200 ceiling test_pack_bills_cost_aware holds; what is left buys
+#: roughly one short clause. The enum is the part that closes the defect
+#: (a caller can no longer invent a value), so the sentence only has to
+#: say which way each value routes. What each route MEANS in full is in
+#: the server instructions, which a client receives once at handshake
+#: instead of once per parameter: the same pay-on-load arithmetic that
+#: keeps the location grammar out of the schema.
 LIVE_SCHEMA: dict[str, Any] = {
     "type": "string",
     "enum": ["auto", "force", "off"],
-    "description": (
-        "auto = file, or live when the document is open in Word; "
-        "force = always live; off = refuse to go live."
-    ),
+    "description": "auto: file or live; force: live; off: refuse",
 }
 
 Live = Annotated[str, WithJsonSchema(LIVE_SCHEMA)]

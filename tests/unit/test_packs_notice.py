@@ -32,8 +32,12 @@ from word_mcp.core.errors import WordMcpError
 from word_mcp.ops import workflows
 
 #: The owner's wording, 2026-09-22, with {MODE_ENV} filled in. Verbatim.
-EXPECTED_NOTE = (
-    "tools/list_changed was sent. If the new tools are not in your tool "
+#: PREFIX + BODY: the first sentence is the only claim that depends on
+#: what the call did, and saying a notification was sent when none was is
+#: a lie told to exactly the caller who is trying to work out why its tool
+#: list has not changed.
+EXPECTED_BODY = (
+    "If the new tools are not in your tool "
     "list, this client fixed its list when the session or worker started: "
     "do not retry here. What works in every client: ask the user to add "
     "the packs to KS4W_MODE (comma list) in this server's launch "
@@ -42,6 +46,11 @@ EXPECTED_NOTE = (
     "enable_tools in the main session and then start a new worker. If "
     "enable_tools refuses a pack, an administrator locked the tool set: "
     "do not retry."
+)
+EXPECTED_NOTE = "tools/list_changed was sent. " + EXPECTED_BODY
+EXPECTED_NOOP_NOTE = (
+    "These packs were already on, so no list change was sent. "
+    + EXPECTED_BODY
 )
 
 EXPECTED_SENTENCE = (
@@ -104,12 +113,49 @@ def test_a_no_op_re_enable_carries_the_note_too():
     again = packs.enable(["references"])
     assert again["enabled"] == []
     assert again["already_enabled"] == ["references"]
-    assert again["note"] == EXPECTED_NOTE
+    assert again["note"] == EXPECTED_NOOP_NOTE
+
+
+def test_a_no_op_does_not_claim_a_notification_was_sent():
+    """Nothing flipped, so nothing was emitted. Saying otherwise is a lie
+    told to the one caller trying to work out why its tool list has not
+    changed, and it is the sentence that would send them looking for a
+    notification that never existed."""
+    packs.enable(["references"])
+    note = packs.enable(["references"])["note"]
+    assert note.startswith(
+        "These packs were already on, so no list change was sent."
+    )
+    assert "tools/list_changed was sent" not in note
+
+
+def test_both_prefixes_carry_the_same_body():
+    """Whichever prefix it gets, the agent's next move is identical."""
+    packs._ENABLED.update({n: False for n in packs.pack_tools("review")})
+    changed = packs.enable(["review"])["note"]
+    unchanged = packs.enable(["review"])["note"]
+    assert changed.endswith(EXPECTED_BODY)
+    assert unchanged.endswith(EXPECTED_BODY)
+    assert changed != unchanged
+    assert packs.pack_note(True) == EXPECTED_NOTE
+    assert packs.pack_note(False) == EXPECTED_NOOP_NOTE
+
+
+def test_a_partial_enable_counts_as_changed():
+    """One pack already on, one not: something WAS emitted."""
+    packs.enable(["review"])
+    packs._ENABLED.update({n: False for n in packs.pack_tools("assembly")})
+    result = packs.enable(["review", "assembly"])
+    assert result["enabled"] == ["assembly"]
+    assert result["already_enabled"] == ["review"]
+    assert result["note"] == EXPECTED_NOTE
 
 
 def test_every_pack_and_everything_carry_it():
     for arg in (["review"], ["everything"], ["review", "assembly"]):
-        assert packs.enable(arg)["note"] == EXPECTED_NOTE
+        note = packs.enable(arg)["note"]
+        assert note.endswith(EXPECTED_BODY)
+        assert note in (EXPECTED_NOTE, EXPECTED_NOOP_NOTE)
 
 
 # ------------------------------------------------- (b) read before calling
@@ -148,6 +194,6 @@ def test_the_locked_refusal_names_an_administrator(monkeypatch):
 
 
 def test_no_em_dash_in_any_of_it():
-    for text in (packs.LIST_CHANGED_NOTE, packs.WORKER_PACK_SENTENCE,
-                 server.mcp.instructions or ""):
+    for text in (packs.pack_note(True), packs.pack_note(False),
+                 packs.WORKER_PACK_SENTENCE, server.mcp.instructions or ""):
         assert "—" not in text

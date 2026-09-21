@@ -131,7 +131,9 @@ mcp = FastMCP(
         "text matches refuse loudly with every candidate. File-based with "
         "auto-backup before every mutation; dual-mode tools edit documents "
         "open in Word live (live='auto'), tools with no live route refuse "
-        "until the file is closed. COM calls serialize server-side: one "
+        "until the file is closed. live='force' goes straight to the open "
+        "document, live='off' refuses rather than going live. COM calls "
+        "serialize server-side: one "
         "call reaches Word at a time, concurrent live calls queue (see "
         "get_workflows task='live-editing' for the save-then-anchor "
         "cycle). list_elements enumerates any "
@@ -2499,7 +2501,7 @@ def create_table(
     standard location object; omit it to append at the end; position
     'after' only. Shading, column widths and repeat-header on an EXISTING
     table: format_cells and set_table_properties (media-forms). From a
-    CSV or JSON file: import_table (protection-io). Auto-backup:
+    CSV or JSON file: import_table (protection-io pack). Auto-backup:
     prev/anchor slots in .ks4w-backups (backup=False skips rotation
     only); atomic save. Refuses documents open in Word.
     """
@@ -2558,8 +2560,8 @@ def get_table(
     has_merges=true returns {text, grid_span, vmerge} cells. For a nested
     table pass nested={row, cell, index} addressing the host cell (index
     picks among several, default 0). Write with set_cells; shade with
-    format_cells; widths and repeat-header with set_table_properties;
-    reshape with modify_table_structure (media-forms). Read-only.
+    format_cells; widths and repeat-header set_table_properties; reshape
+    with modify_table_structure (media-forms pack). Read-only.
     """
     pkg = DocxPackage(file_path)
     if nested is None:

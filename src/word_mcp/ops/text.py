@@ -403,7 +403,10 @@ def insert_paragraphs(
     for item in paragraphs:
         # Validate every item BEFORE any element is built: a batch that
         # refuses halfway would leave the caller guessing which half landed.
-        if item.get("paragraph_format") is not None:
+        # isinstance guard only: a non-dict item fails where it always did,
+        # at _make_paragraph, rather than acquiring a new failure mode here.
+        if isinstance(item, dict) \
+                and item.get("paragraph_format") is not None:
             if not isinstance(item["paragraph_format"], dict):
                 raise WordMcpError(
                     "paragraph_format takes an object of paragraph-format "
@@ -448,7 +451,7 @@ def insert_paragraphs(
     # one, exactly as style/formatting already do.
     applied_formats = 0
     for item, el in zip(paragraphs, new_els):
-        fmt = item.get("paragraph_format")
+        fmt = item.get("paragraph_format") if isinstance(item, dict) else None
         if fmt:
             apply_paragraph_format(el, fmt)
             applied_formats += 1

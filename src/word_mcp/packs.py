@@ -375,8 +375,19 @@ def _validate(packs: list[str]) -> list[str]:
 #: route was the only thing that worked in every client tested. The note
 #: therefore leads with what always works and names the client-specific
 #: escape second. Wording is the owner's, verbatim; do not reword it here.
-LIST_CHANGED_NOTE = (
-    "tools/list_changed was sent. If the new tools are not in your tool "
+#:
+#: PREFIX + BODY, because the first sentence is the one claim in it that
+#: is not always true. A call that enabled nothing new sends no
+#: notification, so telling the caller one was sent is a small lie in the
+#: exact situation where the caller is trying to work out why its tool
+#: list has not changed. The body is identical either way: whichever
+#: prefix it carries, the agent's next move is the same.
+LIST_CHANGED_PREFIX = "tools/list_changed was sent."
+NO_CHANGE_PREFIX = (
+    "These packs were already on, so no list change was sent."
+)
+PACK_NOTE_BODY = (
+    "If the new tools are not in your tool "
     "list, this client fixed its list when the session or worker started: "
     "do not retry here. What works in every client: ask the user to add "
     f"the packs to {ENV_MODE} (comma list) in this server's launch "
@@ -386,6 +397,16 @@ LIST_CHANGED_NOTE = (
     "enable_tools refuses a pack, an administrator locked the tool set: "
     "do not retry."
 )
+
+
+def pack_note(changed: bool) -> str:
+    """The enable_tools note. `changed` = at least one pack flipped on."""
+    prefix = LIST_CHANGED_PREFIX if changed else NO_CHANGE_PREFIX
+    return f"{prefix} {PACK_NOTE_BODY}"
+
+
+#: The note as a call that actually changed the surface returns it.
+LIST_CHANGED_NOTE = pack_note(True)
 
 #: The same fact, one sentence, for the places a client reads BEFORE it
 #: calls anything: the server instructions at handshake and the
@@ -432,7 +453,7 @@ def enable(packs: list[str]) -> dict:
         "approx_tokens_added": tokens_added,
         **surface_report(),
     }
-    result["note"] = LIST_CHANGED_NOTE
+    result["note"] = pack_note(bool(enabled_now))
     return result
 
 
