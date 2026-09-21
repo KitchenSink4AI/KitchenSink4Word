@@ -1,5 +1,8 @@
 # Changelog
 
+### 2.2.0
+<!-- CHANGELOG-2.2.0-BODY: written by the orchestrator -->
+
 ### 2.1.3
 - `get_server_info`: the Word registration probe no longer calls a pywin32 attribute that does not exist. It read the registration through `pythoncom.CLSIDFromProgID`, which pywin32 has never had, so the call raised on every machine and the report said Word was not registered even where Word was installed and automating. The probe now reads the registry directly.
 - Probe failures are reported instead of hidden. A probe that cannot answer says so, and a registered Word, an absent one, and a failed lookup are three different answers rather than two.

@@ -52,7 +52,7 @@ def test_published_numbers_match_scripts():
     lite, full, n_ops = _measured()
     lite_k = re.search(r"lite startup surface: \d+ tools, ~([\d.]+)k",
                        _run("measure_surface.py")).group(1)
-    assert (lite, full, n_ops) == (29, 112, 221), (
+    assert (lite, full, n_ops) == (29, 112, 222), (
         f"scripts now report lite={lite} full={full} ops={n_ops}; update the "
         "public copy AND this test together (that is the whole point)."
     )
@@ -252,7 +252,7 @@ def test_i18n_dictionaries_carry_current_figures():
     full = forms_of("35,200")
     for i, lang in enumerate(langs):
         block = text[spans[i]:spans[i + 1]]
-        assert "221" in block, f"i18n {lang}: operations count 221 missing"
+        assert "222" in block, f"i18n {lang}: operations count 222 missing"
         for name, forms in (("lite 9.9k", sep), ("full 35.2k", full)):
             assert any(f in block for f in forms), (
                 f"i18n {lang}: {name} figure missing in all accepted formats"
@@ -268,7 +268,7 @@ def test_no_em_dashes_in_any_public_file():
 def test_mcp_name_marker_survives():
     first = (ROOT / "README.md").read_text(encoding="utf-8").splitlines()[0]
     assert first == (
-        "<!-- mcp-name: io.github.nometalalchemist/kitchensink4word -->"
+        "<!-- mcp-name: io.github.KitchenSink4AI/kitchensink4word -->"
     ), "README line 1 mcp-name marker was lost in the rewrite"
 
 

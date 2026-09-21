@@ -1,11 +1,11 @@
 # KitchenSink4Word
 
-> Word (.docx) MCP server for agents. 221 operations across 110 tools, one verb
+> Word (.docx) MCP server for agents. 222 operations across 110 tools, one verb
 > grammar. stdio. Every mutation is preceded by an automatic backup and
 > committed by an atomic verified save.
 
-Release: v2.1.3
-MCP registry name: io.github.nometalalchemist/kitchensink4word
+Release: v2.2.0
+MCP registry name: io.github.KitchenSink4AI/kitchensink4word
 Transport: stdio.
 Platform: the file tier is cross-platform and needs no Word installation.
 The `com-live` pack requires Windows with Microsoft Word installed.
@@ -43,7 +43,7 @@ below is a behavior you can rely on without testing it first.
 - File-mode tools refuse a document that is open in Word and name the `live_*` or `com_*` route that handles the open case.
 - Live edits land as one Ctrl+Z step per tool call and leave the user's cursor and selection where they were.
 - Tracked-changes authoring is a parameter, not a mode: pass `track=true` and an author name to a text mutation and the edit is written as a revision.
-- Test evidence for v2.1.2: 1,846 tests, adversarial rounds driven through the raw MCP stdio transport, zero corruptions, outputs verified by opening them in invisible Word and failing on any repair prompt.
+- Test evidence for v2.2.0: 2,068 tests, adversarial rounds driven through the raw MCP stdio transport, zero corruptions, outputs verified by opening them in invisible Word and failing on any repair prompt.
 
 ## 3. Addressing model
 
@@ -84,7 +84,7 @@ These are contracts. Handle them; do not retry blindly.
 - `diagnose_document` reads saved XML and has no live route. Save first; `com_validate_opens_clean` checks the open copy instead.
 - A view taken before `com_save_document` does not see unsaved live edits. Save, then view, then edit.
 
-## 6. Inventory: 221 operations, 110 tools, 8 packs
+## 6. Inventory: 222 operations, 110 tools, 8 packs
 
 ### lite core: 29 tools, 76 operations, loaded at startup
 `create_document`, `copy_document`, `get_document_info`, `get_document_view`, `get_outline`, `get_text`, `find_text`, `search_and_replace`, `insert_paragraphs`, `delete_paragraphs`, `set_paragraph_text`, `set_paragraph_format`, `format_text`, `apply_style`, `insert_list`, `insert_break`, `create_table`, `get_table`, `set_cells`, `delete_table`, `delete_element`, `list_elements`, `apply_edits`, `diagnose_document`, `manage_backups`, `get_workflows`, `get_server_info`, `enable_tools`, `disable_tools`.
@@ -121,7 +121,7 @@ These are contracts. Handle them; do not retry blindly.
 ## 7. Version and migration
 
 v2.0.0 renamed every tool. Measured with one definition on both trees,
-v1.6 performed 200 operations across 189 tools; v2.0 performs 221 across 110.
+v1.6 performed 200 operations across 189 tools; v2.0 performs 222 across 110.
 Every v1.6 capability is mapped into v2 and the operation count went up.
 Upgrading from v1.x: call `get_workflows("migrate-from-v1")`, or read
 `migration/v1_to_v2.json` or `docs/MIGRATION_V2.md`. New installs need nothing.
