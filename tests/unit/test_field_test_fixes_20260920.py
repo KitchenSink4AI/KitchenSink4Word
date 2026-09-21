@@ -708,6 +708,70 @@ def test_prose_lead_words_are_not_read_as_authors(tmp_path):
 
 
 # ==================================================================
+# Round-4 MAJOR-1: a citation that could not be checked must not pass
+# validate(citation_parity). Splitting the unparsed citations out of
+# missing_references left the pass predicate keyed on the confident list
+# alone, so a document 2.1.3 failed came back passed: true beside
+# parity_ok: false.
+# ==================================================================
+
+
+def test_unparsed_unmatched_citations_do_not_pass_validate(tmp_path):
+    """Only-unparsed unmatched citations: passed false, with a reason."""
+    path = _parity_doc(
+        tmp_path,
+        [
+            "As National Assembly of the Republic of Korea (2021) records, "
+            "the vote passed.",
+        ],
+        ["Smith, J. (2020). A title. Journal, 1(1), 1-10."],
+    )
+    r = srv.validate(str(path), checks=["citation_parity"])
+    f = r["results"]["citation_parity"]["findings"]
+    assert f["missing_references"] == []
+    assert f["missing_references_unparsed"] != []
+    assert f["parity_ok"] is False
+    assert r["results"]["citation_parity"]["passed"] is False
+    assert r["passed"] is False
+    assert "not checked" in f["missing_references_unparsed_reason"]
+
+
+def test_fully_matched_citations_still_pass_validate(tmp_path):
+    """Nothing unmatched in either list: passed true, no reason key."""
+    path = _parity_doc(
+        tmp_path,
+        ["The National Archives (2003) holds the cable traffic."],
+        ["National Archives. (2003). Record group 59. NARA."],
+    )
+    r = srv.validate(str(path), checks=["citation_parity"])
+    f = r["results"]["citation_parity"]["findings"]
+    assert f["missing_references"] == []
+    assert f["missing_references_unparsed"] == []
+    assert f["parity_ok"] is True
+    assert r["results"]["citation_parity"]["passed"] is True
+    assert "missing_references_unparsed_reason" not in f
+
+
+def test_mixed_missing_and_unparsed_citations_do_not_pass(tmp_path):
+    """Both lists populated: still one failure, and the reason is there."""
+    path = _parity_doc(
+        tmp_path,
+        [
+            "As National Assembly of the Republic of Korea (2021) records, "
+            "the vote passed.",
+            "Framed by Bordin (1994), the alliance held.",
+        ],
+        ["Smith, J. (2020). A title. Journal, 1(1), 1-10."],
+    )
+    r = srv.validate(str(path), checks=["citation_parity"])
+    f = r["results"]["citation_parity"]["findings"]
+    assert f["missing_references"] == ["Bordin (1994)"]
+    assert f["missing_references_unparsed"] != []
+    assert r["results"]["citation_parity"]["passed"] is False
+    assert "missing_references_unparsed_reason" in f
+
+
+# ==================================================================
 # #864: whole-paragraph character formatting by index / anchor
 # ==================================================================
 

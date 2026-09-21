@@ -230,7 +230,7 @@ def check_citation_parity(pkg: DocxPackage) -> dict:
     missing = sorted(set(missing))
     missing_unparsed = sorted(set(missing_unparsed))
 
-    return {
+    out = {
         "in_text_citations": sum(i["count"] for i in cited.values()),
         "unique_cited_works": len(cited),
         "reference_entries": len(entries) + len(unparsed),
@@ -250,3 +250,11 @@ def check_citation_parity(pkg: DocxPackage) -> dict:
             "entries were not checked."
         ),
     }
+    if missing_unparsed:
+        # A citation the heuristic could not resolve is UNCHECKED, not
+        # clean, so the check must not pass on it (round-4 MAJOR-1).
+        out["missing_references_unparsed_reason"] = (
+            "author not resolved; these citations were not checked against "
+            "the reference list"
+        )
+    return out

@@ -1311,8 +1311,11 @@ _VALIDATE_CHECKS: dict[str, tuple] = {
                          lambda f: not f["broken"]),
     "notes": (lambda pkg, o: _nt.validate_notes(pkg), _notes_ok),
     "forms": (_check_forms, lambda f: bool(f["complete"])),
+    # An unresolved author means the citation was never checked, so it
+    # cannot pass the gate (round-4 MAJOR-1).
     "citation_parity": (lambda pkg, o: _cc.check_citation_parity(pkg),
-                        lambda f: not f["missing_references"]),
+                        lambda f: not f["missing_references"]
+                        and not f["missing_references_unparsed"]),
     "defined_terms": (_check_defined_terms, _dt_passed),
     "brand": (_check_brand, lambda f: bool(f["compliant"])),
     "template": (_check_template, lambda f: bool(f["compliant"])),
