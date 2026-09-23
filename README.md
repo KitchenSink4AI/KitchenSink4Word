@@ -154,7 +154,7 @@ startup; the seven packs load on demand.
 | academic | 24 | ~7.6k | Footnotes and endnotes, TOC, index, captions, cross-references, front matter, chapter headers, sections, styles, list numbering, word counts, validation batteries, submission prep, accessibility |
 | assembly | 7 | ~2.1k | Insert and split documents, move sections, copy tables across files, apply and fill templates, mail merge |
 | media-forms | 16 | ~5.6k | Images, charts, equations, text boxes, hyperlinks, table structure and styling, form fields, content controls, field codes |
-| com-live | 13 | ~3.1k | Drives a local Microsoft Word: PDF import/export, compare and combine, proofing, readability, field refresh, live editing of open documents |
+| com-live | 13 | ~3.1k | Drives a local Microsoft Word for PDF import/export, compare and combine, proofing, readability, field refresh, cursor-point insert, scroll-to-show, track-changes toggle and crash repair. Editing a document that is open in Word needs no pack; the core tools do it. |
 | protection-io | 6 | ~1.6k | Document protection, watermarks, redaction with verification, table data import and export |
 | **Full surface** | **112** | **~35.5k** | Everything (110 document tools plus `enable_tools` / `disable_tools`) |
 
