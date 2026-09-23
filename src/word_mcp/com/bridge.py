@@ -84,6 +84,14 @@ _EXIT_WAIT_SECONDS = 6.0
 #: returned instead of a false timeout (KitchenSink4PPT 1.3.1, R6-1).
 TIMEOUT_GRACE_SECONDS = 10.0
 
+#: TEST SEAM (KitchenSink4PPT 1.3.1, R7-3). _run_bounded builds its internal
+#: completion signal through this factory, so a test can substitute an event
+#: whose waits it drives and pin WHICH stage observed completion without
+#: assuming anything about thread scheduling. Production behaviour is
+#: unchanged: this is threading.Event, with its real wait(), and nothing in
+#: the package reassigns it.
+_COMPLETION_EVENT_FACTORY = threading.Event
+
 #: The last few lifecycle diagnostics, for tests and for com_word_status.
 #: A failed Quit used to be swallowed by contextlib.suppress, which is how
 #: an orphan could exist with nothing anywhere recording that it did.
@@ -333,22 +341,51 @@ def _run_bounded(name: str, timeout: float, fn):
     operation that succeeded is a false failure the caller acts on (R6-1).
     Only if it is still not done is the refusal built, and everything it
     says about a process is state-neutral: what was observed, and what
-    this path did not do (R6-2)."""
+    this path did not do (R6-2).
+
+    QUEUE ABANDONMENT (KitchenSink4PPT 1.3.1, R7-1). A caller that gave up
+    while its worker was still QUEUED on the lock used to get WordBusy and
+    an invitation to retry, while the worker stayed in the queue and ran fn
+    anyway once the holder released, so a retried call ran twice. There is
+    now ONE decision per call, taken atomically, with two outcomes: the
+    caller marks the call ABANDONED when its wait expires, or the worker
+    marks it STARTED after it acquires the lock and BEFORE it calls fn.
+    Whichever side reaches the decision first wins and the other stands
+    down, so an abandoned call never runs and a started one is never
+    reported as queued."""
     result: dict = {}
-    lock_acquired = threading.Event()
-    done = threading.Event()
+    done = _COMPLETION_EVENT_FACTORY()
     worker_tid: list = []
+
+    # ONE decision per call, taken under this lock, with exactly two
+    # outcomes: the caller ABANDONED the queued call, or the worker STARTED
+    # it. The first to arrive wins; the other is told it lost (R7-1).
+    decision_lock = threading.Lock()
+    decision: list = []
+
+    def _elect(outcome: str) -> bool:
+        """Take this call's one decision, or lose it to the other side."""
+        with decision_lock:
+            if decision:
+                return False
+            decision.append(outcome)
+            return True
 
     def worker():
         worker_tid.append(threading.get_ident())
         try:
             with _serial.com_operation(name):
-                lock_acquired.set()
+                # Winning the serialization lock is not permission to run.
+                # The caller may have given up while this thread sat in the
+                # queue, and it was told the operation had not happened; an
+                # abandoned call releases the lock and exits WITHOUT
+                # touching Word.
+                if not _elect("started"):
+                    return
                 result["value"] = fn()
         except BaseException as exc:  # noqa: BLE001 — re-raised in caller
             result["error"] = exc
         finally:
-            lock_acquired.set()
             done.set()
 
     t = threading.Thread(target=worker, daemon=True, name=f"ks4w-{name}")
@@ -357,19 +394,32 @@ def _run_bounded(name: str, timeout: float, fn):
         if "error" in result:
             raise result["error"]
         return result["value"]
-    if not lock_acquired.is_set():
+    if _elect("abandoned"):
+        # The worker had NOT started fn when this decision was taken, so it
+        # never will: it is still queued on the lock, and when it reaches
+        # the front it loses this same decision, releases the lock and
+        # exits. Nothing ran and nothing was changed.
+        if "error" in result:
+            # It failed before it could reach the decision at all, so its
+            # own error is the honest answer, not a queue-contention one.
+            raise result["error"]
         snap = _serial.lock_snapshot()
         running = (snap.get("current_op") or {}).get(
             "name", "another COM operation"
         )
         raise WordBusy(
             f"{name} waited {timeout:.0f}s for the COM serialization lock "
-            f"({running} is still running); retry when it finishes; "
-            "com_word_status reports the running operation"
+            f"({running} is still running); retry when it finishes. "
+            "com_word_status reports the running operation."
+            " The queued call was abandoned before its operation ran; it "
+            "made no document changes. It is safe to retry after "
+            "com_word_status reports no COM operation in progress."
         )
-    # The worker holds the lock, so fn IS running, or has already finished.
-    # The deadline has passed but the work has NOT been cancelled, so the
-    # grace wait is a real second chance rather than a formality.
+    # The worker won the decision, so fn IS running, or has already
+    # finished. This is no longer queue contention and the caller must not
+    # be told to simply retry. The deadline has passed but the work has NOT
+    # been cancelled, so the grace wait is a real second chance rather than
+    # a formality.
     done.wait(TIMEOUT_GRACE_SECONDS)
 
     def _completed():

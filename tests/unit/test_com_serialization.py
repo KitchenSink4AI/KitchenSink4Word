@@ -21,6 +21,7 @@ for the next zero-foreign-WINWORD round.
 
 from __future__ import annotations
 
+import contextlib
 import inspect
 import sys
 import threading
@@ -277,6 +278,345 @@ def test_bounded_op_timeout_validation():
         sample(timeout=1)
     with pytest.raises(WordMcpError, match="number of seconds"):
         sample(timeout="soon")
+
+
+# ------------------------------------ 5b. stage control (PPT 1.3.1, R7-3)
+#
+# _COMPLETION_EVENT_FACTORY is the seam. The event below is real, and the
+# worker sets it exactly as in production; what the test decides is WHICH
+# WAIT observes it, by running an action at a chosen wait. _run_bounded
+# waits on it exactly twice, the caller's deadline and then the grace, so
+# the stage is named by index and nothing is left to timing.
+
+_STAGE_JOIN = 30.0
+
+
+def test_the_completion_seam_is_the_real_event_in_production():
+    """The seam exists for tests only. Unpatched, it is threading.Event
+    itself, so production waits are the real Event.wait."""
+    assert bridge._COMPLETION_EVENT_FACTORY is threading.Event
+    assert type(bridge._COMPLETION_EVENT_FACTORY()) is threading.Event
+
+
+class _StagedCompletion:
+    """_run_bounded's internal completion event, with the observing stage
+    chosen by the test rather than by the scheduler."""
+
+    INITIAL_WAIT = 0
+    GRACE_WAIT = 1
+
+    def __init__(self, release, actions=None, started=None):
+        self._inner = threading.Event()
+        self._release = release
+        self._actions = dict(actions or {})
+        self._started = started
+        self.waits = []
+
+    # the event interface _run_bounded uses
+    def set(self):
+        self._inner.set()
+
+    def is_set(self):
+        return self._inner.is_set()
+
+    def wait(self, timeout=None):
+        stage = len(self.waits)
+        self.waits.append(timeout)
+        action = self._actions.get(stage)
+        if action is not None:
+            action(self)
+        elif stage == self.INITIAL_WAIT and self._started is not None:
+            # The deadline "expires" only once fn has provably started, so
+            # the worker has already won the start decision (R7-1) and the
+            # stage under test is the grace path, not queue contention.
+            # Without this the caller could reach its abandon decision
+            # before the new thread reached its start decision.
+            assert self._started.wait(_STAGE_JOIN), "fn never started"
+        return self._inner.is_set()
+
+    # what the test drives
+    def finish_worker(self, *_):
+        """Let the worker run to completion and block until its OWN
+        completion signal is set, so no later step can outrun it."""
+        self._release.set()
+        assert self._inner.wait(_STAGE_JOIN), "the worker never signalled"
+
+
+@contextlib.contextmanager
+def _staged_run(monkeypatch, actions=None, during_diagnostics=None):
+    """One _run_bounded call with the completion seam installed and the
+    dialog probe counted. Yields (run, staged, probes)."""
+    release = threading.Event()
+    started = threading.Event()
+    staged = _StagedCompletion(release, actions, started=started)
+    probes = []
+
+    def probe(*_a, **_k):
+        probes.append(1)
+        if during_diagnostics is not None:
+            during_diagnostics(staged)
+        return []
+
+    monkeypatch.setattr(bridge, "_COMPLETION_EVENT_FACTORY", lambda: staged)
+    monkeypatch.setattr(dialogs, "pending_dialogs", probe)
+
+    def body():
+        started.set()
+        release.wait(_STAGE_JOIN)
+        return {"paragraphs": 7}
+
+    try:
+        yield (lambda: bridge._run_bounded("staged-op", 30.0, body),
+               staged, probes)
+    finally:
+        release.set()
+        _join_worker("staged-op")
+
+
+def _join_worker(name):
+    for t in threading.enumerate():
+        if t.name == f"ks4w-{name}":
+            t.join(_STAGE_JOIN)
+
+
+def test_completion_during_the_initial_wait_returns_without_any_grace(
+    monkeypatch,
+):
+    """Stage ZERO: the ordinary success. The deadline wait itself observes
+    completion, so no grace and no inspection happen at all."""
+    with _staged_run(
+        monkeypatch,
+        actions={_StagedCompletion.INITIAL_WAIT:
+                 _StagedCompletion.finish_worker},
+    ) as (run, staged, probes):
+        assert run() == {"paragraphs": 7}
+    assert len(staged.waits) == 1, "the grace wait ran on a finished worker"
+    assert probes == [], "a finished worker was inspected anyway"
+
+
+def test_completion_during_the_grace_wait_skips_the_diagnostics(
+    monkeypatch,
+):
+    """Stage ONE, the first post-grace check: a finished success is never
+    delayed behind the dialog inspection."""
+    with _staged_run(
+        monkeypatch,
+        actions={_StagedCompletion.GRACE_WAIT:
+                 _StagedCompletion.finish_worker},
+    ) as (run, staged, probes):
+        assert run() == {"paragraphs": 7}
+    assert len(staged.waits) == 2, "the grace wait was not reached"
+    assert probes == [], (
+        "a completed result waited behind the dialog inspection"
+    )
+
+
+def test_completion_during_the_diagnostics_returns_on_the_second_check(
+    monkeypatch,
+):
+    """Stage TWO, the second check: the inspection can itself take long
+    enough for the worker to finish inside it, and the answer it gives
+    then is still the worker's own."""
+    with _staged_run(
+        monkeypatch,
+        during_diagnostics=_StagedCompletion.finish_worker,
+    ) as (run, staged, probes):
+        assert run() == {"paragraphs": 7}
+    assert len(staged.waits) == 2
+    assert probes == [1], "the second check ran without any inspection"
+
+
+def test_a_worker_that_never_completes_gets_the_refusal(monkeypatch):
+    """Stage THREE: neither check sees completion, the inspection did run,
+    and the refusal is what comes back."""
+    with _staged_run(monkeypatch) as (run, staged, probes):
+        with pytest.raises(WordBlocked) as exc_info:
+            run()
+        assert len(staged.waits) == 2
+        assert probes == [1]
+    assert "The operation was NOT cancelled" in str(exc_info.value)
+
+
+# ------------------------- 5c. queued ghost write (PPT 1.3.1, R7-1)
+#
+# A caller that gives up while its worker is still QUEUED on the COM
+# serialization lock used to get WordBusy and an invitation to retry, while
+# the worker stayed in the queue and ran fn() anyway once the holder
+# released. A retried call therefore ran twice. One atomic decision per
+# call now settles it, and these tests prove both sides of it.
+
+_ABANDONED_SENTENCE = (
+    " The queued call was abandoned before its operation ran; it made no "
+    "document changes. It is safe to retry after com_word_status reports "
+    "no COM operation in progress."
+)
+
+
+@contextlib.contextmanager
+def _lock_holder(name="existing-write"):
+    """Hold the process-wide COM serialization lock until released."""
+    held = threading.Event()
+    release = threading.Event()
+
+    def hold():
+        with com_serial.com_operation(name):
+            held.set()
+            release.wait(_STAGE_JOIN)
+
+    t = threading.Thread(target=hold, daemon=True, name="ks4w-test-holder")
+    t.start()
+    assert held.wait(_STAGE_JOIN), "the holder never took the lock"
+    try:
+        yield release
+    finally:
+        release.set()
+        t.join(_STAGE_JOIN)
+
+
+def _queued_worker(name):
+    for t in threading.enumerate():
+        if t.name == f"ks4w-{name}":
+            return t
+    return None
+
+
+def test_a_call_abandoned_while_queued_never_runs_its_operation():
+    """R7-1(a). The holder keeps the lock past the caller's wait, so the
+    caller is told the call was abandoned. The proof is what happens
+    AFTER the holder releases: the queued worker reaches the front of the
+    queue, loses the decision, and exits without ever entering fn."""
+    calls = []
+    with _lock_holder() as release_holder:
+        with pytest.raises(WordBusy) as exc_info:
+            bridge._run_bounded(
+                "queued-write", 0.05, lambda: calls.append("ran")
+            )
+        assert calls == [], "the operation ran before the caller gave up"
+        worker = _queued_worker("queued-write")
+        assert worker is not None, "the queued worker was not found"
+        release_holder.set()
+        worker.join(_STAGE_JOIN)
+        assert not worker.is_alive(), "the queued worker never finished"
+    assert calls == [], (
+        "the abandoned worker executed the operation after the holder "
+        "released the lock, so a caller told nothing had happened had it "
+        "happen behind its back"
+    )
+    message = str(exc_info.value)
+    assert message.endswith(_ABANDONED_SENTENCE), message
+    assert message == (
+        "queued-write waited 0s for the COM serialization lock "
+        "(existing-write is still running); retry when it finishes. "
+        "com_word_status reports the running operation."
+        + _ABANDONED_SENTENCE
+    )
+
+
+def test_an_abandoned_worker_takes_the_lock_and_still_never_enters_fn():
+    """The abandoned worker is not merely slow: it DOES reach the front of
+    the queue and take the lock after the holder releases, and even then it
+    never enters fn. Repeated, with the holder released the instant the
+    caller gives up, so the tightest ordering is exercised every time.
+    last_op proves the worker really held the lock, which keeps the
+    assertion from passing vacuously on a worker that never ran at all."""
+    entered = []
+
+    def fn():
+        entered.append(threading.get_ident())
+        return {"changed": True}
+
+    for i in range(25):
+        name = f"abandon-{i}"
+        with _lock_holder() as release_holder:
+            with pytest.raises(WordBusy, match="was abandoned"):
+                bridge._run_bounded(name, 0.02, fn)
+            worker = _queued_worker(name)
+            release_holder.set()
+        if worker is not None:
+            worker.join(_STAGE_JOIN)
+            assert not worker.is_alive()
+        snap = com_serial.lock_snapshot()
+        assert snap["held"] is False
+        assert snap["last_op"]["name"] == name, (
+            "the abandoned worker never took the lock, so the test proved "
+            "nothing"
+        )
+    assert entered == [], (
+        f"an abandoned worker entered fn {len(entered)} time(s) after the "
+        "holder released"
+    )
+
+
+def test_a_retry_after_an_abandoned_call_runs_the_operation_once():
+    """R7-1(c). The refusal invites a retry, so the retry must be the only
+    execution there ever is."""
+    calls = []
+
+    def refresh_fields():
+        calls.append("ran")
+        return {"fields_refreshed": True}
+
+    with _lock_holder() as release_holder:
+        with pytest.raises(WordBusy):
+            bridge._run_bounded("queued-write", 0.05, refresh_fields)
+        worker = _queued_worker("queued-write")
+        release_holder.set()
+        if worker is not None:
+            worker.join(_STAGE_JOIN)
+    assert bridge._run_bounded(
+        "queued-write", 30.0, refresh_fields
+    ) == {"fields_refreshed": True}
+    assert calls == ["ran"], (
+        "the operation ran twice, once from the abandoned queued worker and "
+        "once from the retry"
+    )
+
+
+def test_a_worker_that_wins_the_start_decision_is_never_told_to_retry(
+    monkeypatch,
+):
+    """R7-1(b). The other side of the same decision: the worker takes the
+    lock and starts fn in the instant before the caller would have
+    abandoned it. The caller must then follow the grace path and get the
+    worker's own answer, never a queue-contention retry.
+
+    The completion seam makes the order explicit rather than hoped for:
+    the lock is handed over during the caller's deadline wait, and that
+    wait does not return until fn has provably been entered."""
+    calls = []
+    entered = threading.Event()
+    finish = threading.Event()
+
+    def op():
+        calls.append("ran")
+        entered.set()
+        finish.wait(_STAGE_JOIN)
+        return {"paragraphs": 4}
+
+    with _lock_holder() as release_holder:
+
+        def start_the_worker(_staged):
+            release_holder.set()
+            assert entered.wait(_STAGE_JOIN), "the worker never started fn"
+
+        staged = _StagedCompletion(
+            finish,
+            {
+                _StagedCompletion.INITIAL_WAIT: start_the_worker,
+                _StagedCompletion.GRACE_WAIT: _StagedCompletion.finish_worker,
+            },
+        )
+        monkeypatch.setattr(
+            bridge, "_COMPLETION_EVENT_FACTORY", lambda: staged
+        )
+        monkeypatch.setattr(dialogs, "pending_dialogs", lambda *a, **k: [])
+        try:
+            assert bridge._run_bounded("racing-write", 30.0, op) == {
+                "paragraphs": 4
+            }
+        except WordBusy as exc:  # pragma: no cover - the defect
+            pytest.fail(f"a started operation was reported as queued: {exc}")
+    assert calls == ["ran"], "the operation did not run exactly once"
 
 
 # ---------------------------------------- 2. tracked-replace loop (fake COM)
