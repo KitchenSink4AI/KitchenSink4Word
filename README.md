@@ -346,7 +346,7 @@ returns an explicit list of what it could not confidently handle.
 
 ## Live-mode capability matrix
 
-Which tools work on a document that is OPEN in Word. Dual-mode tools auto-route (`live='auto'`); everything else refuses with `DOCUMENT_LOCKED` until the file is closed. Every COM call is **serialized server-side** (one call reaches Word at a time, across separate server processes as well as threads in one), so concurrent agents queue instead of corrupting; live edits stay unsaved until `com_save_document` (the Option C model: see `get_workflows(task='live-editing')`).
+Which tools work on a document that is OPEN in Word. Dual-mode tools auto-route (`live='auto'`); everything else refuses with `DOCUMENT_LOCKED` until the file is closed. Every COM call is **serialized server-side** (one call reaches Word at a time, across separate server processes as well as threads in one); live edits stay unsaved until `com_save_document` (the Option C model: see `get_workflows(task='live-editing')`).
 
 | Dual-mode tool (file + live) | Live-mode notes |
 |---|---|

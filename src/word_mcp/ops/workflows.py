@@ -170,7 +170,7 @@ WORKFLOWS: dict[str, dict] = {
             "model): live edits land in the window unsaved; anchors and "
             "views read the last SAVED state, so save before any "
             "anchor-addressed step. COM calls serialize server-side (one "
-            "at a time), so concurrent agents queue instead of colliding."
+            "at a time)."
         ),
         "steps": [
             {"tool": "com_word_status",

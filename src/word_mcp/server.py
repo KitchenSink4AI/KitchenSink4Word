@@ -134,7 +134,7 @@ mcp = FastMCP(
         "until the file is closed. live='force' goes straight to the open "
         "document, live='off' refuses rather than going live. COM calls "
         "serialize server-side: one "
-        "call reaches Word at a time, concurrent live calls queue (see "
+        "call reaches Word at a time (see "
         "get_workflows task='live-editing' for the save-then-anchor "
         "cycle). list_elements enumerates any "
         "collection; validate runs any read-only check battery; "
