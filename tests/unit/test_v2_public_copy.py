@@ -153,12 +153,17 @@ def test_no_stale_figures_in_public_copy():
             )
 
 
+#: A bare 189, not the tail of a larger number: the 2.2.1 test count is
+#: 2,189 (2.189 / 2 189 in the locales), which says nothing about v1.6.
+_BARE_189 = re.compile(r"(?<!\d[,.   ])(?<!\d)189(?!\d)")
+
+
 def test_189_only_as_v1_history():
     """189 was the v1.6 tool count. It may appear only where a line names
     v1.6/v1.x/migration context, never as a current claim."""
     for path in PUBLIC:
         for i, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
-            if "189" not in line:
+            if not _BARE_189.search(line):
                 continue
             low = line.lower()
             assert ("v1.6" in low or "v1.x" in low or "migrat" in low), (

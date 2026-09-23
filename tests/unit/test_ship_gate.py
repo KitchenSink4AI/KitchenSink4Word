@@ -146,7 +146,7 @@ FIGURE_SURFACES = (
 PUBLISHED_FIGURES = (
     ('222', 'document operations', 'scripts/count_operations.py'),
     ('110', 'tools', 'scripts/measure_surface.py'),
-    ('2,174', 'tests', 'pytest --collect-only'),
+    ('2,189', 'tests', 'pytest --collect-only'),
     ('10,200', 'tokens at lite start', 'scripts/measure_surface.py'),
     ('35,500', 'tokens at full surface', 'scripts/measure_surface.py'),
 )
@@ -189,6 +189,9 @@ SUPERSEDED_FIGURES = (
     ('2,068', 'the 2.2.0 test count, before the 2.2.1 field-test fixes'),
     ('2.068', 'the same count with a german or spanish separator'),
     ('2 068', 'the same count with a french separator'),
+    ('2,174', 'the bf54af4 candidate count, before the M1 repair tests'),
+    ('2.174', 'the same count with a german or spanish separator'),
+    ('2 174', 'the same count with a french separator'),
 )
 
 

@@ -299,7 +299,7 @@ runs against untrusted or semi-trusted agent traffic.
 
 ## Testing
 
-2,174 tests (2,079 run everywhere; 95 live-marked tests drive a real Word
+2,189 tests (2,094 run everywhere; 95 live-marked tests drive a real Word
 instance on Windows): the suite was developed against a private corpus of
 real-world documents (book-length chapters, a document with 171 footnotes, a
 manuscript with 126 tracked changes and reviewer comments), and CI
