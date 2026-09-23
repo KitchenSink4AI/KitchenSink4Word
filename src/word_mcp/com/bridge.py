@@ -11,14 +11,23 @@ under the process-wide COM lock (com/serial.py) — via @_serial.serialized,
 via _run_bounded's worker, or via a bounded try-acquire for status — so
 no bridge call can interleave with a live-layer edit or another bridge
 call. Long invisible-instance operations additionally run under a bounded
-timeout: on expiry the invisible instance this module spawned (and ONLY
-that instance, tracked by PID at DispatchEx time) is terminated, turning
-the report's 30-minute silent hang into a clean structured error.
+timeout, which turns the report's 30-minute silent hang into a structured
+WordBlocked. The deadline bounds how long the CALLER waits; it cancels
+nothing.
+
+NOTHING IN THIS PACKAGE FORCE-ENDS A WORD PROCESS (the KitchenSink4PPT
+1.3.1 rule, adopted here for the 2026-09-22 field-test fixes). The
+invisible instance an operation starts is released with an orderly
+Quit() on its own COM object, and that is all. A timed-out operation is
+reported, not killed: a timeout cannot revalidate a hung apartment, so a
+PID recorded minutes earlier is not proof of what that process is now.
+Ownership needs POSITIVE evidence, and a reading that fails is a no: an
+unreadable process table is unknown, never empty, and an unreadable
+command line owns nothing.
 """
 
 from __future__ import annotations
 
-import atexit
 import collections
 import contextlib
 import functools
@@ -49,19 +58,31 @@ _OLE_MAGIC = bytes.fromhex("d0cf11e0")
 _WD_DO_NOT_SAVE = 0
 _WD_SAVE = -1
 
-# invisible WINWORD.EXE PIDs spawned by _word(), keyed by spawning thread —
-# the timeout kill-switch terminates exactly these, never the user's Word
+# Invisible WINWORD.EXE PIDs started by _word(), keyed by spawning thread.
+# EVIDENCE, not a target list: nothing in this package force-ends a
+# process. An entry exists only when _word() READ the process table before
+# and after DispatchEx and found exactly one new WINWORD.EXE
+# (_acquisition_token). It records what was OBSERVED at start-up, that the
+# pid was not running when the call began; it is not proof of what that
+# process is now. A timed-out operation only NAMES these in its refusal.
 _INVISIBLE_PIDS: dict[int, set] = {}
 
 #: Nothing this module spawns may flash a console on the user's desktop
-#: (author directive 2026-09-06). tasklist and taskkill are console
-#: programs, so every launch carries the flag on Windows and 0 elsewhere.
+#: (author directive 2026-09-06). tasklist and the command-line probe are
+#: console programs, so every launch carries the flag on Windows and 0
+#: elsewhere.
 _NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 
 #: How long to wait for a PID to actually leave the process table after
 #: Quit. Word exits in well under a second when Quit is honored; the
 #: budget is for the case where it is not.
 _EXIT_WAIT_SECONDS = 6.0
+
+#: How much longer a timed-out operation is given before the refusal is
+#: built. The deadline bounds the CALLER's wait and cancels nothing, so a
+#: worker that finishes in this window has finished and its result is
+#: returned instead of a false timeout (KitchenSink4PPT 1.3.1, R6-1).
+TIMEOUT_GRACE_SECONDS = 10.0
 
 #: The last few lifecycle diagnostics, for tests and for com_word_status.
 #: A failed Quit used to be swallowed by contextlib.suppress, which is how
@@ -77,7 +98,23 @@ def _note(message: str) -> None:
         sys.stderr.write(f"[kitchensink4word] {message}\n")
 
 
-def _winword_pids() -> set:
+def _winword_pids() -> set | None:
+    """WINWORD.EXE process ids via the process table (never COM), or None
+    when the table could not be READ.
+
+    NONE MEANS UNKNOWN AND NEVER MEANS "NOTHING WAS RUNNING" (the
+    KitchenSink4PPT 1.3.1 rule, G2b and R4-1). This used to return an
+    empty set for both, so a failed tasklist at the start of a call read as
+    an empty machine, and every Word already running was then counted as
+    one this call had started. Nothing that decides ownership may act on
+    None.
+
+    A genuine no-match is NOT a failure: tasklist prints its INFO line,
+    exits 0, and the answer is an empty set. Unknown is the subprocess
+    raising or timing out, ANY non-zero exit (tasklist prints "ERROR:
+    Access is denied." to stdout and exits 1), no output at all, or a row
+    naming WINWORD.EXE whose pid column will not parse.
+    """
     try:
         result = subprocess.run(
             ["tasklist", "/FI", "IMAGENAME eq WINWORD.EXE", "/FO", "CSV",
@@ -88,16 +125,47 @@ def _winword_pids() -> set:
             creationflags=_NO_WINDOW,
         )
     except Exception:
-        return set()
+        return None
+    if result.returncode != 0:
+        return None
+    stdout = result.stdout or ""
+    if not stdout.strip():
+        return None
     pids = set()
-    for ln in result.stdout.splitlines():
-        if "WINWORD" not in ln.upper():
+    for ln in stdout.splitlines():
+        if "WINWORD.EXE" not in ln.upper():
             continue
         parts = ln.split('","')
-        if len(parts) >= 2:
-            with contextlib.suppress(ValueError):
-                pids.add(int(parts[1].strip('"')))
+        if len(parts) < 2:
+            return None
+        try:
+            pids.add(int(parts[1].strip('"')))
+        except ValueError:
+            return None
     return pids
+
+
+def _acquisition_token(before, after) -> set | None:
+    """The pids this call may record as the instance it started, or None.
+
+    ALL of these must hold, and a read that failed is a no:
+
+    - the process table was READ before DispatchEx (before is not None);
+    - it was READ again after DispatchEx (after is not None);
+    - exactly ONE WINWORD.EXE appeared in between. Word starts one private
+      process per DispatchEx, so one is the only count that names it; two
+      means someone else started Word in the same instant, and there is
+      then no telling which one is ours.
+
+    Word already running is normal here, unlike PowerPoint's singleton: the
+    user's Word is simply in both readings and never in the difference.
+    """
+    if before is None or after is None:
+        return None
+    created = set(after) - set(before)
+    if len(created) != 1:
+        return None
+    return created
 
 
 def _is_automation_instance(pid: int) -> bool | None:
@@ -105,12 +173,11 @@ def _is_automation_instance(pid: int) -> bool | None:
 
     True / False when the command line settles it, None when it cannot be
     read. An interactive WINWORD.EXE never carries /Automation, and the
-    one started by DispatchEx always does, so this is the check that keeps
-    a kill off the user's Word if the PID bookkeeping were ever wrong (the
-    author may have the dissertation open while a com-live tool runs). The
-    policy at every call site is: refuse to kill only on a definite False.
-    None must not block the timeout kill switch, which exists to end a
-    hang.
+    one started by DispatchEx always does. The policy at every call site
+    is: this server claims a process only on a definite True. None means
+    the command line could not be read, and an unreadable command line
+    OWNS NOTHING, exactly like False: no claim is made about it and no
+    advice is given about ending it.
     """
     if sys.platform != "win32":
         return None
@@ -132,61 +199,33 @@ def _is_automation_instance(pid: int) -> bool | None:
     return "/automation" in line.lower()
 
 
-def _kill_pids(pids, *, why: str) -> set:
-    """Force-terminate exactly these PIDs. Returns the ones killed.
-
-    Every caller passes PIDs recorded by _word() at DispatchEx time. The
-    command-line check is a second, independent gate: a PID that is
-    positively NOT an automation instance is left alone and said so, out
-    loud, because killing the user's open Word is the one failure this
-    module must never have."""
-    killed = set()
-    for pid in sorted(pids):
-        if _is_automation_instance(pid) is False:
-            _note(
-                f"refusing to terminate WINWORD.EXE pid {pid}: its command "
-                "line carries no /Automation flag, so it is not an instance "
-                "this server created"
-            )
-            continue
-        try:
-            subprocess.run(
-                ["taskkill", "/PID", str(pid), "/F"],
-                capture_output=True,
-                timeout=15,
-                creationflags=_NO_WINDOW,
-            )
-        except Exception as exc:  # noqa: BLE001
-            _note(f"could not terminate WINWORD.EXE pid {pid} ({why}): {exc}")
-            continue
-        killed.add(pid)
-    if killed:
-        _note(
-            f"terminated invisible WINWORD.EXE {sorted(killed)} ({why})"
-        )
-    return killed
+def _claims(pid: int) -> bool:
+    """Whether this server may say a recorded pid is the instance it
+    launched. Only a command line READ as carrying /Automation says yes;
+    False and None (unreadable) both own nothing."""
+    return _is_automation_instance(pid) is True
 
 
 def _survivors(pids, timeout: float = _EXIT_WAIT_SECONDS) -> set:
     """Which of these PIDs are still in the process table after a bounded
     wait. Quit is asynchronous: Word acknowledges it and then takes a
-    moment, so checking once would report a false orphan."""
+    moment, so checking once would report a false orphan.
+
+    If the table goes unreadable mid-poll the answer is the empty set:
+    unknown is not evidence that anything survived, and polling it again
+    cannot become evidence either (G2b)."""
     remaining = {int(p) for p in pids}
     if not remaining:
         return remaining
     deadline = time.monotonic() + timeout
     while True:
-        remaining &= _winword_pids()
+        now = _winword_pids()
+        if now is None:
+            return set()
+        remaining &= now
         if not remaining or time.monotonic() >= deadline:
             return remaining
         time.sleep(0.25)
-
-
-def _kill_invisible_for_thread(tid) -> bool:
-    """Terminate the invisible instance(s) the given worker thread spawned.
-    PID-precise: only processes recorded by _word() at DispatchEx time."""
-    pids = _INVISIBLE_PIDS.get(tid) or set()
-    return bool(_kill_pids(pids, why="operation timed out"))
 
 
 def _close_open_documents(app) -> None:
@@ -195,10 +234,9 @@ def _close_open_documents(app) -> None:
     This is where the orphan came from. Individual operations close their
     own document, but any path that raised before its close left one open,
     and Word will not Quit an instance holding a document it considers
-    unsaved. The refusal was swallowed, the PID record was dropped on the
-    very next line, and the invisible WINWORD.EXE then had no owner and no
-    way to be killed: exactly the two /Automation orphans the 2026-09-21
-    field test found still running.
+    unsaved. The refusal was swallowed and the PID record was dropped on
+    the very next line, unchecked: exactly the two /Automation orphans the
+    2026-09-21 field test found still running.
 
     wdDoNotSaveChanges, always: this instance is private to one operation
     and everything it was asked to persist was persisted by that operation.
@@ -227,19 +265,21 @@ def _word():
     pythoncom.CoInitialize()
     app = None
     tid = threading.get_ident()
+    # OWNERSHIP NEEDS POSITIVE EVIDENCE. before is None when tasklist could
+    # not be read, and then nothing is recorded for this call at all.
     before = _winword_pids()
     try:
         app = win32com.client.DispatchEx("Word.Application")
-        created = _winword_pids() - before
+        created = _acquisition_token(before, _winword_pids())
         if created:
             _INVISIBLE_PIDS[tid] = created
         app.Visible = False
         app.DisplayAlerts = _WD_ALERTS_NONE
         yield app
     finally:
-        # Take the PID record BEFORE anything can fail, and put it back if
-        # the instance is still alive at the end. Dropping it unverified is
-        # what made an orphan unkillable.
+        # Take the PID record BEFORE anything can fail. It is evidence for
+        # a timeout refusal while the call runs, and nothing after this
+        # call acts on it: nothing in this package force-ends a process.
         pids = _INVISIBLE_PIDS.pop(tid, None) or set()
         if app is not None:
             _close_open_documents(app)
@@ -251,43 +291,49 @@ def _word():
                     f"{exc}"
                 )
         if pids:
+            # Verified, not assumed: Quit is asynchronous, so the record is
+            # checked against the process table before it is dropped. A
+            # survivor is REPORTED, never ended, and only when its command
+            # line is read as an automation instance: an unreadable one owns
+            # nothing, so no claim is made and no advice is given about it.
+            # A cleanup problem is announced, not raised over the top of an
+            # operation that already succeeded.
             alive = _survivors(pids)
-            if alive:
+            if any(_claims(pid) for pid in sorted(alive)):
                 _note(
-                    f"invisible WINWORD.EXE {sorted(alive)} did not exit "
-                    f"within {_EXIT_WAIT_SECONDS:.0f}s of Quit; terminating"
+                    "the Word instance this call launched did not exit "
+                    f"within {_EXIT_WAIT_SECONDS:.0f}s of Quit(); a "
+                    "WINWORD.EXE process may be lingering (zombie_check() "
+                    "to confirm). It was launched by this tool and is safe "
+                    "to end via Task Manager."
                 )
-                unkilled = alive - _kill_pids(alive, why="Quit did not take")
-                if unkilled:
-                    # Still ours, still running: keep the record so the
-                    # atexit sweep gets another attempt rather than losing
-                    # the only handle that can end it.
-                    _INVISIBLE_PIDS.setdefault(tid, set()).update(unkilled)
         pythoncom.CoUninitialize()
 
 
-@atexit.register
-def _sweep_invisible_instances() -> None:
-    """Process-exit backstop over every PID still on the books.
-
-    _word() is the normal owner and cleans up in its own finally block;
-    this catches the paths it cannot, a hard interpreter exit during a COM
-    call among them. It touches ONLY PIDs recorded at DispatchEx time and
-    confirmed to carry /Automation, never the user's Word."""
-    for tid in list(_INVISIBLE_PIDS):
-        pids = _INVISIBLE_PIDS.pop(tid, None) or set()
-        alive = {p for p in pids if p in _winword_pids()}
-        if alive:
-            _kill_pids(alive, why="server exit sweep")
-
-
 def _run_bounded(name: str, timeout: float, fn):
-    """Run fn on a worker thread under the COM lock with a hard deadline.
+    """Run fn on a worker thread under the COM lock, bounding how long the
+    CALLER waits.
 
     On expiry: if the worker never got the lock, that is queue contention
-    (WordBusy names the running operation). If it got the lock and stalled,
-    the invisible instance it spawned is terminated so the COM call errors
-    out and the lock is released (WordBlocked)."""
+    and WordBusy names the operation actually running. If it got the lock
+    and then stalled, NOTHING IS CANCELLED AND NOTHING IS FORCE-ENDED: the
+    deadline bounds how long the caller waits, not how long the work runs.
+    The worker is still inside the COM call, can finish later, and can
+    still save its output.
+
+    It used to force-end the invisible instance the worker had started.
+    That is gone (the KitchenSink4PPT 1.3.1 rule): a timeout cannot
+    revalidate a hung apartment, so the PID recorded at start-up is not
+    proof that the process is still only this call's.
+
+    The completion check is TWO-STAGE, as in KitchenSink4PPT 1.3.1: once
+    the instant the grace wait ends, before any dialog inspection, and once
+    more after it. Either way the worker's own answer wins, its result
+    returned or its exception raised, because reporting a timeout for an
+    operation that succeeded is a false failure the caller acts on (R6-1).
+    Only if it is still not done is the refusal built, and everything it
+    says about a process is state-neutral: what was observed, and what
+    this path did not do (R6-2)."""
     result: dict = {}
     lock_acquired = threading.Event()
     done = threading.Event()
@@ -321,13 +367,65 @@ def _run_bounded(name: str, timeout: float, fn):
             f"({running} is still running); retry when it finishes; "
             "com_word_status reports the running operation"
         )
-    killed = _kill_invisible_for_thread(worker_tid[0] if worker_tid else None)
-    done.wait(10.0)
+    # The worker holds the lock, so fn IS running, or has already finished.
+    # The deadline has passed but the work has NOT been cancelled, so the
+    # grace wait is a real second chance rather than a formality.
+    done.wait(TIMEOUT_GRACE_SECONDS)
+
+    def _completed():
+        """The worker's own answer, when it has one."""
+        if not done.is_set():
+            return False
+        if "error" in result:
+            raise result["error"]
+        return "value" in result
+
+    if _completed():
+        return result["value"]
+
+    dialogs_seen = []
+    with contextlib.suppress(Exception):
+        from . import dialogs as _dialogs
+
+        dialogs_seen = _dialogs.pending_dialogs()
+
+    if _completed():
+        return result["value"]
+    # Evidence is read HERE, at the moment the refusal is built: a worker
+    # that finished and released its instance meanwhile has cleared it.
+    ours = set(
+        _INVISIBLE_PIDS.get(worker_tid[0] if worker_tid else None) or set()
+    )
+    # STATE-NEUTRAL: an empty record is not evidence that no Word was
+    # started. The table may have been unreadable, two processes may have
+    # appeared at once, or the worker may never have reached DispatchEx.
+    if ours:
+        pids = ", ".join(str(p) for p in sorted(ours))
+        detail = (
+            f" (Word process pid {pids} was not running when this "
+            "call began; this call did not force-end it, and its current "
+            "state was not re-checked)"
+        )
+    else:
+        detail = (
+            " (no newly started Word process could be identified; no "
+            "process was force-ended)"
+        )
+    if dialogs_seen:
+        titles = ", ".join(
+            d.get("title") or d.get("class", "?") for d in dialogs_seen[:3]
+        )
+        detail += f". Word has a dialog open: {titles}"
+    # NOTHING WAS CANCELLED. The old sentence said the operation "was
+    # aborted", which stopped being true the moment nothing was ended: a
+    # caller told it was aborted retries on top of a live operation (R5-1).
     raise WordBlocked(
-        f"{name} did not finish within {timeout:.0f}s and was aborted"
-        + (" (its invisible Word instance was terminated)" if killed else "")
-        + ". The document may be very large, or Word may be stuck; check "
-        "com_word_status, and pass a larger timeout to raise the bound."
+        f"Word did not answer within {timeout:.0f} s. The operation "
+        "was NOT cancelled: it may still be running and may still finish "
+        "and save its output. Do not retry yet: call com_word_status and "
+        "wait until it reports no COM operation in progress, then check the "
+        "output file before repeating the call."
+        + detail
     )
 
 
@@ -1085,6 +1183,7 @@ def zombie_check() -> dict:
         capture_output=True,
         text=True,
         timeout=30,
+        creationflags=_NO_WINDOW,
     )
     lines = [
         ln for ln in result.stdout.splitlines() if "WINWORD.EXE" in ln.upper()

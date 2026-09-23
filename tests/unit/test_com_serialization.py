@@ -220,18 +220,30 @@ def test_run_bounded_fast_path_and_error_propagation():
         )
 
 
-def test_run_bounded_stuck_op_raises_word_blocked():
+def test_run_bounded_stuck_op_raises_word_blocked(monkeypatch):
+    """A worker still inside its call after the deadline AND the grace
+    wait is reported as blocked. Deterministic: the worker waits on an
+    event this test owns, and the grace wait is shortened, so nothing here
+    depends on how fast the machine is. Nothing is force-ended, so the
+    worker is released at the end to give the COM lock back."""
+    monkeypatch.setattr(bridge, "TIMEOUT_GRACE_SECONDS", 0.2)
+    release = threading.Event()
+
     def stuck():
-        time.sleep(3)
+        release.wait(30)
         return {}
 
     t0 = time.monotonic()
-    with pytest.raises(WordBlocked, match="did not finish within"):
-        bridge._run_bounded("stuck-op", 0.3, stuck)
-    # must not have waited for the sleep to end before raising... the
-    # implementation waits up to 10s for the worker to unwind after the
-    # (no-op) kill; the worker finishes its sleep in 3s, well under that
-    assert time.monotonic() - t0 < 8
+    try:
+        with pytest.raises(WordBlocked, match="did not answer within"):
+            bridge._run_bounded("stuck-op", 0.3, stuck)
+        assert time.monotonic() - t0 < 8
+    finally:
+        release.set()
+        for t in threading.enumerate():
+            if t.name == "ks4w-stuck-op":
+                t.join(10)
+    assert com_serial.lock_snapshot()["held"] is False
 
 
 def test_run_bounded_queued_behind_lock_raises_word_busy():
