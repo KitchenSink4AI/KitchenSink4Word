@@ -47,7 +47,7 @@
     "all_tools": {
       "type": "boolean",
       "title": "Load every tool at startup",
-      "description": "Off: starts with the core set, and Claude can ask for more mid-session. On: every tool loads from the first message, which costs more of Claude's working memory but never needs a follow-up. Use with care: the full set includes the tools that drive the real application.",
+      "description": "Off: starts with the core set, and Claude can ask for more mid-session. On: every tool loads from the first message, which costs more of Claude's working memory but never needs a follow-up. Either way, the core tools can edit a file that is open in the app; this setting only changes which extra tools load at startup.",
       "default": false,
       "required": false
     },
