@@ -290,3 +290,89 @@ def test_non_affiliation_disclaimer_present():
         assert "Not affiliated with or endorsed by Microsoft" in text, (
             f"{path.name} is missing the non-affiliation disclaimer"
         )
+
+
+# Version stamps nothing checked before 2.2.1. test_update_check pins the
+# package __init__ to pyproject; every other place the number lives was
+# bumped by hand at each release with nothing to catch a miss: the registry
+# entry (twice), the bundle manifest and its uvx pin, and the two llms.txt
+# lines an agent reads first. Ported from KitchenSink4XL 1.2.5.
+
+
+def _pyproject_version() -> str:
+    import tomllib
+
+    return tomllib.loads(
+        (ROOT / "pyproject.toml").read_text(encoding="utf-8")
+    )["project"]["version"]
+
+
+def test_version_is_consistent_across_manifests():
+    """pyproject, server.json (entry and package), and the bundle manifest
+    (version and uvx pin) name one version. A stale uvx pin installs the
+    previous release from a bundle labelled with the new one."""
+    version = _pyproject_version()
+    server_json = json.loads(
+        (ROOT / "server.json").read_text(encoding="utf-8"))
+    manifest = json.loads(
+        (ROOT / "bundle" / "manifest.json").read_text(encoding="utf-8"))
+    found = {
+        "server.json version": server_json["version"],
+        "server.json packages[0].version": server_json["packages"][0]["version"],
+        "bundle/manifest.json version": manifest["version"],
+        "bundle/manifest.json uvx pin": manifest["server"]["mcp_config"]["args"],
+    }
+    expected = {
+        "server.json version": version,
+        "server.json packages[0].version": version,
+        "bundle/manifest.json version": version,
+        "bundle/manifest.json uvx pin": [f"kitchensink4word=={version}"],
+    }
+    wrong = {k: v for k, v in found.items() if v != expected[k]}
+    assert not wrong, (
+        f"these stamps do not match pyproject version {version}: {wrong}")
+
+
+def test_llms_txt_version_lines_match_the_package_version():
+    """The Release line and the test-evidence line both name the version
+    being shipped, and each appears exactly once."""
+    version = _pyproject_version()
+    lines = (ROOT / "docs" / "llms.txt").read_text(
+        encoding="utf-8").splitlines()
+    release = [ln for ln in lines if ln.startswith("Release:")]
+    assert release == [f"Release: v{version}"], (
+        f"docs/llms.txt Release line(s) {release!r} do not match pyproject "
+        f"version {version}")
+    evidence = [m.group(1) for ln in lines
+                for m in [re.match(r"- Test evidence for v(\S+?):", ln)] if m]
+    assert evidence == [version], (
+        f"docs/llms.txt test-evidence line names {evidence!r}, not pyproject "
+        f"version {version}")
+
+
+#: The one download URL the showroom uses: the latest release's bundle,
+#: which carries no version and so cannot go stale. A release that attaches
+#: the bundle under any other file name breaks every one of these links.
+SHOWROOM_DOWNLOAD_URL = ("https://github.com/KitchenSink4AI/KitchenSink4Word/"
+                         "releases/latest/download/kitchensink4word.mcpb")
+
+#: The rendered install panel plus its seven i18n copies (en, ko, ja, zh,
+#: de, fr, es). A locale added or dropped changes this number on purpose.
+SHOWROOM_DOWNLOAD_LINKS = 8
+
+
+def test_showroom_download_links_track_the_latest_release():
+    """Every release link in docs/index.html is the versionless latest-bundle
+    URL. A link pinned to a tag (releases/download/vX.Y.Z/...) would keep
+    serving that release after the next one ships."""
+    html = (ROOT / "docs" / "index.html").read_text(encoding="utf-8")
+    links = re.findall(
+        r"https://github\.com/KitchenSink4AI/KitchenSink4Word/releases/"
+        r"[A-Za-z0-9_./-]*", html)
+    assert len(links) == SHOWROOM_DOWNLOAD_LINKS, (
+        f"docs/index.html has {len(links)} release links, expected "
+        f"{SHOWROOM_DOWNLOAD_LINKS} (one per install panel)")
+    other = sorted({ln for ln in links if ln != SHOWROOM_DOWNLOAD_URL})
+    assert not other, (
+        f"docs/index.html release links other than {SHOWROOM_DOWNLOAD_URL}: "
+        f"{other}")
