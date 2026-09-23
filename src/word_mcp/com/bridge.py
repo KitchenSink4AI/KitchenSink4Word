@@ -47,6 +47,7 @@ from ..core.sandbox import check_path
 from . import callargs as _args
 from . import rot as _rot
 from . import serial as _serial
+from . import xproc as _xproc
 
 _WD_ALERTS_NONE = 0
 _WD_FORMAT_PDF = 17
@@ -1035,44 +1036,57 @@ def _retry_word_call(fn, *, attempts: int = 5, first_delay: float = 0.5):
     ) from last_exc
 
 
-@_serial.serialized("com_save_document")
+#: M1 (2.2.1 release review): the passwordless save and close drive the
+#: USER's Word and flip its DisplayAlerts, the application state the
+#: cross-process live lock exists for (H2), so they take both lock layers
+#: the way a live session does, and without waiting: a held layer refuses
+#: with CallNotStarted before Word is touched, and nothing stays queued to
+#: save or close after the client has given up.
+_SAVE_CLOSE_LOCK = "com_save_document"
+
+
+@_serial.serialized(_SAVE_CLOSE_LOCK, refuse_if_busy=True)
 def save_open_document(path: str) -> dict:
     """Tell the USER's running Word to save a document it has open, so
     file-based tools can read the current state. Runs under the COM
     serialization lock with alerts suppressed and a bounded retry —
-    concurrent saves were the report's 11/11 dialog-blocked failure."""
-    pythoncom, app, doc = _find_open_document(path)
-    try:
-        with _alerts_suppressed(app):
-            _, retries = _retry_word_call(doc.Save)
-        out = {"saved": doc.FullName}
-        if retries:
-            out["retries"] = retries
-        return out
-    finally:
-        pythoncom.CoUninitialize()
+    concurrent saves were the report's 11/11 dialog-blocked failure.
+    Refuses without waiting when a COM lock is held (M1)."""
+    with _xproc.cross_process_lock(_SAVE_CLOSE_LOCK, refuse_if_held=True):
+        pythoncom, app, doc = _find_open_document(path)
+        try:
+            with _alerts_suppressed(app):
+                _, retries = _retry_word_call(doc.Save)
+            out = {"saved": doc.FullName}
+            if retries:
+                out["retries"] = retries
+            return out
+        finally:
+            pythoncom.CoUninitialize()
 
 
-@_serial.serialized("com_save_document")
+@_serial.serialized(_SAVE_CLOSE_LOCK, refuse_if_busy=True)
 def close_open_document(path: str, *, save: bool = True) -> dict:
     """Tell the USER's running Word to close a document (saving by default),
     releasing the lock so file-based tools can edit it. Serialized, alerts
-    suppressed, bounded retry (same contention path as save)."""
-    pythoncom, app, doc = _find_open_document(path)
-    try:
-        with _alerts_suppressed(app):
-            _, retries = _retry_word_call(
-                lambda: doc.Close(
-                    _WD_SAVE if save else _WD_DO_NOT_SAVE
-                ),
-                attempts=3,
-            )
-        out = {"closed": str(Path(path).resolve()), "saved": save}
-        if retries:
-            out["retries"] = retries
-        return out
-    finally:
-        pythoncom.CoUninitialize()
+    suppressed, bounded retry (same contention path as save). Refuses
+    without waiting when a COM lock is held (M1)."""
+    with _xproc.cross_process_lock(_SAVE_CLOSE_LOCK, refuse_if_held=True):
+        pythoncom, app, doc = _find_open_document(path)
+        try:
+            with _alerts_suppressed(app):
+                _, retries = _retry_word_call(
+                    lambda: doc.Close(
+                        _WD_SAVE if save else _WD_DO_NOT_SAVE
+                    ),
+                    attempts=3,
+                )
+            out = {"closed": str(Path(path).resolve()), "saved": save}
+            if retries:
+                out["retries"] = retries
+            return out
+        finally:
+            pythoncom.CoUninitialize()
 
 
 @_bounded_op("com_proofing_errors", default=60.0)

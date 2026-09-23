@@ -68,6 +68,13 @@ class WordBusy(WordMcpError):
     """Word rejected the call (dialog, Backstage, or a running command)."""
 
 
+class CallNotStarted(WordBusy):
+    """A live call or a passwordless save/close was refused BEFORE its body
+    ran, because a COM lock it needs was already held. Nothing was queued,
+    so nothing from the call can run later (M1, 2.2.1 release review).
+    Maps to APP_BUSY through WordBusy."""
+
+
 class WordBlocked(WordMcpError):
     """Word is not answering at all (long synchronous operation in progress)."""
 

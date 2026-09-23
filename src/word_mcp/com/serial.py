@@ -31,6 +31,17 @@ machine.
 Individual operations are fast; serialization latency is negligible
 (report finding). Status reporting (lock_snapshot) lets com_word_status
 tell callers honestly when a call would queue.
+
+NO LATE ENTRY (M1, 2.2.1 release review X-20260924-011). A caller that
+waits on this lock without a bound can outlive its client: behind a hung
+invisible Word, which nothing force-ends any more, a live edit or a save
+sat queued after the client had given up, the client retried, and both
+bodies ran against the user's open document once the holder let go.
+Callers that change the user's open document therefore opt into
+``refuse_if_busy``: they take the lock only if it is free (or already
+theirs, since it is re-entrant) and otherwise raise ``CallNotStarted``
+BEFORE their body, leaving nothing queued. A finite wait would not do: the
+server cannot know how long its client will wait.
 """
 
 from __future__ import annotations
@@ -38,6 +49,8 @@ from __future__ import annotations
 import contextlib
 import threading
 import time
+
+from ..core.errors import CallNotStarted
 
 COM_LOCK = threading.RLock()
 
@@ -48,14 +61,50 @@ _depth = 0                        # re-entrant depth on the owning thread
 _serialized_total = 0             # ops that ran under the lock
 _waited_total_ms = 0.0            # cumulative wait time across ops
 
+#: The refusal every no-late-entry route raises, pinned by
+#: test_m1_no_late_entry. {holder} names what is using Word. COPY SLOT
+#: P1-P-3 (copy packet 2, CM-20260924-012): the sentence is Codex's to
+#: write; replace this placeholder and its pin in the same commit.
+BUSY_NOT_STARTED = (
+    "[[COPY: P1-P-3, see COPY_PACKET_2_FACT_SHEET §6 (P-3). The "
+    "APP_BUSY refusal for a live call, or a com_save_document save or "
+    "close, refused before it started because Word is already in use by "
+    "{holder}. Facts: this call did not start and made no document "
+    "changes; nothing was queued, so nothing from this call will run "
+    "later; wait until com_word_status reports no COM operation in "
+    "progress, then retry. No existing approved string says this "
+    "truthfully: the R7-1 sentence speaks of a queued call that was "
+    "abandoned.]]"
+)
+
+
+def busy_refusal(holder: str) -> CallNotStarted:
+    """The no-late-entry refusal, naming what holds Word."""
+    return CallNotStarted(BUSY_NOT_STARTED.format(holder=holder))
+
+
+def _current_holder() -> str:
+    with _state_lock:
+        if _current is not None:
+            return _current["name"]
+    return "another COM operation"
+
 
 @contextlib.contextmanager
-def com_operation(name: str):
+def com_operation(name: str, *, refuse_if_busy: bool = False):
     """Hold the process-wide COM lock for the duration of one COM-touching
-    operation. Records timing so com_word_status can report contention."""
+    operation. Records timing so com_word_status can report contention.
+
+    refuse_if_busy: take the lock only if it is free or already held by
+    this thread; otherwise raise CallNotStarted before the caller's body
+    runs, with nothing left waiting (see NO LATE ENTRY above)."""
     global _current, _last, _depth, _serialized_total, _waited_total_ms
     t0 = time.monotonic()
-    COM_LOCK.acquire()
+    if refuse_if_busy:
+        if not COM_LOCK.acquire(blocking=False):
+            raise busy_refusal(_current_holder())
+    else:
+        COM_LOCK.acquire()
     waited_ms = (time.monotonic() - t0) * 1000.0
     with _state_lock:
         _depth += 1
@@ -88,20 +137,22 @@ def com_operation(name: str):
         COM_LOCK.release()
 
 
-def serialized(name: str):
+def serialized(name: str, *, refuse_if_busy: bool = False):
     """Decorator form of com_operation for whole-function COM operations.
     Marks the function so the coverage audit test can verify every COM
-    entry point takes the lock."""
+    entry point takes the lock (and, with refuse_if_busy, that it refuses
+    rather than queues)."""
 
     def deco(fn):
         import functools
 
         @functools.wraps(fn)
         def wrapper(*args, **kwargs):
-            with com_operation(name):
+            with com_operation(name, refuse_if_busy=refuse_if_busy):
                 return fn(*args, **kwargs)
 
         wrapper._com_serialized = name
+        wrapper._refuses_if_busy = refuse_if_busy
         return wrapper
 
     return deco

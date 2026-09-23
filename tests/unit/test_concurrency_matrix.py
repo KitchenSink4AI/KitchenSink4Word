@@ -540,11 +540,15 @@ def test_h1_same_target_replace_no_longer_double_applies(two_process_doc):
     tokens, twelve claimed replacements, and text welded from two edits
     ('HIT-C1-00HIT-C2-00 sits on this line.') with both callers reporting
     success. Serialized across processes, the second caller finds nothing
-    left to replace and says so."""
+    left to replace and says so, or, since the M1 repair (2.2.1 release
+    review), is refused with CallNotStarted while the other process holds
+    the live lock, and replaces nothing."""
     results = _run_workers(two_process_doc, "replace", "replace")
-    assert not any(r["errors"] for r in results), [r["errors"] for r in results]
+    unexpected = [e for r in results for e in r["errors"]
+                  if not e.startswith("CallNotStarted(")]
+    assert not unexpected, unexpected
     claimed = sum(sum(c or 0 for c in r["calls"]) for r in results)
-    assert claimed == 6, f"six tokens, {claimed} claimed replacements"
+    assert claimed <= 6, f"six tokens, {claimed} claimed replacements"
 
     paras = srv.get_text(two_process_doc, live="force")
     texts = [p["text"] if isinstance(p, dict) else str(p) for p in paras]
@@ -554,7 +558,8 @@ def test_h1_same_target_replace_no_longer_double_applies(two_process_doc):
         assert markers <= 1, (
             f"two replacements welded into one line: {line!r}\n{body}"
         )
-    assert body.count("HIT-") == 6
+    assert body.count("HIT-") == claimed
+    assert body.count("HIT-") + body.count("TOKEN-") == 6
 
 
 @live_mark
@@ -568,7 +573,11 @@ def test_h2_display_alerts_survives_two_overlapping_processes(
     import win32com.client
 
     results = _run_workers(two_process_doc, "edit_only", "edit_only")
-    assert not any(r["errors"] for r in results), [r["errors"] for r in results]
+    # since the M1 repair a live call against a held lock is refused before
+    # it starts; any other error is a failure
+    unexpected = [e for r in results for e in r["errors"]
+                  if not e.startswith("CallNotStarted(")]
+    assert not unexpected, unexpected
     app = win32com.client.GetActiveObject("Word.Application")
     try:
         assert app.DisplayAlerts == live._WD_ALERTS_ALL, (
