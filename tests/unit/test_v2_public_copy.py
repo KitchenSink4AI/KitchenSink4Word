@@ -110,6 +110,17 @@ _STALE = [
     (r"7[,.\s]900", "retired lite token bill 7,900"),
     (r"26[.,]\s?[79]k", "retired full token bill 26.7k / 26.9k"),
     (r"27[.,]\s?4k", "retired full token bill 27.4k"),
+    # Superseded by the 2026-09-22 field-test fixes: the live parameter
+    # gained a three-value enum on fourteen tools.
+    (r"(?<![\d.])9[.,]\s?9k", "retired lite token bill 9.9k"),
+    (r"(?<![\d.,])9[,.\s]900\b", "retired lite token bill 9,900"),
+    (r"35[.,]\s?2k", "retired full token bill 35.2k"),
+    (r"35[,.\s]200\b", "retired full token bill 35,200"),
+    # Superseded on the 2.2.1 release branch: four com-live descriptions
+    # dropped their "aborts after timeout" clause, which stopped being true
+    # once nothing force-ends Word.
+    (r"35[.,]\s?6k", "retired full token bill 35.6k"),
+    (r"35[,.\s]600\b", "retired full token bill 35,600"),
 ]
 
 
@@ -142,12 +153,17 @@ def test_no_stale_figures_in_public_copy():
             )
 
 
+#: A bare 189, not the tail of a larger number: the 2.2.1 test count is
+#: 2,189 (2.189 / 2 189 in the locales), which says nothing about v1.6.
+_BARE_189 = re.compile(r"(?<!\d[,.   ])(?<!\d)189(?!\d)")
+
+
 def test_189_only_as_v1_history():
     """189 was the v1.6 tool count. It may appear only where a line names
     v1.6/v1.x/migration context, never as a current claim."""
     for path in PUBLIC:
         for i, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
-            if "189" not in line:
+            if not _BARE_189.search(line):
                 continue
             low = line.lower()
             assert ("v1.6" in low or "v1.x" in low or "migrat" in low), (
@@ -248,12 +264,12 @@ def test_i18n_dictionaries_carry_current_figures():
         return [base] + [base.replace(",", s)
                          for s in (".", " ", " ", " ")]
 
-    sep = forms_of("9,900")
-    full = forms_of("35,200")
+    sep = forms_of("10,200")
+    full = forms_of("35,500")
     for i, lang in enumerate(langs):
         block = text[spans[i]:spans[i + 1]]
         assert "222" in block, f"i18n {lang}: operations count 222 missing"
-        for name, forms in (("lite 9.9k", sep), ("full 35.2k", full)):
+        for name, forms in (("lite 10.2k", sep), ("full 35.5k", full)):
             assert any(f in block for f in forms), (
                 f"i18n {lang}: {name} figure missing in all accepted formats"
             )
@@ -279,3 +295,89 @@ def test_non_affiliation_disclaimer_present():
         assert "Not affiliated with or endorsed by Microsoft" in text, (
             f"{path.name} is missing the non-affiliation disclaimer"
         )
+
+
+# Version stamps nothing checked before 2.2.1. test_update_check pins the
+# package __init__ to pyproject; every other place the number lives was
+# bumped by hand at each release with nothing to catch a miss: the registry
+# entry (twice), the bundle manifest and its uvx pin, and the two llms.txt
+# lines an agent reads first. Ported from KitchenSink4XL 1.2.5.
+
+
+def _pyproject_version() -> str:
+    import tomllib
+
+    return tomllib.loads(
+        (ROOT / "pyproject.toml").read_text(encoding="utf-8")
+    )["project"]["version"]
+
+
+def test_version_is_consistent_across_manifests():
+    """pyproject, server.json (entry and package), and the bundle manifest
+    (version and uvx pin) name one version. A stale uvx pin installs the
+    previous release from a bundle labelled with the new one."""
+    version = _pyproject_version()
+    server_json = json.loads(
+        (ROOT / "server.json").read_text(encoding="utf-8"))
+    manifest = json.loads(
+        (ROOT / "bundle" / "manifest.json").read_text(encoding="utf-8"))
+    found = {
+        "server.json version": server_json["version"],
+        "server.json packages[0].version": server_json["packages"][0]["version"],
+        "bundle/manifest.json version": manifest["version"],
+        "bundle/manifest.json uvx pin": manifest["server"]["mcp_config"]["args"],
+    }
+    expected = {
+        "server.json version": version,
+        "server.json packages[0].version": version,
+        "bundle/manifest.json version": version,
+        "bundle/manifest.json uvx pin": [f"kitchensink4word=={version}"],
+    }
+    wrong = {k: v for k, v in found.items() if v != expected[k]}
+    assert not wrong, (
+        f"these stamps do not match pyproject version {version}: {wrong}")
+
+
+def test_llms_txt_version_lines_match_the_package_version():
+    """The Release line and the test-evidence line both name the version
+    being shipped, and each appears exactly once."""
+    version = _pyproject_version()
+    lines = (ROOT / "docs" / "llms.txt").read_text(
+        encoding="utf-8").splitlines()
+    release = [ln for ln in lines if ln.startswith("Release:")]
+    assert release == [f"Release: v{version}"], (
+        f"docs/llms.txt Release line(s) {release!r} do not match pyproject "
+        f"version {version}")
+    evidence = [m.group(1) for ln in lines
+                for m in [re.match(r"- Test evidence for v(\S+?):", ln)] if m]
+    assert evidence == [version], (
+        f"docs/llms.txt test-evidence line names {evidence!r}, not pyproject "
+        f"version {version}")
+
+
+#: The one download URL the showroom uses: the latest release's bundle,
+#: which carries no version and so cannot go stale. A release that attaches
+#: the bundle under any other file name breaks every one of these links.
+SHOWROOM_DOWNLOAD_URL = ("https://github.com/KitchenSink4AI/KitchenSink4Word/"
+                         "releases/latest/download/kitchensink4word.mcpb")
+
+#: The rendered install panel plus its seven i18n copies (en, ko, ja, zh,
+#: de, fr, es). A locale added or dropped changes this number on purpose.
+SHOWROOM_DOWNLOAD_LINKS = 8
+
+
+def test_showroom_download_links_track_the_latest_release():
+    """Every release link in docs/index.html is the versionless latest-bundle
+    URL. A link pinned to a tag (releases/download/vX.Y.Z/...) would keep
+    serving that release after the next one ships."""
+    html = (ROOT / "docs" / "index.html").read_text(encoding="utf-8")
+    links = re.findall(
+        r"https://github\.com/KitchenSink4AI/KitchenSink4Word/releases/"
+        r"[A-Za-z0-9_./-]*", html)
+    assert len(links) == SHOWROOM_DOWNLOAD_LINKS, (
+        f"docs/index.html has {len(links)} release links, expected "
+        f"{SHOWROOM_DOWNLOAD_LINKS} (one per install panel)")
+    other = sorted({ln for ln in links if ln != SHOWROOM_DOWNLOAD_URL})
+    assert not other, (
+        f"docs/index.html release links other than {SHOWROOM_DOWNLOAD_URL}: "
+        f"{other}")

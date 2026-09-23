@@ -169,8 +169,11 @@ WORKFLOWS: dict[str, dict] = {
             "Edit a document while it is OPEN in Word (the Option C save "
             "model): live edits land in the window unsaved; anchors and "
             "views read the last SAVED state, so save before any "
-            "anchor-addressed step. COM calls serialize server-side (one "
-            "at a time), so concurrent agents queue instead of colliding."
+            "anchor-addressed step. Word COM calls within one server process "
+            "are serialized. Live calls and passwordless save or close "
+            "also use a machine-local cross-process lock; a concurrent "
+            "caller receives APP_BUSY before touching Word and nothing is "
+            "queued."
         ),
         "steps": [
             {"tool": "com_word_status",
@@ -333,7 +336,8 @@ WORKFLOWS: dict[str, dict] = {
                     "and indents against the ones they had in the source"},
             {"tool": "format_text",
              "why": "a range per inserted block fixes character formatting "
-                    "the merge reconciled away (no find string needed)"},
+                    "the merge reconciled away; add find to reach a "
+                    "substring inside one run instead"},
             {"tool": "set_paragraph_format",
              "why": "outline_level tags chapter and section headings when "
                     "the sources style headings directly"},
@@ -356,6 +360,11 @@ WORKFLOWS: dict[str, dict] = {
             "com_refresh_fields recomputes PAGE and NUMPAGES at layout "
             "time, so the cached values inside headers and footers stay as "
             "they were; the printed output is still correct.",
+            "com_refresh_fields walks every story range and then updates "
+            "each TablesOfContents and TablesOfFigures MEMBER. Under late "
+            "binding the collection itself has no Update, so a script "
+            "calling doc.TablesOfContents.Update() fails; iterate "
+            "1..Count and update each one.",
         ],
     },
     "build-lists-without-heading-styles": {
@@ -396,6 +405,9 @@ WORKFLOWS: dict[str, dict] = {
             "captions are excluded.",
             "outline_level changes structure only; the text keeps the "
             "formatting the author gave it.",
+            "com_refresh_fields updates each TablesOfContents and "
+            "TablesOfFigures member in turn: the collection has no Update "
+            "method under late binding.",
         ],
     },
     "merge-reference-lists": {
@@ -459,6 +471,8 @@ def get_workflows(task: str | None = None) -> dict:
     recommended tool sequence, one why-line per step, plus notes. Steps
     whose tool lives in an optional pack carry that pack's name, and
     packs_required lists every pack the workflow needs enabled."""
+    from .. import packs as _packs
+
     if task is None:
         return {
             "tasks": [
@@ -469,7 +483,10 @@ def get_workflows(task: str | None = None) -> dict:
                 }
                 for name, wf in WORKFLOWS.items()
             ],
-            "note": "call again with task='<name>' for the step-by-step sequence",
+            "note": (
+                "call again with task='<name>' for the step-by-step "
+                "sequence. " + _packs.WORKER_PACK_SENTENCE
+            ),
         }
     wf = WORKFLOWS.get(task)
     if wf is None:

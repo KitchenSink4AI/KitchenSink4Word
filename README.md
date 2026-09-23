@@ -120,7 +120,7 @@ comparison is about what each one can do, not how many names it has:
 
 | Capability | KitchenSink4Word | GongRzhe Office-Word (2.1k★, archived) | word-mcp-live (195★) | SecurityRonin docx-mcp (43★) |
 |---|---|---|---|---|
-| Tiered context loading (lite core, packs on demand) | ✅ from ~9.9k tokens | ❌ | ❌ | ❌ |
+| Tiered context loading (lite core, packs on demand) | ✅ from ~10.2k tokens | ❌ | ❌ | ❌ |
 | Live editing while the doc is open in Word | ✅ cursor-safe, one Ctrl+Z per call | ❌ | ✅ | ❌ |
 | Table column insert/delete | ✅ merge-aware | ❌ | ❌ | ❌ |
 | Bulk cell edits (one call) | ✅ | ❌ | ❌ | ❌ |
@@ -148,7 +148,7 @@ startup; the seven packs load on demand.
 
 | Pack | Tools | Approx tokens | What it carries |
 |---|---:|---:|---|
-| **lite** (startup) | 29 | ~9.9k | Everyday reading and editing: text, paragraphs, tables, cells, lists, find and replace, outline, document view, backups, workflow guide, server info, pack toggles |
+| **lite** (startup) | 29 | ~10.2k | Everyday reading and editing: text, paragraphs, tables, cells, lists, find and replace, outline, document view, backups, workflow guide, server info, pack toggles |
 | references | 8 | ~2.9k | Word-native citations and bibliography, Zotero search and cite, parity checks, style conversion and detection |
 | review | 9 | ~2.4k | Tracked changes (read, accept/reject, reports), threaded comments, structured diff, anonymize and deanonymize |
 | academic | 24 | ~7.6k | Footnotes and endnotes, TOC, index, captions, cross-references, front matter, chapter headers, sections, styles, list numbering, word counts, validation batteries, submission prep, accessibility |
@@ -156,7 +156,7 @@ startup; the seven packs load on demand.
 | media-forms | 16 | ~5.6k | Images, charts, equations, text boxes, hyperlinks, table structure and styling, form fields, content controls, field codes |
 | com-live | 13 | ~3.1k | Drives a local Microsoft Word: PDF import/export, compare and combine, proofing, readability, field refresh, live editing of open documents |
 | protection-io | 6 | ~1.6k | Document protection, watermarks, redaction with verification, table data import and export |
-| **Full surface** | **112** | **~35.2k** | Everything (110 document tools plus `enable_tools` / `disable_tools`) |
+| **Full surface** | **112** | **~35.5k** | Everything (110 document tools plus `enable_tools` / `disable_tools`) |
 
 ## Quickstart: start lite, enable what you need
 
@@ -211,10 +211,10 @@ schema).
   `scripts/count_operations.py`; the v1.6 run is
   `scripts/count_operations_v16.py`, which measures a v1.6 checkout with the
   same definition.
-- **Tiered loading: starts at about 9.9k tokens, scales to everything.** A
-  fresh session loads the 29-tool lite core (about 9,900 tokens) and turns on
+- **Tiered loading: starts at about 10.2k tokens, scales to everything.** A
+  fresh session loads the 29-tool lite core (about 10,200 tokens) and turns on
   capability packs only when a task needs them, with one `enable_tools` call.
-  Load every pack and the full surface measures about 35,200 tokens, so a
+  Load every pack and the full surface measures about 35,500 tokens, so a
   session that never leaves lite carries roughly a quarter of the whole sink.
   (All figures are script-measured and count what the client actually
   receives; see [Context cost](#context-cost-measured) below.)
@@ -224,9 +224,9 @@ schema).
 Almost no MCP server tells you what it costs to load. Here is the bill, from
 `scripts/measure_surface.py`:
 
-- **Lite start:** 29 tools, about 9,900 tokens, loaded when the session opens.
+- **Lite start:** 29 tools, about 10,200 tokens, loaded when the session opens.
 - **Full surface:** 112 tools (110 document tools plus the two pack toggles),
-  about 35,200 tokens with every pack enabled.
+  about 35,500 tokens with every pack enabled.
 - Clients that defer tool schemas until first use (for example Claude Code)
   pay close to zero until a tool is actually called.
 
@@ -299,7 +299,7 @@ runs against untrusted or semi-trusted agent traffic.
 
 ## Testing
 
-2,068 tests (1,974 run everywhere; 94 live-marked tests drive a real Word
+2,189 tests (2,094 run everywhere; 95 live-marked tests drive a real Word
 instance on Windows): the suite was developed against a private corpus of
 real-world documents (book-length chapters, a document with 171 footnotes, a
 manuscript with 126 tracked changes and reviewer comments), and CI
@@ -346,7 +346,7 @@ returns an explicit list of what it could not confidently handle.
 
 ## Live-mode capability matrix
 
-Which tools work on a document that is OPEN in Word. Dual-mode tools auto-route (`live='auto'`); everything else refuses with `DOCUMENT_LOCKED` until the file is closed. Every COM call is **serialized server-side** (one call reaches Word at a time, across separate server processes as well as threads in one), so concurrent agents queue instead of corrupting; live edits stay unsaved until `com_save_document` (the Option C model: see `get_workflows(task='live-editing')`).
+Which tools work on a document that is OPEN in Word. Dual-mode tools auto-route (`live='auto'`); everything else refuses with `DOCUMENT_LOCKED` until the file is closed. Word COM calls within one server process are serialized. Live calls and passwordless save or close also use a machine-local cross-process lock; a concurrent caller receives `APP_BUSY` before touching Word and nothing is queued. Live edits stay unsaved until `com_save_document` (the Option C model: see `get_workflows(task='live-editing')`).
 
 | Dual-mode tool (file + live) | Live-mode notes |
 |---|---|

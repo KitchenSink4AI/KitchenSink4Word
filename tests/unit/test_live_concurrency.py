@@ -65,9 +65,18 @@ def test_concurrent_live_writes_serialize_without_interleaving(busy_doc):
     """The stress report's failure mode, reproduced deliberately: many
     threads writing through the server layer at once. Under the lock,
     every write must land intact (no character-level interleaving, no
-    garbled text) and every call must succeed or refuse cleanly."""
+    garbled text) and every call must succeed or refuse cleanly.
+
+    Since the M1 repair (2.2.1 release review) a live call that finds the
+    COM lock held is REFUSED with CallNotStarted instead of queueing, so
+    "refuse cleanly" is now the common outcome here: a refused write must
+    be wholly absent, a completed one wholly present."""
+    from word_mcp.core.errors import CallNotStarted
+
     errors: list = []
+    refused: list = []
     results: list = []
+    written: list = []
 
     def replace_worker(i):
         try:
@@ -76,6 +85,9 @@ def test_concurrent_live_writes_serialize_without_interleaving(busy_doc):
                 [{"find": f"marker-{i:02d}", "replace": f"HIT-{i:02d}"}],
             )
             results.append((i, r["total"]))
+            written.append(i)
+        except CallNotStarted:
+            refused.append(i)
         except Exception as exc:  # noqa: BLE001 - collected for assert
             errors.append((i, repr(exc)))
 
@@ -85,6 +97,9 @@ def test_concurrent_live_writes_serialize_without_interleaving(busy_doc):
                 busy_doc, {"paragraph": i},
                 f"rewritten {i:02d} clean full sentence body.",
             )
+            written.append(i)
+        except CallNotStarted:
+            refused.append(i)
         except Exception as exc:  # noqa: BLE001
             errors.append((i, repr(exc)))
 
@@ -100,20 +115,24 @@ def test_concurrent_live_writes_serialize_without_interleaving(busy_doc):
     for t in threads:
         t.join(120)
     assert not errors, f"concurrent live calls failed: {errors}"
+    assert written, "every concurrent live call was refused"
+    assert sorted(written + refused) == list(range(12))
     assert all(total == 1 for _i, total in results)
     text = srv.get_text(busy_doc)
     joined = "\n".join(p["text"] for p in text)
     for i in range(0, 6):
-        assert f"HIT-{i:02d}" in joined
+        assert (f"HIT-{i:02d}" in joined) == (i in written)
     for i in range(6, 12):
-        assert f"rewritten {i:02d} clean full sentence body." in joined
+        assert (
+            f"rewritten {i:02d} clean full sentence body." in joined
+        ) == (i in written)
     # the report's signature corruptions must be absent
     assert "HIT-HIT" not in joined
     for p in text:
         for frag in ("monitoment", "\x07"):
             assert frag not in p["text"]
     snap = com_serial.lock_snapshot()
-    assert snap["ops_serialized"] >= 12
+    assert snap["ops_serialized"] >= len(written)
 
 
 @live_mark

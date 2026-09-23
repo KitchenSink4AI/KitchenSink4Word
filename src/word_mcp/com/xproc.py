@@ -51,11 +51,11 @@ expensive way:
 Scope: APPLICATION, not document. H2 leaked between two processes editing
 DIFFERENT documents, because the state they corrupted belongs to
 Word.Application, and H1's two callers reach one Application anyway. A
-per-document lock would leave H2 open. The cost is that two servers
-driving two different open documents now queue instead of overlapping,
-which costs nothing real: Word's STA already admitted one COM call at a
-time, and the matrix measured a 1191 ms median per live operation under
-load either way.
+per-document lock would leave H2 open. The cost is one cross-process
+owner at a time; each caller's policy decides whether a held lock causes
+immediate refusal or a bounded wait. Word's STA already admitted one COM
+call at a time, and the matrix measured a 1191 ms median per live
+operation under load either way.
 
 Deliberate deviation from the Excel port: the lockfile lives in a local
 per-user directory, NOT beside the document. The live route never writes
@@ -79,6 +79,7 @@ import uuid
 from pathlib import Path
 
 from ..core.errors import LiveLockTimeout
+from . import serial as _serial
 
 #: Directory holding live-session lockfiles (per user, machine-local).
 _LOCK_DIR_ENV = "KS4W_LIVE_LOCK_DIR"
@@ -203,6 +204,10 @@ _OWNER_CREATED = _process_create_time(os.getpid())
 _MUTEXES: dict[str, threading.RLock] = {}
 _MUTEX_GUARD = threading.Lock()
 
+#: Who holds each scope's local mutex (outermost hold), so a no-wait
+#: refusal can name it. Written only by the thread holding that mutex.
+_MUTEX_HOLDERS: dict[str, str] = {}
+
 
 def _mutex_for(key: str) -> threading.RLock:
     with _MUTEX_GUARD:
@@ -308,10 +313,24 @@ def _is_stale(info: dict) -> bool:
     return False
 
 
-def _acquire_lockfile(lock_path: Path, holder: str, wait: float) -> bool:
+def _holder_detail(info: dict) -> str:
+    """The same 'PID n, running x' detail the timeout refusal gives."""
+    detail = f"PID {info.get('pid')}"
+    if info.get("holder"):
+        detail += f", running {info['holder']!r}"
+    return detail
+
+
+def _acquire_lockfile(
+    lock_path: Path, holder: str, wait: float, *, refuse_if_held: bool = False
+) -> bool:
     """Create the advisory lockfile. Returns True when this call created it
     (and must therefore remove it); False for a re-entrant same-process
-    hold. Raises LiveLockTimeout when a live holder does not release."""
+    hold. Raises LiveLockTimeout when a live holder does not release.
+
+    refuse_if_held: never wait. A live foreign holder, or a lockfile still
+    inside its unreadable grace, raises CallNotStarted at once; a stale
+    lock is broken exactly as in the waiting form (M1, no late entry)."""
     deadline = time.monotonic() + wait
     while True:
         if _publish_lockfile(lock_path, holder):
@@ -331,6 +350,8 @@ def _acquire_lockfile(lock_path: Path, holder: str, wait: float) -> bool:
                 continue                      # it vanished; try again
             if time.time() - born > _UNREADABLE_GRACE_SECONDS:
                 _break_lock(lock_path)
+            elif refuse_if_held:
+                raise _serial.busy_refusal(str(lock_path))
             elif time.monotonic() > deadline:
                 raise LiveLockTimeout(
                     "Word is held by a live-session lock this process "
@@ -344,17 +365,16 @@ def _acquire_lockfile(lock_path: Path, holder: str, wait: float) -> bool:
         if _is_stale(info):
             _break_lock(lock_path)
             continue
+        if refuse_if_held:
+            raise _serial.busy_refusal(_holder_detail(info))
         if time.monotonic() > deadline:
-            pid = info.get("pid")
             stamp = info.get("time", 0.0)
             age = (
                 time.time() - stamp
                 if isinstance(stamp, (int, float))
                 else None
             )
-            detail = f"PID {pid}"
-            if info.get("holder"):
-                detail += f", running {info['holder']!r}"
+            detail = _holder_detail(info)
             if age is not None:
                 detail += f", held for {int(age)}s"
             raise LiveLockTimeout(
@@ -403,6 +423,7 @@ def cross_process_lock(
     *,
     scope: str = APP_SCOPE,
     wait: float = LOCK_WAIT_SECONDS,
+    refuse_if_held: bool = False,
 ):
     """Serialize a whole live COM session against every other server process.
 
@@ -415,9 +436,24 @@ def cross_process_lock(
     be created; it never fails a live edit because a lockfile could not be
     hosted, and it never silently claims cross-process coverage it does not
     have (see ``lock_state``).
+
+    refuse_if_held (M1, no late entry): BOTH layers are taken without
+    waiting. If another thread of this process holds the local mutex, or a
+    live holder in another process holds the lockfile, CallNotStarted is
+    raised before the caller's body and nothing is left waiting that could
+    run it later. The same thread re-entering is not refused.
     """
     mutex = _mutex_for(scope)
-    mutex.acquire()
+    if refuse_if_held:
+        if not mutex.acquire(blocking=False):
+            raise _serial.busy_refusal(
+                _MUTEX_HOLDERS.get(scope) or "another COM operation"
+            )
+    else:
+        mutex.acquire()
+    outermost = scope not in _MUTEX_HOLDERS
+    if outermost:
+        _MUTEX_HOLDERS[scope] = holder
     owns = False
     lock_path: Path | None = None
     try:
@@ -432,11 +468,15 @@ def cross_process_lock(
             # reduced coverage rather than letting a caller assume it.
             lock_path = None
         if lock_path is not None:
-            owns = _acquire_lockfile(lock_path, holder, wait)
+            owns = _acquire_lockfile(
+                lock_path, holder, wait, refuse_if_held=refuse_if_held
+            )
         yield owns
     finally:
         if owns and lock_path is not None:
             _release_lockfile(lock_path)
+        if outermost:
+            _MUTEX_HOLDERS.pop(scope, None)
         mutex.release()
 
 

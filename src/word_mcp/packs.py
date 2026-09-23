@@ -292,14 +292,43 @@ def validate_toggles() -> None:
         toggle(name)
 
 
+#: Every value KS4W_PACK_POLICY recognizes.
+_POLICIES = ("auto", "locked")
+
+
+def pack_policy() -> str:
+    """The validated KS4W_PACK_POLICY value.
+
+    A typo used to FAIL OPEN. resolve_lock asked only whether the value
+    equalled "locked", so KS4W_PACK_POLICY=lockedd served with the packs
+    freely unlockable, while its sibling KS4W_MODE=fulll refused to start
+    at all: the one env var whose whole purpose is a security pin was the
+    one that shrugged off a misspelling, and it did so silently. The host
+    that set it had no way to learn its lock was not in force.
+    KitchenSink4XL fixed the identical defect as M-4 of its fresh-eyes
+    round; this is the port. Unknown values now refuse loudly, at startup
+    and at every policy consultation."""
+    raw = os.environ.get(ENV_PACK_POLICY, "auto").strip().lower()
+    if not raw:
+        return "auto"
+    if raw not in _POLICIES:
+        raise WordMcpError(
+            f"{ENV_PACK_POLICY}={raw!r} is not a recognized policy; use "
+            f"one of {list(_POLICIES)}. Refusing rather than letting a typo "
+            "silently drop the host's lock."
+        )
+    return raw
+
+
 def resolve_lock() -> bool:
     """Is the tool surface fixed at startup?
 
     Precedence: an explicit KS4W_PACK_POLICY beats KS4W_LOCK_TOOLS beats
-    the unlocked default."""
-    explicit = _explicit(ENV_PACK_POLICY)
-    if explicit:
-        return explicit.lower() == "locked"
+    the unlocked default. An unrecognized policy value is not a third
+    answer, it is a refusal: see pack_policy."""
+    policy = pack_policy()
+    if _explicit(ENV_PACK_POLICY):
+        return policy == "locked"
     return toggle(ENV_LOCK_TOOLS)
 
 
@@ -335,16 +364,95 @@ def _validate(packs: list[str]) -> list[str]:
     return out
 
 
+#: The note every SUCCESSFUL enable_tools returns, including one that
+#: enabled nothing new (punch-list #887). The old sentence said only
+#: "tools/list_changed was sent; re-fetch the tool list if your client does
+#: not refresh automatically", which is true and useless: the clients that
+#: strand an agent are exactly the ones that never re-fetch, and the agent
+#: reading the note has no way to make them. A subagent in Claude Code
+#: enabled the graphics pack, was told to re-fetch, and then could not call
+#: one tool it had just turned on (2026-09-21 field test); the start-up
+#: route was the only thing that worked in every client tested. The note
+#: therefore leads with what always works and names the client-specific
+#: escape second. Wording is the owner's, verbatim; do not reword it here.
+#:
+#: COPY SLOT P1-S2-07 (copy packet 2), landed from Codex X-20260924-013
+#: and accepted by the main thread. The 2026-09-22 owner body told a
+#: Claude Desktop extension user to set a launch variable the extension
+#: settings do not offer (#930), and its last sentence named an
+#: administrator for a lock the user may have set. test_packs_notice
+#: pins this text word for word.
+#:
+#: PREFIX + BODY, because the first sentence is the one claim in it that
+#: is not always true. A call that enabled nothing new sends no
+#: notification, so telling the caller one was sent is a small lie in the
+#: exact situation where the caller is trying to work out why its tool
+#: list has not changed. The body is identical either way: whichever
+#: prefix it carries, the agent's next move is the same.
+LIST_CHANGED_PREFIX = "tools/list_changed was sent."
+NO_CHANGE_PREFIX = (
+    "These packs were already on, so no list change was sent."
+)
+PACK_NOTE_BODY = (
+    "If the new tools are not in your tool list, this client fixed its "
+    "list when the session or worker started: do not retry here. In the "
+    "Claude Desktop extension, ask the user to turn on 'Load every tool "
+    "at startup', restart Claude Desktop, and start a new session. This "
+    "loads every pack and uses more working memory. In a hand-configured "
+    f"client, ask the user to add the packs to {ENV_MODE} as a comma list "
+    "in this server's launch settings, restart the app or session, then "
+    "start a new worker if needed. Claude Code only: the orchestrator can "
+    "instead call enable_tools in the main session and then start a new "
+    "worker. If enable_tools refuses a pack, the tool set was fixed at "
+    "startup by the launch settings: do not retry until a person changes "
+    "those settings and restarts the server."
+)
+
+
+def pack_note(changed: bool) -> str:
+    """The enable_tools note. `changed` = at least one pack flipped on."""
+    prefix = LIST_CHANGED_PREFIX if changed else NO_CHANGE_PREFIX
+    return f"{prefix} {PACK_NOTE_BODY}"
+
+
+#: The note as a call that actually changed the surface returns it.
+LIST_CHANGED_NOTE = pack_note(True)
+
+#: The same fact, one sentence, for the places a client reads BEFORE it
+#: calls anything: the server instructions at handshake and the
+#: get_workflows index. It was the owner's wording, verbatim.
+#:
+#: COPY SLOT P1-S2-08 (copy packet 2), landed from Codex X-20260924-013
+#: and accepted by the main thread. It deliberately revises the owner's
+#: 2026-09-22 wording so the Claude Desktop route is truthful (#930).
+WORKER_PACK_SENTENCE = (
+    "Workers and subagents only see the tools that were on when they "
+    "started: in the Claude Desktop extension, turn on 'Load every tool "
+    "at startup', restart Claude Desktop, and start a new session; in a "
+    f"hand-configured client, start the server with {ENV_MODE} set to a "
+    "comma list of packs; in Claude Code, you can instead enable packs in "
+    "the main session before starting workers."
+)
+
+#: COPY SLOT P1-S2-09 (copy packet 2), landed from Codex X-20260924-013
+#: and accepted by the main thread: the enable_tools refusal (code
+#: CONFLICT) while the tool set is locked. The earlier text named an
+#: administrator, which is false when a person ticked the lock box
+#: themselves.
+LOCKED_REFUSAL = (
+    "The tool surface was fixed at startup by the host "
+    "(KS4W_PACK_POLICY=locked, or the 'Lock the tool set at startup' "
+    "setting). Only a human can change this launch preference: untick "
+    "that setting in Claude Desktop, or restart a hand-configured server "
+    f"with a different {ENV_MODE} or pack policy. Do not retry until then."
+)
+
+
 def enable(packs: list[str]) -> dict:
     """Idempotent enable. Reports what changed, the approx token cost added,
     and the resulting total surface."""
     if _policy_locked():
-        err = WordMcpError(
-            "the tool surface is fixed at startup by the host "
-            "(KS4W_PACK_POLICY=locked, or the 'Lock the tool set at "
-            "startup' setting). Only a human can change it: untick that "
-            "setting, or restart the server with a different KS4W_MODE."
-        )
+        err = WordMcpError(LOCKED_REFUSAL)
         err.code = "CONFLICT"
         raise err
     wanted = _validate(packs)
@@ -368,11 +476,7 @@ def enable(packs: list[str]) -> dict:
         "approx_tokens_added": tokens_added,
         **surface_report(),
     }
-    if enabled_now:
-        result["note"] = (
-            "tools/list_changed was sent; re-fetch the tool list if your "
-            "client does not refresh automatically"
-        )
+    result["note"] = pack_note(bool(enabled_now))
     return result
 
 
