@@ -10,18 +10,17 @@ fastmcp 3.x adaptation (the pptx original rode fastmcp 2.14, where
 Tool.enable()/disable() flipped a per-tool flag and queued the
 list_changed notification; 3.0 REMOVED Tool.enable/disable): this module
 now keeps its own per-tool enabled bookkeeping (authoritative for
-surface_report and the informed-approval token math) and mirrors every
-change through an injectable visibility hook. server.py wires the hook to
-the fastmcp 3.x visibility API (Phase 4, VERIFIED against an in-process
-fastmcp 3.4.7 client session):
-- startup surface: main() applies apply_startup_mode() to bookkeeping,
-  then ONE global transform, mcp.add_transform(Visibility(False,
-  names=disabled)) (3.4.7 has no server.disable method);
-- mid-session toggles: session-scoped ctx.enable_components /
-  ctx.disable_components(names={...}), whose rules override the global
-  transform (mark-based, later marks win) and send
-  ToolListChangedNotification to the session only (observed on the wire:
-  tools/resources/prompts list_changed all fire per toggle).
+surface_report and the informed-approval token math).
+
+Which tools a session sees and may call comes from that session's own
+record (punch-list #933). main() applies apply_startup_mode() to the process
+default record (_ENABLED); a session's first enable_tools or disable_tools
+copies it into a record of its own (packstate.py), and the server's own
+middleware (packgate.py) filters tools/list and admits tools/call from that
+record, sending tools/list_changed to that session only. No fastmcp
+visibility state is used: fastmcp expired a session's visibility rules a
+day after they were set, which is how an enabled pack used to vanish from a
+long conversation while this module still said it was on.
 
 Env contract:
 - KS4W_MODE: startup surface for clients without reliable list_changed.
@@ -62,9 +61,10 @@ from __future__ import annotations
 import json
 import os
 import sys
-from typing import Callable
+from typing import Any
 
-from .core.errors import WordMcpError
+from . import packstate as _packstate
+from .core.errors import TargetNotFound, WordMcpError
 
 # v2 packs in menu order, per V2_DESIGN Section 14.8 (author-firmed seven
 # packs; granularity per the 2026-09-02 addendum). "lite" is the always-on
@@ -106,25 +106,49 @@ EVERYTHING = "everything"
 # pack -> {tool_name: fastmcp Tool}; "lite" holds the always-on core.
 _REGISTRY: dict[str, dict[str, object]] = {"lite": {}}
 
-# tool_name -> currently enabled? Authoritative bookkeeping (fastmcp 3.x
-# has no per-tool enabled flag to read back; see module docstring).
+# tool_name -> enabled? The PROCESS DEFAULT record: the startup surface
+# apply_startup_mode() sets, which every session starts from. A session's
+# own changes live in its own record (packstate.py), never here; only
+# callers outside any MCP session (the test suite, the measurement scripts)
+# read and write this one directly.
 _ENABLED: dict[str, bool] = {}
 
-# Injected by server.py: called as _visibility_hook(names, enabled) after
-# every state change so the FastMCP surface mirrors the registry. None
-# means bookkeeping only (unit tests, measurement scripts).
-_visibility_hook: Callable[[set[str], bool], None] | None = None
+#: "The session being served", the default for the session parameters
+#: below. Passing None means "no session": the process default record.
+_CURRENT: Any = object()
 
 
-def set_visibility_hook(hook: Callable[[set[str], bool], None] | None) -> None:
-    """server.py wires this to the fastmcp 3.x visibility API."""
-    global _visibility_hook
-    _visibility_hook = hook
+def _record(session: Any = _CURRENT) -> dict[str, bool]:
+    """The record in force for a session: its own, or the process default
+    when it has none (or there is no session)."""
+    if session is _CURRENT:
+        session = _packstate.current_session()
+    own = _packstate.session_record(session)
+    return _ENABLED if own is None else own
 
 
-def _sync(names: set[str], enabled: bool) -> None:
-    if _visibility_hook is not None and names:
-        _visibility_hook(names, enabled)
+class PackOff(TargetNotFound):
+    """A call to a tool whose pack is off in the calling session.
+
+    Refused as NOT_FOUND through the normal refusal envelope, by the session
+    pack gate and, when that is skipped, inside the tool's own boundary
+    wrapper, so both give the same payload (punch-list #933, in the #51
+    v2.1 erratum S1-A shape). The words are the disabled-tool signpost's,
+    unchanged."""
+
+    code = "NOT_FOUND"
+
+    def __init__(self, tool_name: str, pack: str):
+        super().__init__(
+            f"tool {tool_name!r} exists but is currently disabled: it "
+            f"belongs to the {pack!r} pack."
+        )
+        self.tool_name = tool_name
+        self.pack = pack
+        self.hint = (
+            f"call enable_tools(packs=['{pack}']) to turn it on, then "
+            "retry this call"
+        )
 
 
 def register(tool_name: str, pack: str | None, tool: object) -> None:
@@ -152,8 +176,8 @@ def pack_of(tool_name: str) -> str | None:
     return None
 
 
-def is_tool_enabled(tool_name: str) -> bool:
-    return _ENABLED.get(tool_name, False)
+def is_tool_enabled(tool_name: str, session: Any = _CURRENT) -> bool:
+    return _record(session).get(tool_name, False)
 
 
 def tool_names() -> dict[str, list[str]]:
@@ -196,13 +220,15 @@ def pack_cost(pack: str) -> int:
     return sum(approx_tokens(t) for t in _REGISTRY.get(pack, {}).values())
 
 
-def surface_report() -> dict:
-    """Current active surface: enabled tool count and approx token bill."""
+def surface_report(session: Any = _CURRENT) -> dict:
+    """The session's active surface: enabled tool count and approx token
+    bill."""
+    record = _record(session)
     active = 0
     tokens = 0
     per_pack: dict[str, str] = {}
     for pack, tools in _REGISTRY.items():
-        enabled = [t for n, t in tools.items() if _ENABLED.get(n, False)]
+        enabled = [t for n, t in tools.items() if record.get(n, False)]
         active += len(enabled)
         tokens += sum(approx_tokens(t) for t in enabled)
         per_pack[pack] = f"{len(enabled)}/{len(tools)} enabled"
@@ -433,28 +459,34 @@ def enable(packs: list[str]) -> dict:
         err.code = "CONFLICT"
         raise err
     wanted = _validate(packs)
-    enabled_now: list[str] = []
-    already: list[str] = []
-    tokens_added = 0
-    flipped: set[str] = set()
-    for pack in wanted:
-        newly = False
-        for name, tool in _REGISTRY.get(pack, {}).items():
-            if not _ENABLED.get(name, False):
-                _ENABLED[name] = True
-                flipped.add(name)
-                tokens_added += approx_tokens(tool)
-                newly = True
-        (enabled_now if newly else already).append(pack)
-    _sync(flipped, True)
-    result = {
-        "enabled": enabled_now,
-        "already_enabled": already,
-        "approx_tokens_added": tokens_added,
-        **surface_report(),
-    }
-    result["note"] = pack_note(bool(enabled_now))
-    return result
+    session = _packstate.current_session()
+    with _packstate.LOCK:
+        record = _record(session)
+        if session is not None:
+            record = dict(record)  # copy-on-write: never edit a stored one
+        enabled_now: list[str] = []
+        already: list[str] = []
+        tokens_added = 0
+        flipped: set[str] = set()
+        for pack in wanted:
+            newly = False
+            for name, tool in _REGISTRY.get(pack, {}).items():
+                if not record.get(name, False):
+                    record[name] = True
+                    flipped.add(name)
+                    tokens_added += approx_tokens(tool)
+                    newly = True
+            (enabled_now if newly else already).append(pack)
+        if session is not None and flipped:
+            _packstate.keep_session_record(session, record)
+        result = {
+            "enabled": enabled_now,
+            "already_enabled": already,
+            "approx_tokens_added": tokens_added,
+            **surface_report(session),
+        }
+        result["note"] = pack_note(bool(enabled_now))
+        return result
 
 
 def disable(packs: list[str]) -> dict:
@@ -467,26 +499,32 @@ def disable(packs: list[str]) -> dict:
         err.code = "CONFLICT"
         raise err
     wanted = _validate(packs)
-    disabled_now: list[str] = []
-    already: list[str] = []
-    tokens_removed = 0
-    flipped: set[str] = set()
-    for pack in wanted:
-        newly = False
-        for name, tool in _REGISTRY.get(pack, {}).items():
-            if _ENABLED.get(name, False):
-                _ENABLED[name] = False
-                flipped.add(name)
-                tokens_removed += approx_tokens(tool)
-                newly = True
-        (disabled_now if newly else already).append(pack)
-    _sync(flipped, False)
-    return {
-        "disabled": disabled_now,
-        "already_disabled": already,
-        "approx_tokens_removed": tokens_removed,
-        **surface_report(),
-    }
+    session = _packstate.current_session()
+    with _packstate.LOCK:
+        record = _record(session)
+        if session is not None:
+            record = dict(record)  # copy-on-write: never edit a stored one
+        disabled_now: list[str] = []
+        already: list[str] = []
+        tokens_removed = 0
+        flipped: set[str] = set()
+        for pack in wanted:
+            newly = False
+            for name, tool in _REGISTRY.get(pack, {}).items():
+                if record.get(name, False):
+                    record[name] = False
+                    flipped.add(name)
+                    tokens_removed += approx_tokens(tool)
+                    newly = True
+            (disabled_now if newly else already).append(pack)
+        if session is not None and flipped:
+            _packstate.keep_session_record(session, record)
+        return {
+            "disabled": disabled_now,
+            "already_disabled": already,
+            "approx_tokens_removed": tokens_removed,
+            **surface_report(session),
+        }
 
 
 def resolve_startup_mode() -> str:
@@ -522,10 +560,9 @@ def startup_note() -> str:
 
 
 def apply_startup_mode() -> str:
-    """Apply the resolved startup surface at server start (before the event
-    loop; no client is connected yet, so the visibility hook runs without a
-    session and the server-side wiring must use global transforms, not
-    session state). Returns the mode applied, for logging.
+    """Apply the resolved startup surface at server start, before any
+    client connects, to the process default record every session starts
+    from. Returns the mode applied, for logging.
 
     Every boolean toggle is parsed here so a typo in any of them refuses
     LOUDLY before the server serves a single request, and the resolution is
@@ -550,13 +587,9 @@ def apply_startup_mode() -> str:
     if not packs:
         return "lite"
     valid = _validate(packs)
-    flipped: set[str] = set()
     for pack in valid:
         for name in _REGISTRY.get(pack, {}):
-            if not _ENABLED.get(name, False):
-                _ENABLED[name] = True
-                flipped.add(name)
-    _sync(flipped, True)
+            _ENABLED[name] = True
     return mode
 
 

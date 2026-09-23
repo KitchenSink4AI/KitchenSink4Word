@@ -159,33 +159,41 @@ def test_pack_hint_skips_lite_and_unknown_tools():
     assert envelope.pack_hint(exc) is None
 
 
-def test_disabled_tool_signpost_middleware():
-    """A tools/call to a registered but disabled tool must name the pack,
-    not dead-end as Unknown tool."""
-    from fastmcp.exceptions import NotFoundError, ToolError
+def test_session_pack_gate_middleware():
+    """A tools/call to a registered tool whose pack is off in the calling
+    session names the pack and the enable call, in the refusal envelope
+    (code NOT_FOUND), and never reaches the tool; a name no pack registers
+    passes through to fastmcp untouched (punch-list #933; this replaced the
+    DisabledToolSignpost test)."""
+    from types import SimpleNamespace
+
+    from word_mcp import packgate
 
     packs.register("insert_citation", "references", DummyTool())
-    mw = envelope.DisabledToolSignpost()
+    gate = packgate.SessionPackGate(envelope.refuse)
 
-    class Ctx:
-        class message:
-            name = "insert_citation"
+    class Session:  # a stand-in MCP session: weakly referenceable, by identity
+        pass
+
+    session = Session()
+
+    def ctx(name):
+        return SimpleNamespace(
+            fastmcp_context=SimpleNamespace(session=session),
+            message=SimpleNamespace(name=name),
+        )
 
     async def call_next(_ctx):
-        raise NotFoundError("Unknown tool: insert_citation")
+        return "reached the tool"
 
-    with pytest.raises(ToolError) as exc:
-        asyncio.run(mw.on_call_tool(Ctx(), call_next))
-    msg = str(exc.value)
-    assert "references" in msg
-    assert "enable_tools" in msg
+    out = asyncio.run(gate.on_call_tool(ctx("insert_citation"), call_next))
+    assert out.is_error
+    assert out["error"]["code"] == "NOT_FOUND"
+    assert "'references' pack" in out["error"]["message"]
+    assert "enable_tools(packs=['references'])" in out["error"]["hint"]
 
-    class CtxUnknown:
-        class message:
-            name = "never_registered"
-
-    with pytest.raises(NotFoundError):
-        asyncio.run(mw.on_call_tool(CtxUnknown(), call_next))
+    passed = asyncio.run(gate.on_call_tool(ctx("never_registered"), call_next))
+    assert passed == "reached the tool"
 
 
 def test_no_em_dashes_in_envelope_strings():

@@ -2,16 +2,16 @@
 
 Pack membership finalized against the 110-tool surface (+2 toggles),
 enable_tools/disable_tools registered, KS4W_MODE/KS4W_PACK_POLICY
-startup handling, the fastmcp 3.x visibility route (global transform at
-startup, session-scoped toggles mid-session), and the discoverability
-contract. The red-gate discoverability scenarios (fresh agents enabling
-the right pack unprompted) run in Phase 6; the stubs here prove the
-plumbing they depend on.
+startup handling, the per-session pack record the session pack gate
+filters by (punch-list #933; test_session_packs.py holds its gates), and
+the discoverability contract. The red-gate discoverability scenarios
+(fresh agents enabling the right pack unprompted) run in Phase 6; the
+stubs here prove the plumbing they depend on.
 
 Wire tests ride an in-process fastmcp Client and replicate main()'s
-startup wiring (global Visibility transform) in a try/finally that
-restores process-global state, because the FastMCP instance and the
-packs bookkeeping are shared with every other test in the suite.
+startup wiring, which is the lite default record alone, restoring the
+process-global bookkeeping afterwards because the FastMCP instance and the
+packs registry are shared with every other test in the suite.
 """
 
 from __future__ import annotations
@@ -23,7 +23,6 @@ import pytest
 
 from fastmcp import Client
 from fastmcp.exceptions import ToolError
-from fastmcp.server.transforms.visibility import Visibility
 
 from word_mcp import envelope, packs, server
 from word_mcp.core.errors import WordMcpError
@@ -62,7 +61,6 @@ def restore_enabled():
     yield
     packs._ENABLED.clear()
     packs._ENABLED.update(saved)
-    server._PENDING_VISIBILITY.clear()
 
 
 # ------------------------------------------------- membership integrity
@@ -207,59 +205,51 @@ def test_locked_policy_refuses(restore_enabled, monkeypatch):
 def test_toggle_round_trip_and_signpost(restore_enabled):
     """Startup lite -> disabled tool signposts pack + exact call ->
     enable -> visible + list_changed -> disable -> hidden -> signpost.
-    Replicates main()'s startup wiring against fastmcp 3.4.7 reality
-    (verified: disabled tools raise NotFoundError('Unknown tool'), the
-    DisabledToolSignpost converts it; session visibility rules override
-    the global transform and send ToolListChangedNotification)."""
+    Replicates main()'s startup wiring, which since punch-list #933 is the
+    lite default record alone: the session pack gate refuses a pack-off
+    tool with the pack-naming envelope, and enable_tools/disable_tools
+    send ToolListChangedNotification themselves."""
 
     async def run():
         out = {}
         _reset_to_lite()
-        server._PENDING_VISIBILITY.clear()
-        transform = Visibility(
-            False, names=server._startup_disabled_names()
-        )
-        server.mcp.add_transform(transform)
         notes: list[str] = []
 
         async def handler(message):
             notes.append(getattr(
                 getattr(message, "root", None), "method", "?"))
 
-        try:
-            async with Client(server.mcp, message_handler=handler) as c:
-                names = {t.name for t in await c.list_tools()}
-                out["startup"] = names
+        async with Client(server.mcp, message_handler=handler) as c:
+            names = {t.name for t in await c.list_tools()}
+            out["startup"] = names
 
-                with pytest.raises(ToolError) as exc:
-                    await c.call_tool("insert_citation", {
-                        "file_path": "x.docx", "source_tag": "t",
-                    })
-                out["signpost"] = str(exc.value)
+            with pytest.raises(ToolError) as exc:
+                await c.call_tool("insert_citation", {
+                    "file_path": "x.docx", "source_tag": "t",
+                })
+            out["signpost"] = str(exc.value)
 
-                res = await c.call_tool(
-                    "enable_tools", {"packs": ["references"]})
-                out["enable"] = res.structured_content
-                await asyncio.sleep(0.1)
-                out["notes_enable"] = list(notes)
-                out["after_enable"] = {
-                    t.name for t in await c.list_tools()}
+            res = await c.call_tool(
+                "enable_tools", {"packs": ["references"]})
+            out["enable"] = res.structured_content
+            await asyncio.sleep(0.1)
+            out["notes_enable"] = list(notes)
+            out["after_enable"] = {
+                t.name for t in await c.list_tools()}
 
-                notes.clear()
-                await c.call_tool(
-                    "disable_tools", {"packs": ["references"]})
-                await asyncio.sleep(0.1)
-                out["notes_disable"] = list(notes)
-                out["after_disable"] = {
-                    t.name for t in await c.list_tools()}
+            notes.clear()
+            await c.call_tool(
+                "disable_tools", {"packs": ["references"]})
+            await asyncio.sleep(0.1)
+            out["notes_disable"] = list(notes)
+            out["after_disable"] = {
+                t.name for t in await c.list_tools()}
 
-                with pytest.raises(ToolError) as exc2:
-                    await c.call_tool("insert_citation", {
-                        "file_path": "x.docx", "source_tag": "t",
-                    })
-                out["signpost2"] = str(exc2.value)
-        finally:
-            server.mcp._transforms.remove(transform)
+            with pytest.raises(ToolError) as exc2:
+                await c.call_tool("insert_citation", {
+                    "file_path": "x.docx", "source_tag": "t",
+                })
+            out["signpost2"] = str(exc2.value)
         return out
 
     out = asyncio.run(run())

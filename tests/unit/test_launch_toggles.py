@@ -47,12 +47,9 @@ def _restore_enabled():
     """The enabled bookkeeping is process-global; apply_startup_mode writes
     to it, so snapshot and restore around every test."""
     saved = dict(packs._ENABLED)
-    saved_hook = packs._visibility_hook
-    packs.set_visibility_hook(None)
     yield
     packs._ENABLED.clear()
     packs._ENABLED.update(saved)
-    packs.set_visibility_hook(saved_hook)
 
 
 # --------------------------------------------------------- 1. polarity

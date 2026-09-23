@@ -25,11 +25,12 @@ now subclasses ToolResult alone (is_error=True at construction) and exposes
 the mapping protocol over structured_content, which preserves both halves
 of the old contract.
 
-Phase 4 verification (fastmcp 3.4.7, in-process client): a tools/call to
-a visibility-disabled tool has get_tool return None, and the server
-raises NotFoundError("Unknown tool: ...") exactly as 2.14 did, so
-DisabledToolSignpost's except clause holds unchanged; the signpost was
-observed on the wire converting it into the pack-naming ToolError.
+The transport-layer disabled-tool signpost (DisabledToolSignpost, which
+turned fastmcp's "Unknown tool" for a hidden tool into a pack-naming
+ToolError) is gone. A call to a tool whose pack is off in the calling
+session is now refused before fastmcp looks the tool up, by the session
+pack gate (packgate.py, punch-list #933), with packs.PackOff: the same
+words, in this module's envelope (code NOT_FOUND).
 """
 
 from __future__ import annotations
@@ -38,9 +39,6 @@ import json as _json
 from typing import Any
 from xml.etree.ElementTree import ParseError as _XmlParseError
 
-from fastmcp.exceptions import NotFoundError as _FmcpNotFound
-from fastmcp.exceptions import ToolError as _FmcpToolError
-from fastmcp.server.middleware import Middleware as _FmcpMiddleware
 from fastmcp.tools.tool import ToolResult as _FmcpToolResult
 from lxml import etree as _lxml_etree
 
@@ -185,6 +183,17 @@ def _declared_code(exc: BaseException) -> str | None:
     return code if isinstance(code, str) and code in CLOSED_CODES else None
 
 
+def _declared_hint(exc: BaseException) -> str | None:
+    """A remedy the raise site states for itself, which beats the blanket
+    per-code entry in HINTS (ported from KitchenSink4PPT, which found the
+    need first). packs.PackOff uses it: the fix for a tool whose pack is off
+    is the enable_tools call, not the per-code advice to re-read the
+    document. A raise site that knows better says so through exc.hint, the
+    same way it declares exc.hint_tools."""
+    hint = getattr(exc, "hint", None)
+    return hint if isinstance(hint, str) and hint.strip() else None
+
+
 def refusal(exc: BaseException) -> dict:
     """Build the {ok: false, error: {code, message, hint}} payload."""
     code = _declared_code(exc) or classify(exc)
@@ -197,7 +206,7 @@ def refusal(exc: BaseException) -> dict:
             "probably has the wrong shape (list where a dict belongs, or "
             "vice versa)"
         )
-    hint = HINTS.get(code, "")
+    hint = _declared_hint(exc) or HINTS.get(code, "")
     ph = pack_hint(exc)
     if ph:
         hint = f"{hint} {ph}".strip()
@@ -244,25 +253,3 @@ class RefusalResult(_FmcpToolResult):
 def refuse(exc: BaseException) -> RefusalResult:
     """One-call convenience for the Phase 2 tool wrapper."""
     return RefusalResult(refusal(exc))
-
-
-class DisabledToolSignpost(_FmcpMiddleware):
-    """Discoverability rule 2 at the transport layer (pptx M4 fix): a
-    tools/call to a registered but currently disabled tool must name the
-    owning pack and the exact enable_tools call, not dead-end with a bare
-    "Unknown tool"."""
-
-    async def on_call_tool(self, context, call_next):
-        try:
-            return await call_next(context)
-        except _FmcpNotFound as exc:
-            name = getattr(context.message, "name", "")
-            pack = _packs.pack_of(name)
-            if pack and pack != "lite" and not _packs.is_tool_enabled(name):
-                raise _FmcpToolError(
-                    f"tool {name!r} exists but is currently disabled: it "
-                    f"belongs to the {pack!r} pack. Call "
-                    f"enable_tools(packs=['{pack}']) to turn it on, "
-                    "then retry this call."
-                ) from exc
-            raise

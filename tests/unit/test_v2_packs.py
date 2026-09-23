@@ -31,17 +31,14 @@ def _clean_registry(monkeypatch):
     monkeypatch.delenv("KS4W_LOCK_TOOLS", raising=False)
     saved_reg = {p: dict(t) for p, t in packs._REGISTRY.items()}
     saved_en = dict(packs._ENABLED)
-    saved_hook = packs._visibility_hook
     packs._REGISTRY.clear()
     packs._REGISTRY.update({"lite": {}})
     packs._ENABLED.clear()
-    packs.set_visibility_hook(None)
     yield
     packs._REGISTRY.clear()
     packs._REGISTRY.update({p: dict(t) for p, t in saved_reg.items()})
     packs._ENABLED.clear()
     packs._ENABLED.update(saved_en)
-    packs._visibility_hook = saved_hook
 
 
 @pytest.fixture
@@ -175,19 +172,19 @@ def test_startup_mode_bad_pack_fails_loudly(populated, monkeypatch):
         packs.apply_startup_mode()
 
 
-def test_visibility_hook_mirrors_changes(populated):
-    calls: list[tuple[set, bool]] = []
-    packs.set_visibility_hook(lambda names, enabled: calls.append(
-        (set(names), enabled)
-    ))
+def test_toggles_outside_a_session_use_the_default_record(populated):
+    """Punch-list #933: with no MCP session (in-process callers, as here)
+    enable and disable read and write the process default record directly
+    and leave no per-session record behind. (This replaced the visibility
+    hook test: there is no visibility hook any more.)"""
+    from word_mcp import packstate
+
+    before = packstate.live_records()
     packs.enable(["references"])
-    assert calls == [({"ref_one", "ref_two"}, True)]
+    assert packs._ENABLED["ref_one"] and packs._ENABLED["ref_two"]
     packs.disable(["references"])
-    assert calls[-1] == ({"ref_one", "ref_two"}, False)
-    # idempotent re-enable of nothing flips nothing: no hook call
-    calls.clear()
-    packs.disable(["references"])
-    assert calls == []
+    assert not packs._ENABLED["ref_one"] and not packs._ENABLED["ref_two"]
+    assert packstate.live_records() == before
 
 
 def test_menu_and_costs(populated):
