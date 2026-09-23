@@ -23,11 +23,10 @@ Contract for every mutating tool (v1.6 rule carried forward):
 - Mutations of one file are serialized; saves are atomic and validated.
 - A file open in Word is edited live by dual-mode tools (live='auto');
   tools with no live route refuse until it is closed.
-- Every COM-touching call (live routes, live_ tools, com_ tools) runs
-  under one process-wide serialization lock (com/serial.py): exactly one
-  call reaches Word at a time, so concurrent multi-agent live editing
-  queues instead of corrupting (2026-09-03 live COM stress report; it
-  was unsafe before this lock).
+- Calls within one server process are serialized. Live calls and
+  passwordless save or close also use a machine-local cross-process
+  lock; a concurrent caller receives `APP_BUSY` before touching Word and
+  nothing is queued.
 """
 
 from __future__ import annotations
@@ -132,11 +131,12 @@ mcp = FastMCP(
         "auto-backup before every mutation; dual-mode tools edit documents "
         "open in Word live (live='auto'), tools with no live route refuse "
         "until the file is closed. live='force' goes straight to the open "
-        "document, live='off' refuses rather than going live. COM calls "
-        "serialize server-side: one "
-        "call reaches Word at a time (see "
-        "get_workflows task='live-editing' for the save-then-anchor "
-        "cycle). list_elements enumerates any "
+        "document, live='off' refuses rather than going live. Calls within "
+        "one server process are serialized. Live calls and passwordless "
+        "save or close also use a machine-local cross-process lock; a "
+        "concurrent caller receives `APP_BUSY` before touching Word and "
+        "nothing is queued (see get_workflows task='live-editing' for "
+        "the save-then-anchor cycle). list_elements enumerates any "
         "collection; validate runs any read-only check battery; "
         "migration/v1_to_v2.json maps every v1 tool name here. "
         # Punch-list #887. This paragraph had no pack sentence to append to

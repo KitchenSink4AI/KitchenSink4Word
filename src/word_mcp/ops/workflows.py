@@ -169,8 +169,11 @@ WORKFLOWS: dict[str, dict] = {
             "Edit a document while it is OPEN in Word (the Option C save "
             "model): live edits land in the window unsaved; anchors and "
             "views read the last SAVED state, so save before any "
-            "anchor-addressed step. COM calls serialize server-side (one "
-            "at a time)."
+            "anchor-addressed step. Calls within one server process are "
+            "serialized. Live calls and passwordless save or close also "
+            "use a machine-local cross-process lock; a concurrent caller "
+            "receives `APP_BUSY` before touching Word and nothing is "
+            "queued."
         ),
         "steps": [
             {"tool": "com_word_status",

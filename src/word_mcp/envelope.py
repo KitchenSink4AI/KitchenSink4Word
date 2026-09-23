@@ -131,8 +131,8 @@ HINTS: dict[str, str] = {
     ),
     "APP_NOT_RUNNING": "this operation needs Word installed and reachable",
     "APP_BUSY": (
-        "Word is showing a dialog or running a command; clear it and "
-        "retry"
+        "Word is in use or showing a dialog; wait for the current "
+        "operation or clear the dialog, then retry."
     ),
     "APP_BLOCKED": "Word is not answering; wait or restart it",
     "PROTECTED_VIEW": "click Enable Editing in Word first",

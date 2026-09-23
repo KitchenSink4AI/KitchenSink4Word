@@ -38,7 +38,7 @@ below is a behavior you can rely on without testing it first.
 - Closed error vocabulary: every refusal is `{ok: false, error: {code, message, hint}}`. `code` is one of 13 values: `AMBIGUOUS_LOCATION`, `NOT_FOUND`, `STALE_ANCHOR`, `RANGE_OUT_OF_BOUNDS`, `DOCUMENT_LOCKED`, `APP_NOT_RUNNING`, `APP_BUSY`, `APP_BLOCKED`, `PROTECTED_VIEW`, `VALIDATION_FAILED`, `UNSUPPORTED_CONTENT`, `CONFLICT`, `BAD_PARAMS`. Branch on `code`, never on message text.
 - Refusals ride the wire with `isError=true`. A refusal never arrives as a success.
 - `hint` carries the next call to make, not a restatement of the failure.
-- COM access is serialized: two agents working at once cannot interleave writes into the same document. Serialization spans separate server processes, not only threads in one.
+- Calls within one server process are serialized. Live calls and passwordless save or close also use a machine-local cross-process lock; a concurrent caller receives `APP_BUSY` before touching Word and nothing is queued.
 - Pending Word dialogs are detected at the OS window level, not inferred from a timeout. `com_word_status` reports the dialog a human has to dismiss.
 - File-mode tools refuse a document that is open in Word and name the `live_*` or `com_*` route that handles the open case.
 - Live edits land as one Ctrl+Z step per tool call and leave the user's cursor and selection where they were.
