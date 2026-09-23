@@ -1,6 +1,6 @@
 [project]
 name = "kitchensink4word"
-version = "2.2.0"
+version = "2.2.1"
 description = "Edit Word (.docx) files with your AI assistant: tracked changes, citations, tables, templates and live editing in Word on Windows. Local MCP server for Claude Code, Codex CLI and other MCP clients."
 readme = "README.md"
 license = "AGPL-3.0-only"

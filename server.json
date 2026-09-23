@@ -3,7 +3,7 @@
   "name": "io.github.KitchenSink4AI/kitchensink4word",
   "title": "KitchenSink4Word",
   "description": "Word (.docx) MCP server: 222 operations, live editing, tracked changes, citations, mail merge.",
-  "version": "2.2.0",
+  "version": "2.2.1",
   "websiteUrl": "https://kitchensink4.ai/KitchenSink4Word/",
   "repository": {
     "url": "https://github.com/KitchenSink4AI/KitchenSink4Word",
@@ -13,7 +13,7 @@
     {
       "registryType": "pypi",
       "identifier": "kitchensink4word",
-      "version": "2.2.0",
+      "version": "2.2.1",
       "transport": {
         "type": "stdio"
       }
