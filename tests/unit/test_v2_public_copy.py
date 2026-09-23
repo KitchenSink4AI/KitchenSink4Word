@@ -110,6 +110,12 @@ _STALE = [
     (r"7[,.\s]900", "retired lite token bill 7,900"),
     (r"26[.,]\s?[79]k", "retired full token bill 26.7k / 26.9k"),
     (r"27[.,]\s?4k", "retired full token bill 27.4k"),
+    # Superseded by the 2026-09-22 field-test fixes: the live parameter
+    # gained a three-value enum on fourteen tools.
+    (r"(?<![\d.])9[.,]\s?9k", "retired lite token bill 9.9k"),
+    (r"(?<![\d.,])9[,.\s]900\b", "retired lite token bill 9,900"),
+    (r"35[.,]\s?2k", "retired full token bill 35.2k"),
+    (r"35[,.\s]200\b", "retired full token bill 35,200"),
 ]
 
 
@@ -248,12 +254,12 @@ def test_i18n_dictionaries_carry_current_figures():
         return [base] + [base.replace(",", s)
                          for s in (".", " ", " ", " ")]
 
-    sep = forms_of("9,900")
-    full = forms_of("35,200")
+    sep = forms_of("10,200")
+    full = forms_of("35,600")
     for i, lang in enumerate(langs):
         block = text[spans[i]:spans[i + 1]]
         assert "222" in block, f"i18n {lang}: operations count 222 missing"
-        for name, forms in (("lite 9.9k", sep), ("full 35.2k", full)):
+        for name, forms in (("lite 10.2k", sep), ("full 35.6k", full)):
             assert any(f in block for f in forms), (
                 f"i18n {lang}: {name} figure missing in all accepted formats"
             )
