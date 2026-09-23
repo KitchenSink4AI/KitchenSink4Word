@@ -1,5 +1,8 @@
 # Changelog
 
+### 2.2.1
+[[COPY: CHANGELOG 2.2.1 entry, written by Codex from the fact sheet]]
+
 ### 2.2.0
 This release changes what several calls return and what some of them write. The first three entries can break code written against 2.1.3, so read them before you upgrade. `com_refresh_fields`, `get_outline(detect_formatted=true)` and `list_elements(type="toc")` also return more or different data, and `insert_document` with `formatting="source"` writes more direct formatting than it did; each is described in its own entry below.
 
