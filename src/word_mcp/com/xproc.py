@@ -51,11 +51,11 @@ expensive way:
 Scope: APPLICATION, not document. H2 leaked between two processes editing
 DIFFERENT documents, because the state they corrupted belongs to
 Word.Application, and H1's two callers reach one Application anyway. A
-per-document lock would leave H2 open. The cost is that two servers
-driving two different open documents now queue instead of overlapping,
-which costs nothing real: Word's STA already admitted one COM call at a
-time, and the matrix measured a 1191 ms median per live operation under
-load either way.
+per-document lock would leave H2 open. The cost is one cross-process
+owner at a time; each caller's policy decides whether a held lock causes
+immediate refusal or a bounded wait. Word's STA already admitted one COM
+call at a time, and the matrix measured a 1191 ms median per live
+operation under load either way.
 
 Deliberate deviation from the Excel port: the lockfile lives in a local
 per-user directory, NOT beside the document. The live route never writes

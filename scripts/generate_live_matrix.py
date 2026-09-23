@@ -56,15 +56,17 @@ def build_section(rows) -> str:
     file_reader = sum(1 for _t, _p, b in rows
                       if b.startswith("file-only reader"))
 
-    out = [START, "## Live-mode capability matrix", ""]
+    out = [START, "", "## Live-mode capability matrix", ""]
     out.append(
         "Which tools work on a document that is OPEN in Word. Dual-mode "
         "tools auto-route (`live='auto'`); everything else refuses with "
-        "`DOCUMENT_LOCKED` until the file is closed. Every COM call is "
-        "**serialized server-side** (one call reaches Word at a time), "
-        "so concurrent agents queue instead of corrupting; live edits "
-        "stay unsaved until `com_save_document` (the Option C model: "
-        "see `get_workflows(task='live-editing')`)."
+        "`DOCUMENT_LOCKED` until the file is closed. Word COM calls within "
+        "one server process are serialized. Live calls and passwordless "
+        "save or close also use a machine-local cross-process lock; a "
+        "concurrent caller receives `APP_BUSY` before touching Word and "
+        "nothing is queued. Live edits stay unsaved until "
+        "`com_save_document` (the Option C model: see "
+        "`get_workflows(task='live-editing')`)."
     )
     out.append("")
     out.append("| Dual-mode tool (file + live) | Live-mode notes |")
