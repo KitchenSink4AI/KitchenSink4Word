@@ -5098,8 +5098,8 @@ def com_multi_document(
     headers and numbering possible; output_path is required. To insert a
     document INTO another at a chosen position use insert_document; for one
     table, copy_table. Input files are never modified; the result is a
-    new file written to disk. Bounded: aborts after timeout seconds
-    (default 300). Requires Word installed; documents need not be open.
+    new file written to disk. Requires Word installed; documents need not
+    be open.
     """
     from .com import bridge
 
@@ -5188,8 +5188,7 @@ def com_proofing_errors(
     it, and suggested corrections; a review aid before submission. Opens
     an invisible instance; the source file is untouched but must be
     CLOSED in Word (open documents refuse: same-name dialog risk).
-    Bounded: aborts cleanly after timeout seconds (default 60). Requires
-    Word installed. Read-only.
+    Requires Word installed. Read-only.
     """
     from .com import bridge
 
@@ -5201,9 +5200,8 @@ def com_readability_statistics(file_path: str, timeout: float = 60) -> dict:
     """Word's own readability statistics via COM: Flesch Reading Ease,
     Flesch-Kincaid Grade Level, word, sentence, and paragraph counts,
     and averages. Opens an invisible instance and modifies nothing; the
-    file must be CLOSED in Word (open documents refuse). Bounded: aborts
-    after timeout seconds (default 60). Requires Word installed.
-    Read-only.
+    file must be CLOSED in Word (open documents refuse). Requires Word
+    installed. Read-only.
     """
     from .com import bridge
 
@@ -5216,9 +5214,8 @@ def com_validate_opens_clean(file_path: str, timeout: float = 60) -> dict:
     Word instance and report clean or fail, with Word's own error where
     one is raised; the Word verdict when XML checks pass but Word still
     complains. A document already OPEN in Word is checked via the open
-    copy (no same-name dialog) and the result says so. Bounded: aborts
-    after timeout seconds (default 60). Requires Word installed;
-    modifies nothing. Read-only.
+    copy (no same-name dialog) and the result says so. Requires Word
+    installed; modifies nothing. Read-only.
     """
     from .com import bridge
 

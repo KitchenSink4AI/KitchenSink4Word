@@ -116,6 +116,11 @@ _STALE = [
     (r"(?<![\d.,])9[,.\s]900\b", "retired lite token bill 9,900"),
     (r"35[.,]\s?2k", "retired full token bill 35.2k"),
     (r"35[,.\s]200\b", "retired full token bill 35,200"),
+    # Superseded on the 2.2.1 release branch: four com-live descriptions
+    # dropped their "aborts after timeout" clause, which stopped being true
+    # once nothing force-ends Word.
+    (r"35[.,]\s?6k", "retired full token bill 35.6k"),
+    (r"35[,.\s]600\b", "retired full token bill 35,600"),
 ]
 
 
@@ -255,11 +260,11 @@ def test_i18n_dictionaries_carry_current_figures():
                          for s in (".", " ", " ", " ")]
 
     sep = forms_of("10,200")
-    full = forms_of("35,600")
+    full = forms_of("35,500")
     for i, lang in enumerate(langs):
         block = text[spans[i]:spans[i + 1]]
         assert "222" in block, f"i18n {lang}: operations count 222 missing"
-        for name, forms in (("lite 10.2k", sep), ("full 35.6k", full)):
+        for name, forms in (("lite 10.2k", sep), ("full 35.5k", full)):
             assert any(f in block for f in forms), (
                 f"i18n {lang}: {name} figure missing in all accepted formats"
             )

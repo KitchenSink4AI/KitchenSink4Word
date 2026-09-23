@@ -156,7 +156,7 @@ startup; the seven packs load on demand.
 | media-forms | 16 | ~5.6k | Images, charts, equations, text boxes, hyperlinks, table structure and styling, form fields, content controls, field codes |
 | com-live | 13 | ~3.1k | Drives a local Microsoft Word: PDF import/export, compare and combine, proofing, readability, field refresh, live editing of open documents |
 | protection-io | 6 | ~1.6k | Document protection, watermarks, redaction with verification, table data import and export |
-| **Full surface** | **112** | **~35.6k** | Everything (110 document tools plus `enable_tools` / `disable_tools`) |
+| **Full surface** | **112** | **~35.5k** | Everything (110 document tools plus `enable_tools` / `disable_tools`) |
 
 ## Quickstart: start lite, enable what you need
 
@@ -214,7 +214,7 @@ schema).
 - **Tiered loading: starts at about 10.2k tokens, scales to everything.** A
   fresh session loads the 29-tool lite core (about 10,200 tokens) and turns on
   capability packs only when a task needs them, with one `enable_tools` call.
-  Load every pack and the full surface measures about 35,600 tokens, so a
+  Load every pack and the full surface measures about 35,500 tokens, so a
   session that never leaves lite carries roughly a quarter of the whole sink.
   (All figures are script-measured and count what the client actually
   receives; see [Context cost](#context-cost-measured) below.)
@@ -226,7 +226,7 @@ Almost no MCP server tells you what it costs to load. Here is the bill, from
 
 - **Lite start:** 29 tools, about 10,200 tokens, loaded when the session opens.
 - **Full surface:** 112 tools (110 document tools plus the two pack toggles),
-  about 35,600 tokens with every pack enabled.
+  about 35,500 tokens with every pack enabled.
 - Clients that defer tool schemas until first use (for example Claude Code)
   pay close to zero until a tool is actually called.
 

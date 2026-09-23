@@ -148,7 +148,7 @@ PUBLISHED_FIGURES = (
     ('110', 'tools', 'scripts/measure_surface.py'),
     ('2,068', 'tests', 'pytest --collect-only'),
     ('10,200', 'tokens at lite start', 'scripts/measure_surface.py'),
-    ('35,600', 'tokens at full surface', 'scripts/measure_surface.py'),
+    ('35,500', 'tokens at full surface', 'scripts/measure_surface.py'),
 )
 
 #: (string, what it used to mean). Absent from every FIGURE_SURFACES file at
@@ -183,6 +183,9 @@ SUPERSEDED_FIGURES = (
     ('35,200', 'the 2.2.0 full-surface figure, before the typed live parameter'),
     ('35.200', 'the same figure with a german or spanish separator'),
     ('35 200', 'the same figure with a french separator'),
+    ('35,600', 'the pre-release 2.2.1 full-surface figure, before four com-live descriptions were narrowed'),
+    ('35.600', 'the same figure with a german or spanish separator'),
+    ('35 600', 'the same figure with a french separator'),
 )
 
 
