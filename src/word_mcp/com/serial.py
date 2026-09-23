@@ -63,18 +63,13 @@ _waited_total_ms = 0.0            # cumulative wait time across ops
 
 #: The refusal every no-late-entry route raises, pinned by
 #: test_m1_no_late_entry. {holder} names what is using Word. COPY SLOT
-#: P1-P-3 (copy packet 2, CM-20260924-012): the sentence is Codex's to
-#: write; replace this placeholder and its pin in the same commit.
+#: P1-P-3 (copy packet 2), landed from Codex X-20260924-013 and accepted
+#: by the main thread.
 BUSY_NOT_STARTED = (
-    "[[COPY: P1-P-3, see COPY_PACKET_2_FACT_SHEET §6 (P-3). The "
-    "APP_BUSY refusal for a live call, or a com_save_document save or "
-    "close, refused before it started because Word is already in use by "
-    "{holder}. Facts: this call did not start and made no document "
-    "changes; nothing was queued, so nothing from this call will run "
-    "later; wait until com_word_status reports no COM operation in "
-    "progress, then retry. No existing approved string says this "
-    "truthfully: the R7-1 sentence speaks of a queued call that was "
-    "abandoned.]]"
+    "Word is already in use by {holder}. This call did not start or "
+    "change the document, and nothing from it is queued to run later. "
+    "Wait until com_word_status reports no COM operation in progress, "
+    "then retry."
 )
 
 

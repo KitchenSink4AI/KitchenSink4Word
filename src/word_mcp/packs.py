@@ -376,12 +376,12 @@ def _validate(packs: list[str]) -> list[str]:
 #: therefore leads with what always works and names the client-specific
 #: escape second. Wording is the owner's, verbatim; do not reword it here.
 #:
-#: COPY SLOT P1-S2-07 (copy packet 2, CM-20260924-012). The owner's body
-#: told a Claude Desktop extension user to set a launch variable the
-#: extension settings do not offer (#930), and its last sentence named an
-#: administrator for a lock the user may have set (fact sheet section
-#: 1.15). The replacement is Codex's to write; the placeholder carries the
-#: facts, and test_packs_notice pins it so the landing commit updates both.
+#: COPY SLOT P1-S2-07 (copy packet 2), landed from Codex X-20260924-013
+#: and accepted by the main thread. The 2026-09-22 owner body told a
+#: Claude Desktop extension user to set a launch variable the extension
+#: settings do not offer (#930), and its last sentence named an
+#: administrator for a lock the user may have set. test_packs_notice
+#: pins this text word for word.
 #:
 #: PREFIX + BODY, because the first sentence is the one claim in it that
 #: is not always true. A call that enabled nothing new sends no
@@ -394,20 +394,18 @@ NO_CHANGE_PREFIX = (
     "These packs were already on, so no list change was sent."
 )
 PACK_NOTE_BODY = (
-    "[[COPY: P1-S2-07, see COPY_PACKET_2_FACT_SHEET §2 (slot S2-07) "
-    "and §1.15. The body of every successful enable_tools note, "
-    "after its prefix. Facts: if the newly enabled tools are not in the "
-    "tool list, this client fixed its list when the session or worker "
-    "started, so do not retry here; for hand-configured clients and "
-    f"workers, the packs go in {ENV_MODE} (comma list) in the server's "
-    "launch settings, then restart the app or session and start a new "
-    "worker if needed; a Claude Desktop extension user has no "
-    f"{ENV_MODE} field, and that extension's setting 'Load every tool at "
-    "startup' loads every pack; Claude Code only: the orchestrator can "
-    "call enable_tools in the main session and then start a new worker; "
-    "if enable_tools refuses a pack, the tool set was locked at startup "
-    "by whoever controls the launch settings, which may be the user, so "
-    "never say an administrator locked it; do not retry.]]"
+    "If the new tools are not in your tool list, this client fixed its "
+    "list when the session or worker started: do not retry here. In the "
+    "Claude Desktop extension, ask the user to turn on 'Load every tool "
+    "at startup', restart Claude Desktop, and start a new session. This "
+    "loads every pack and uses more working memory. In a hand-configured "
+    f"client, ask the user to add the packs to {ENV_MODE} as a comma list "
+    "in this server's launch settings, restart the app or session, then "
+    "start a new worker if needed. Claude Code only: the orchestrator can "
+    "instead call enable_tools in the main session and then start a new "
+    "worker. If enable_tools refuses a pack, the tool set was fixed at "
+    "startup by the launch settings: do not retry until a person changes "
+    "those settings and restarts the server."
 )
 
 
@@ -424,38 +422,29 @@ LIST_CHANGED_NOTE = pack_note(True)
 #: calls anything: the server instructions at handshake and the
 #: get_workflows index. It was the owner's wording, verbatim.
 #:
-#: COPY SLOT P1-S2-08 (copy packet 2): #930, the same Desktop problem as
-#: P1-S2-07. Replacing recorded owner wording goes to Nyk (fact sheet
-#: 2.0.2); the placeholder says so.
+#: COPY SLOT P1-S2-08 (copy packet 2), landed from Codex X-20260924-013
+#: and accepted by the main thread. It deliberately revises the owner's
+#: 2026-09-22 wording so the Claude Desktop route is truthful (#930).
 WORKER_PACK_SENTENCE = (
-    "[[COPY: P1-S2-08, see COPY_PACKET_2_FACT_SHEET §2 (slot "
-    "S2-08). One sentence read before any call, in the server "
-    "instructions and the get_workflows index; the text it replaces was "
-    "the owner's verbatim wording, so the change goes to Nyk. Facts: "
-    "workers and subagents only see the tools that were on when they "
-    f"started; hand-configured clients start the server with {ENV_MODE} "
-    "set to a comma list of packs; a Claude Desktop extension user has "
-    "no such field, and its setting 'Load every tool at startup' loads "
-    "every pack; in Claude Code, enable packs in the main session before "
-    "starting workers.]]"
+    "Workers and subagents only see the tools that were on when they "
+    "started: in the Claude Desktop extension, turn on 'Load every tool "
+    "at startup', restart Claude Desktop, and start a new session; in a "
+    f"hand-configured client, start the server with {ENV_MODE} set to a "
+    "comma list of packs; in Claude Code, you can instead enable packs in "
+    "the main session before starting workers."
 )
 
-#: COPY SLOT P1-S2-09 (copy packet 2): the locked refusal. It named an
+#: COPY SLOT P1-S2-09 (copy packet 2), landed from Codex X-20260924-013
+#: and accepted by the main thread: the enable_tools refusal (code
+#: CONFLICT) while the tool set is locked. The earlier text named an
 #: administrator, which is false when a person ticked the lock box
-#: themselves (fact sheet section 1.15), and its continuation began with a
-#: lower-case "the" (Codex approved "The tool surface ..." in
-#: X-20260924-011; that approval is carried as a fact).
+#: themselves.
 LOCKED_REFUSAL = (
-    "[[COPY: P1-S2-09, see COPY_PACKET_2_FACT_SHEET §1.15 and "
-    "§2 (slot S2-09). The enable_tools refusal, code CONFLICT, "
-    "while the tool set is locked. Facts: the tool surface was fixed at "
-    "startup by KS4W_PACK_POLICY=locked or by the Claude Desktop setting "
-    "'Lock the tool set at startup'; either is a launch preference of "
-    "whoever controls the launch settings, which may be the user, so "
-    "never say an administrator locked it; only a human can change it, by "
-    "unticking that setting or restarting the server with a different "
-    f"{ENV_MODE}; do not retry. Approved for the old text: the sentence "
-    "after the first full stop begins 'The tool surface ...'.]]"
+    "The tool surface was fixed at startup by the host "
+    "(KS4W_PACK_POLICY=locked, or the 'Lock the tool set at startup' "
+    "setting). Only a human can change this launch preference: untick "
+    "that setting in Claude Desktop, or restart a hand-configured server "
+    f"with a different {ENV_MODE} or pack policy. Do not retry until then."
 )
 
 

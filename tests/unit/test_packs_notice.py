@@ -31,33 +31,30 @@ from word_mcp import packs, server  # noqa: F401  (registers the tools)
 from word_mcp.core.errors import WordMcpError
 from word_mcp.ops import workflows
 
-#: COPY SLOTS P1-S2-07, P1-S2-08 and P1-S2-09 (copy packet 2,
-#: CM-20260924-012). The owner's 2026-09-22 wording pointed a Claude
-#: Desktop extension user at a launch variable the extension does not offer
-#: (#930) and named an administrator for a lock the user may have set
-#: (fact sheet section 1.15). Until Codex's replacement lands, each slot
-#: holds a placeholder carrying the facts, pinned here word for word so the
-#: landing commit has to update the pin with the text.
+#: COPY SLOTS P1-S2-07, P1-S2-08 and P1-S2-09 (copy packet 2), landed
+#: from Codex X-20260924-013 and accepted by the main thread. The owner's
+#: 2026-09-22 wording pointed a Claude Desktop extension user at a launch
+#: variable the extension does not offer (#930) and named an
+#: administrator for a lock the user may have set. Pinned word for word:
+#: an edit to any of it is a decision someone makes, not a drift.
 #:
 #: PREFIX + BODY: the first sentence is the only claim that depends on
 #: what the call did, and saying a notification was sent when none was is
 #: a lie told to exactly the caller who is trying to work out why its tool
 #: list has not changed. The prefixes are code, not copy, and stay.
 EXPECTED_BODY = (
-    "[[COPY: P1-S2-07, see COPY_PACKET_2_FACT_SHEET §2 (slot S2-07) "
-    "and §1.15. The body of every successful enable_tools note, "
-    "after its prefix. Facts: if the newly enabled tools are not in the "
-    "tool list, this client fixed its list when the session or worker "
-    "started, so do not retry here; for hand-configured clients and "
-    "workers, the packs go in KS4W_MODE (comma list) in the server's "
-    "launch settings, then restart the app or session and start a new "
-    "worker if needed; a Claude Desktop extension user has no "
-    "KS4W_MODE field, and that extension's setting 'Load every tool at "
-    "startup' loads every pack; Claude Code only: the orchestrator can "
-    "call enable_tools in the main session and then start a new worker; "
-    "if enable_tools refuses a pack, the tool set was locked at startup "
-    "by whoever controls the launch settings, which may be the user, so "
-    "never say an administrator locked it; do not retry.]]"
+    "If the new tools are not in your tool list, this client fixed its "
+    "list when the session or worker started: do not retry here. In the "
+    "Claude Desktop extension, ask the user to turn on 'Load every tool "
+    "at startup', restart Claude Desktop, and start a new session. This "
+    "loads every pack and uses more working memory. In a hand-configured "
+    "client, ask the user to add the packs to KS4W_MODE as a comma list "
+    "in this server's launch settings, restart the app or session, then "
+    "start a new worker if needed. Claude Code only: the orchestrator can "
+    "instead call enable_tools in the main session and then start a new "
+    "worker. If enable_tools refuses a pack, the tool set was fixed at "
+    "startup by the launch settings: do not retry until a person changes "
+    "those settings and restarts the server."
 )
 EXPECTED_NOTE = "tools/list_changed was sent. " + EXPECTED_BODY
 EXPECTED_NOOP_NOTE = (
@@ -66,29 +63,20 @@ EXPECTED_NOOP_NOTE = (
 )
 
 EXPECTED_SENTENCE = (
-    "[[COPY: P1-S2-08, see COPY_PACKET_2_FACT_SHEET §2 (slot "
-    "S2-08). One sentence read before any call, in the server "
-    "instructions and the get_workflows index; the text it replaces was "
-    "the owner's verbatim wording, so the change goes to Nyk. Facts: "
-    "workers and subagents only see the tools that were on when they "
-    "started; hand-configured clients start the server with KS4W_MODE "
-    "set to a comma list of packs; a Claude Desktop extension user has "
-    "no such field, and its setting 'Load every tool at startup' loads "
-    "every pack; in Claude Code, enable packs in the main session before "
-    "starting workers.]]"
+    "Workers and subagents only see the tools that were on when they "
+    "started: in the Claude Desktop extension, turn on 'Load every tool "
+    "at startup', restart Claude Desktop, and start a new session; in a "
+    "hand-configured client, start the server with KS4W_MODE set to a "
+    "comma list of packs; in Claude Code, you can instead enable packs in "
+    "the main session before starting workers."
 )
 
 EXPECTED_LOCKED_REFUSAL = (
-    "[[COPY: P1-S2-09, see COPY_PACKET_2_FACT_SHEET §1.15 and "
-    "§2 (slot S2-09). The enable_tools refusal, code CONFLICT, "
-    "while the tool set is locked. Facts: the tool surface was fixed at "
-    "startup by KS4W_PACK_POLICY=locked or by the Claude Desktop setting "
-    "'Lock the tool set at startup'; either is a launch preference of "
-    "whoever controls the launch settings, which may be the user, so "
-    "never say an administrator locked it; only a human can change it, by "
-    "unticking that setting or restarting the server with a different "
-    "KS4W_MODE; do not retry. Approved for the old text: the sentence "
-    "after the first full stop begins 'The tool surface ...'.]]"
+    "The tool surface was fixed at startup by the host "
+    "(KS4W_PACK_POLICY=locked, or the 'Lock the tool set at startup' "
+    "setting). Only a human can change this launch preference: untick "
+    "that setting in Claude Desktop, or restart a hand-configured server "
+    "with a different KS4W_MODE or pack policy. Do not retry until then."
 )
 
 

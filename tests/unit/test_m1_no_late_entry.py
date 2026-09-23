@@ -53,19 +53,14 @@ from word_mcp.com import bridge, live, xproc
 from word_mcp.com import serial as com_serial
 from word_mcp.core.errors import CallNotStarted, WordBusy
 
-#: The refusal text as it must read, pinned literally. The sentence is owed
-#: by the prose owner; when it lands, the constant in com/serial.py and this
-#: pin change together.
+#: The refusal text as it must read, pinned literally: copy slot P1-P-3,
+#: landed from Codex X-20260924-013. The constant in com/serial.py and
+#: this pin change together.
 PINNED_BUSY_TEXT = (
-    "[[COPY: P1-P-3, see COPY_PACKET_2_FACT_SHEET §6 (P-3). The "
-    "APP_BUSY refusal for a live call, or a com_save_document save or "
-    "close, refused before it started because Word is already in use by "
-    "{holder}. Facts: this call did not start and made no document "
-    "changes; nothing was queued, so nothing from this call will run "
-    "later; wait until com_word_status reports no COM operation in "
-    "progress, then retry. No existing approved string says this "
-    "truthfully: the R7-1 sentence speaks of a queued call that was "
-    "abandoned.]]"
+    "Word is already in use by {holder}. This call did not start or "
+    "change the document, and nothing from it is queued to run later. "
+    "Wait until com_word_status reports no COM operation in progress, "
+    "then retry."
 )
 
 #: How long the simulated client waits before it gives up on a call.
