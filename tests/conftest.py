@@ -67,3 +67,12 @@ def pytest_collection_modifyitems(config, items):
         # Only corpus-dependent tests are skipped; corpus-free tests still run.
         if uses_corpus[fname]:
             item.add_marker(skip)
+
+
+@pytest.fixture(autouse=True)
+def _pack_store_per_test(tmp_path_factory, monkeypatch):
+    """Saved pack choices (packstore.py) go to a fresh directory for every
+    test, never to the developer's own state directory, so no test starts
+    from a choice another test (or a real session) saved."""
+    monkeypatch.setenv(
+        "KS4W_PACK_STORE_DIR", str(tmp_path_factory.mktemp("pack-store")))

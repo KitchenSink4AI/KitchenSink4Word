@@ -447,10 +447,11 @@ def test_gate5_both_layers_give_the_same_refusal(launch, tmp_path,
 # ------------------------------------------------- gate 6: GC cleanup
 
 
-def test_gate6_a_finished_session_leaves_nothing_behind(launch):
-    """A pack one session enabled does not outlive that session: the next
-    session starts on the startup surface, is told so, and gets a real
-    enable of its own."""
+def test_gate6_a_finished_sessions_choice_carries_to_the_next(launch):
+    """A pack one session enabled stays on for the next session: a choice
+    lasts until someone changes it (owner ruling 2026-09-26, which
+    replaced the #933 gate that had the next session start lite). The
+    next session lists it, reports it, and a second enable is a no-op."""
     launch()
     n = pack_size()
 
@@ -466,9 +467,9 @@ def test_gate6_a_finished_session_leaves_nothing_behind(launch):
             return listed, report, again
 
     listed, report, again = asyncio.run(run())
-    assert not listed
-    assert report == f"0/{n} enabled"
-    assert again["enabled"] == [PACK]
+    assert listed
+    assert report == f"{n}/{n} enabled"
+    assert again["already_enabled"] == [PACK]
 
 
 def test_gate6_records_are_collected_with_their_sessions(launch):
