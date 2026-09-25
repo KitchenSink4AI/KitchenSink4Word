@@ -10,6 +10,8 @@ Two placements, one answer:
 - SessionPackGate, registered as the first (outermost) middleware,
   filters every tools/list by the calling session's record and refuses a
   tools/call to a tool whose pack is off in that session.
+- SessionPackGate also gives each session its record when it
+  initializes (packstate.pin_session_record).
 - check_call() runs the same test inside every tool's boundary wrapper,
   inside its try block, so a route that skips the middleware still
   refuses.
@@ -74,6 +76,16 @@ class SessionPackGate(Middleware):
 
     def __init__(self, refuse: Callable[[BaseException], Any]):
         self._refuse = refuse
+
+    async def on_initialize(self, context, call_next):
+        """A new session starts from the process default as it is now,
+        and keeps that surface until it changes its own packs."""
+        result = await call_next(context)
+        packstate.pin_session_record(
+            packstate.session_of(context.fastmcp_context),
+            packs.default_record(),
+        )
+        return result
 
     async def on_list_tools(self, context, call_next):
         tools = await call_next(context)

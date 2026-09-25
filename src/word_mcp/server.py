@@ -1727,6 +1727,7 @@ def get_server_info() -> dict:
         "family": ["kitchensink4xl", "kitchensink4ppt", "kitchensink4web"],
         "version": __version__,
         "surface": _packs.surface_report(),
+        "saved_packs": _packs.saved_packs_report(),
         "packs_available": _packs.pack_names(),
         "startup_mode": _packs.resolve_startup_mode(),
         "surface_locked": _packs.resolve_lock(),

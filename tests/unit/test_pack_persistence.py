@@ -367,7 +367,9 @@ def test_status_matches_what_is_on_after_a_restart(launch):
     assert TOOL not in listed
     saved = report["saved_packs"]
     assert saved["applied"] is True
-    assert saved["packs"][PACK] == "off"
+    # Only choices that differ from the launch settings are kept: PACK is
+    # off at a lite launch anyway, so nothing is saved for it.
+    assert PACK not in saved["packs"]
     assert all(saved["packs"][p] == "on"
                for p in packs.pack_names() if p != PACK)
 

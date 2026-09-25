@@ -52,8 +52,8 @@ QUIET = {"KS4W_UPDATE_CHECK": "off", "KS4W_STAR_NUDGE": "off"}
 LITE_COUNT = 29
 NO_CHANGE_PREFIX = packs.NO_CHANGE_PREFIX
 FAMILY_SHA256 = {
-    "packstate.py": "0343a3036c6fa7ee3a58ae6ac4c4c4b66a4e5699a9b4a0ecc14299d3e3abf2e1",
-    "packgate.py": "814c7354d79227b37dc4734c69adfd36b9d35505d3734e675b37efd625113680",
+    "packstate.py": "3d7a3b073bddc28aa66b7d307c4e16c11d20ec621d6af6c2a087179697db5f34",
+    "packgate.py": "b961967d1e22294beb7b61a4ef9dd895d2a164bfa2cb119e075a453dae977e4f",
 }
 
 

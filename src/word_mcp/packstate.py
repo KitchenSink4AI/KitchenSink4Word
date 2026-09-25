@@ -28,10 +28,18 @@ connection, held weakly and compared by identity (ServerSession defines
 no __eq__ or __hash__). stdio has one session for the life of the
 process; every HTTP session is its own. When a session ends and its
 object is collected, its record goes with it, so nothing needs cleaning
-up by hand. A session that has not changed its packs has no record and
-uses the process default, which is the startup surface main() applied
-(the MODE setting and the launch toggles); its first change copies that
-default.
+up by hand. A session is given its record when it initializes: a copy
+of the process default at that moment, so a change another session makes
+later does not move its surface (the 2026-09-02 session-scoped ruling). A
+session with no record (one that never initialized, as with stateless
+HTTP, where every request is a new session) uses the process default.
+
+The process default is the startup surface main() applied (the MODE
+setting and the launch toggles) plus the pack choices saved by earlier
+enable_tools and disable_tools calls (packstore.py; owner ruling
+2026-09-26: a choice stays until someone changes it). Every change a
+session makes is also applied to the process default, so a session that
+starts later, in this process or after a restart, starts from it.
 
 Outside any session (in-process callers: the test suite and the
 measurement scripts) there is no record to consult. The pack bookkeeping
@@ -97,6 +105,16 @@ def keep_session_record(session: Any, enabled: dict[str, bool]) -> None:
     mapping and does not edit it afterwards."""
     with LOCK:
         _RECORDS[session] = enabled
+
+
+def pin_session_record(session: Any, default: dict[str, bool]) -> None:
+    """Give a session that has no record yet a copy of `default`. A
+    session that already has one keeps it."""
+    if session is None:
+        return
+    with LOCK:
+        if _RECORDS.get(session) is None:
+            _RECORDS[session] = dict(default)
 
 
 def live_records() -> int:

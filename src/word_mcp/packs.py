@@ -14,8 +14,8 @@ surface_report and the informed-approval token math).
 
 Which tools a session sees and may call comes from that session's own
 record (punch-list #933). main() applies apply_startup_mode() to the process
-default record (_ENABLED); a session's first enable_tools or disable_tools
-copies it into a record of its own (packstate.py), and the server's own
+default record (_ENABLED); each session copies it into a record of its
+own when it initializes (packstate.py), and the server's own
 middleware (packgate.py) filters tools/list and admits tools/call from that
 record, sending tools/list_changed to that session only. No fastmcp
 visibility state is used: fastmcp expired a session's visibility rules a
@@ -44,7 +44,14 @@ There is deliberately no per-pack startup toggle: see toggle_env_names.
 startup_note() names which setting decided the surface and
 apply_startup_mode() writes that line to stderr.
 
-No persistence, by design: every session starts at KS4W_MODE.
+Saved choices (owner ruling 2026-09-26: "If someone switches it on, they
+don't expect it to revert. I know I wouldn't."). Every enable_tools and
+disable_tools call is saved (packstore.py) under the launch settings in
+force, and main() starts the process default from the launch settings
+plus those saved choices, so a choice stays until a person or the AI
+changes it again. A launch-time lock (KS4W_PACK_POLICY=locked, or the lock
+toggle) wins: saved choices are not applied while it holds. The store
+directory can be moved with KS4W_PACK_STORE_DIR.
 
 server.py populates the registry via register(); this module never imports
 FastMCP itself and holds only the Tool objects it is handed (for the
@@ -64,6 +71,7 @@ import sys
 from typing import Any
 
 from . import packstate as _packstate
+from . import packstore as _packstore
 from .core.errors import TargetNotFound, WordMcpError
 
 # v2 packs in menu order, per V2_DESIGN Section 14.8 (author-firmed seven
@@ -107,11 +115,84 @@ EVERYTHING = "everything"
 _REGISTRY: dict[str, dict[str, object]] = {"lite": {}}
 
 # tool_name -> enabled? The PROCESS DEFAULT record: the startup surface
-# apply_startup_mode() sets, which every session starts from. A session's
-# own changes live in its own record (packstate.py), never here; only
-# callers outside any MCP session (the test suite, the measurement scripts)
-# read and write this one directly.
+# apply_startup_mode() sets (launch settings plus saved choices), which a
+# session copies when it initializes. A session's own changes live in its
+# own record (packstate.py), and are also applied here and saved, so a
+# session that starts later starts from them; callers outside any MCP
+# session (the test suite, the measurement scripts) read and write this
+# one directly.
 _ENABLED: dict[str, bool] = {}
+
+#: The packs the launch settings turned on at startup, set by
+#: apply_startup_mode(). Saved choices are kept under this set.
+_STARTUP_PACKS: list[str] = []
+
+#: Were saved choices applied at startup? False while the launch settings
+#: lock the tool set.
+_SAVED_APPLIED = False
+
+#: Moves the saved-choices directory (the test suite points it at a
+#: temporary one).
+ENV_PACK_STORE = "KS4W_PACK_STORE_DIR"
+_STATE_DIR_NAME = "word-mcp"
+
+
+def default_record() -> dict[str, bool]:
+    """The process default record: what a session starts from."""
+    return _ENABLED
+
+
+def _store_path():
+    return _packstore.store_path(ENV_PACK_STORE, _STATE_DIR_NAME)
+
+
+def _launch_key() -> str:
+    return _packstore.launch_key(_STARTUP_PACKS)
+
+
+def _remember(choices: dict[str, bool]) -> bool:
+    """Make `choices` ({pack: on?}) the process default for the packs they
+    name, so every session that starts later starts from them, and save
+    them. Returns whether they were saved. Called under packstate.LOCK."""
+    for pack, on in choices.items():
+        for name in _REGISTRY.get(pack, {}):
+            _ENABLED[name] = on
+    return _packstore.save(
+        _store_path(), _launch_key(), choices, _STARTUP_PACKS)
+
+
+def saved_packs_report() -> dict:
+    """The saved choices for this launch settings, and whether they were
+    applied at startup (not while the tool set is locked)."""
+    choices = _packstore.load(_store_path(), _launch_key(), PACK_SUMMARIES)
+    return {
+        "applied": _SAVED_APPLIED,
+        "packs": {p: ("on" if on else "off") for p, on in choices.items()},
+    }
+
+
+def _apply_saved_choices(startup_packs: list[str]) -> None:
+    """Start the process default from the saved choices for this launch,
+    unless the launch settings lock the tool set."""
+    global _STARTUP_PACKS, _SAVED_APPLIED
+    _STARTUP_PACKS = list(startup_packs)
+    _SAVED_APPLIED = False
+    choices = _packstore.load(_store_path(), _launch_key(), PACK_SUMMARIES)
+    if _policy_locked():
+        if choices:
+            sys.stderr.write(
+                "[kitchensink4word] saved pack choices not applied: the tool set "
+                "is locked at startup\n")
+        return
+    for pack, on in choices.items():
+        for name in _REGISTRY.get(pack, {}):
+            _ENABLED[name] = on
+    _SAVED_APPLIED = True
+    if choices:
+        listed = ", ".join(
+            f"{p} {'on' if on else 'off'}" for p, on in sorted(choices.items()))
+        sys.stderr.write(
+            f"[kitchensink4word] saved pack choices applied: {listed}\n")
 
 #: "The session being served", the default for the session parameters
 #: below. Passing None means "no session": the process default record.
@@ -479,8 +560,10 @@ def enable(packs: list[str]) -> dict:
             (enabled_now if newly else already).append(pack)
         if session is not None and flipped:
             _packstate.keep_session_record(session, record)
+        saved = _remember({pack: True for pack in wanted})
         result = {
             "enabled": enabled_now,
+            "saved": saved,
             "already_enabled": already,
             "approx_tokens_added": tokens_added,
             **surface_report(session),
@@ -519,8 +602,10 @@ def disable(packs: list[str]) -> dict:
             (disabled_now if newly else already).append(pack)
         if session is not None and flipped:
             _packstate.keep_session_record(session, record)
+        saved = _remember({pack: False for pack in wanted})
         return {
             "disabled": disabled_now,
+            "saved": saved,
             "already_disabled": already,
             "approx_tokens_removed": tokens_removed,
             **surface_report(session),
@@ -572,6 +657,7 @@ def apply_startup_mode() -> str:
     mode = resolve_startup_mode()
     sys.stderr.write(f"[kitchensink4word] {startup_note()}\n")
     if not mode or mode == "lite":
+        _apply_saved_choices([])
         return "lite"
     # "lite" and "full"/"everything" are mode tokens, tolerated inside
     # comma lists alike: lite is always on anyway, full means every pack.
@@ -584,13 +670,12 @@ def apply_startup_mode() -> str:
     if named:
         _validate(named)  # raises on typos so a bad env fails LOUDLY
     packs = list(PACK_SUMMARIES) if wants_full else named
-    if not packs:
-        return "lite"
-    valid = _validate(packs)
+    valid = _validate(packs) if packs else []
     for pack in valid:
         for name in _REGISTRY.get(pack, {}):
             _ENABLED[name] = True
-    return mode
+    _apply_saved_choices(valid)
+    return mode if valid else "lite"
 
 
 def menu() -> dict:
