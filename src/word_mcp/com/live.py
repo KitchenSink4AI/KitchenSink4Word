@@ -647,12 +647,18 @@ def live_session(path: str, tool_name: str, *, mutating: bool = True):
     Alerts are suppressed (DisplayAlerts = wdAlertsNone) for the session and
     restored ownership-aware by the StateGuard (see _suppress_alerts_owned),
     so Word cannot raise a modal dialog mid-operation; live_repair restores
-    alerts if a client crashes."""
+    alerts if a client crashes.
+
+    NO LATE ENTRY (M1, 2.2.1 release review). Both locks are taken without
+    waiting: when either is already held elsewhere, CallNotStarted
+    (APP_BUSY) is raised before anything below runs and nothing is left
+    queued. A session that queued instead could outlive its client, whose
+    retry then queued too, and both edits landed once the holder let go."""
     pythoncom, pywintypes, win32com = _com_modules()
     _ensure_com(pythoncom)
-    with _serial.com_operation(f"live:{tool_name}"), _xproc.cross_process_lock(
-        f"live:{tool_name}"
-    ):
+    with _serial.com_operation(
+        f"live:{tool_name}", refuse_if_busy=True
+    ), _xproc.cross_process_lock(f"live:{tool_name}", refuse_if_held=True):
         app = doc = None
         guard = StateGuard()
         restore_failed: list = []

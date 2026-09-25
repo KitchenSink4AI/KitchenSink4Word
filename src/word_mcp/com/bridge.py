@@ -11,16 +11,28 @@ under the process-wide COM lock (com/serial.py) — via @_serial.serialized,
 via _run_bounded's worker, or via a bounded try-acquire for status — so
 no bridge call can interleave with a live-layer edit or another bridge
 call. Long invisible-instance operations additionally run under a bounded
-timeout: on expiry the invisible instance this module spawned (and ONLY
-that instance, tracked by PID at DispatchEx time) is terminated, turning
-the report's 30-minute silent hang into a clean structured error.
+timeout, which turns the report's 30-minute silent hang into a structured
+WordBlocked. The deadline bounds how long the CALLER waits; it cancels
+nothing.
+
+NOTHING IN THIS PACKAGE FORCE-ENDS A WORD PROCESS (the KitchenSink4PPT
+1.3.1 rule, adopted here for the 2026-09-22 field-test fixes). The
+invisible instance an operation starts is released with an orderly
+Quit() on its own COM object, and that is all. A timed-out operation is
+reported, not killed: a timeout cannot revalidate a hung apartment, so a
+PID recorded minutes earlier is not proof of what that process is now.
+Ownership needs POSITIVE evidence, and a reading that fails is a no: an
+unreadable process table is unknown, never empty, and an unreadable
+command line owns nothing.
 """
 
 from __future__ import annotations
 
+import collections
 import contextlib
 import functools
 import subprocess
+import sys
 import threading
 import time
 from pathlib import Path
@@ -35,6 +47,7 @@ from ..core.sandbox import check_path
 from . import callargs as _args
 from . import rot as _rot
 from . import serial as _serial
+from . import xproc as _xproc
 
 _WD_ALERTS_NONE = 0
 _WD_FORMAT_PDF = 17
@@ -46,12 +59,71 @@ _OLE_MAGIC = bytes.fromhex("d0cf11e0")
 _WD_DO_NOT_SAVE = 0
 _WD_SAVE = -1
 
-# invisible WINWORD.EXE PIDs spawned by _word(), keyed by spawning thread —
-# the timeout kill-switch terminates exactly these, never the user's Word
+# Invisible WINWORD.EXE PIDs started by _word(), keyed by spawning thread.
+# EVIDENCE, not a target list: nothing in this package force-ends a
+# process. An entry exists only when _word() READ the process table before
+# and after DispatchEx and found exactly one new WINWORD.EXE
+# (_acquisition_token). It records what was OBSERVED at start-up, that the
+# pid was not running when the call began; it is not proof of what that
+# process is now. A timed-out operation only NAMES these in its refusal.
 _INVISIBLE_PIDS: dict[int, set] = {}
 
+#: Nothing this module spawns may flash a console on the user's desktop
+#: (author directive 2026-09-06). tasklist and the command-line probe are
+#: console programs, so every launch carries the flag on Windows and 0
+#: elsewhere.
+_NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 
-def _winword_pids() -> set:
+#: How long to wait for a PID to actually leave the process table after
+#: Quit. Word exits in well under a second when Quit is honored; the
+#: budget is for the case where it is not.
+_EXIT_WAIT_SECONDS = 6.0
+
+#: How much longer a timed-out operation is given before the refusal is
+#: built. The deadline bounds the CALLER's wait and cancels nothing, so a
+#: worker that finishes in this window has finished and its result is
+#: returned instead of a false timeout (KitchenSink4PPT 1.3.1, R6-1).
+TIMEOUT_GRACE_SECONDS = 10.0
+
+#: TEST SEAM (KitchenSink4PPT 1.3.1, R7-3). _run_bounded builds its internal
+#: completion signal through this factory, so a test can substitute an event
+#: whose waits it drives and pin WHICH stage observed completion without
+#: assuming anything about thread scheduling. Production behaviour is
+#: unchanged: this is threading.Event, with its real wait(), and nothing in
+#: the package reassigns it.
+_COMPLETION_EVENT_FACTORY = threading.Event
+
+#: The last few lifecycle diagnostics, for tests and for com_word_status.
+#: A failed Quit used to be swallowed by contextlib.suppress, which is how
+#: an orphan could exist with nothing anywhere recording that it did.
+_LIFECYCLE_NOTES: collections.deque = collections.deque(maxlen=20)
+
+
+def _note(message: str) -> None:
+    """Record and announce one lifecycle event. stderr, never stdout:
+    stdout carries the MCP protocol."""
+    _LIFECYCLE_NOTES.append(message)
+    with contextlib.suppress(Exception):
+        sys.stderr.write(f"[kitchensink4word] {message}\n")
+
+
+def _winword_pids() -> set | None:
+    """WINWORD.EXE process ids via the process table (never COM), or None
+    when the table could not be READ.
+
+    NONE MEANS UNKNOWN AND NEVER MEANS "NOTHING WAS RUNNING" (the
+    KitchenSink4PPT 1.3.1 rule, G2b and R4-1). This used to return an
+    empty set for both, so a failed tasklist at the start of a call read as
+    an empty machine, and every Word already running was then counted as
+    one this call had started. Nothing that decides ownership may act on
+    None.
+
+    A genuine no-match is NOT a failure: tasklist prints its INFO line,
+    exits 0, and the answer is an empty set. Unknown is the subprocess
+    raising or timing out, ANY non-zero exit (tasklist prints "ERROR:
+    Access is denied." to stdout and exits 1), no output at all, or a row
+    naming WINWORD.EXE whose pid column will not parse.
+    """
     try:
         result = subprocess.run(
             ["tasklist", "/FI", "IMAGENAME eq WINWORD.EXE", "/FO", "CSV",
@@ -59,34 +131,135 @@ def _winword_pids() -> set:
             capture_output=True,
             text=True,
             timeout=30,
+            creationflags=_NO_WINDOW,
         )
     except Exception:
-        return set()
+        return None
+    if result.returncode != 0:
+        return None
+    stdout = result.stdout or ""
+    if not stdout.strip():
+        return None
     pids = set()
-    for ln in result.stdout.splitlines():
-        if "WINWORD" not in ln.upper():
+    for ln in stdout.splitlines():
+        if "WINWORD.EXE" not in ln.upper():
             continue
         parts = ln.split('","')
-        if len(parts) >= 2:
-            with contextlib.suppress(ValueError):
-                pids.add(int(parts[1].strip('"')))
+        if len(parts) < 2:
+            return None
+        try:
+            pids.add(int(parts[1].strip('"')))
+        except ValueError:
+            return None
     return pids
 
 
-def _kill_invisible_for_thread(tid) -> bool:
-    """Terminate the invisible instance(s) the given worker thread spawned.
-    PID-precise: only processes recorded by _word() at DispatchEx time."""
-    pids = _INVISIBLE_PIDS.get(tid) or set()
-    killed = False
-    for pid in pids:
-        with contextlib.suppress(Exception):
-            subprocess.run(
-                ["taskkill", "/PID", str(pid), "/F"],
-                capture_output=True,
-                timeout=15,
-            )
-            killed = True
-    return killed
+def _acquisition_token(before, after) -> set | None:
+    """The pids this call may record as the instance it started, or None.
+
+    ALL of these must hold, and a read that failed is a no:
+
+    - the process table was READ before DispatchEx (before is not None);
+    - it was READ again after DispatchEx (after is not None);
+    - exactly ONE WINWORD.EXE appeared in between. Word starts one private
+      process per DispatchEx, so one is the only count that names it; two
+      means someone else started Word in the same instant, and there is
+      then no telling which one is ours.
+
+    Word already running is normal here, unlike PowerPoint's singleton: the
+    user's Word is simply in both readings and never in the difference.
+    """
+    if before is None or after is None:
+        return None
+    created = set(after) - set(before)
+    if len(created) != 1:
+        return None
+    return created
+
+
+def _is_automation_instance(pid: int) -> bool | None:
+    """Is this PID a Word started for automation, rather than the user's?
+
+    True / False when the command line settles it, None when it cannot be
+    read. An interactive WINWORD.EXE never carries /Automation, and the
+    one started by DispatchEx always does. The policy at every call site
+    is: this server claims a process only on a definite True. None means
+    the command line could not be read, and an unreadable command line
+    OWNS NOTHING, exactly like False: no claim is made about it and no
+    advice is given about ending it.
+    """
+    if sys.platform != "win32":
+        return None
+    try:
+        out = subprocess.run(
+            ["powershell", "-NoProfile", "-NonInteractive", "-Command",
+             "(Get-CimInstance Win32_Process -Filter "
+             f"\"ProcessId={int(pid)}\").CommandLine"],
+            capture_output=True, text=True, timeout=20,
+            creationflags=_NO_WINDOW,
+        )
+    except Exception:
+        return None
+    if out.returncode != 0:
+        return None
+    line = (out.stdout or "").strip()
+    if not line:
+        return None  # already gone, or unreadable: not a definite "no"
+    return "/automation" in line.lower()
+
+
+def _claims(pid: int) -> bool:
+    """Whether this server may say a recorded pid is the instance it
+    launched. Only a command line READ as carrying /Automation says yes;
+    False and None (unreadable) both own nothing."""
+    return _is_automation_instance(pid) is True
+
+
+def _survivors(pids, timeout: float = _EXIT_WAIT_SECONDS) -> set:
+    """Which of these PIDs are still in the process table after a bounded
+    wait. Quit is asynchronous: Word acknowledges it and then takes a
+    moment, so checking once would report a false orphan.
+
+    If the table goes unreadable mid-poll the answer is the empty set:
+    unknown is not evidence that anything survived, and polling it again
+    cannot become evidence either (G2b)."""
+    remaining = {int(p) for p in pids}
+    if not remaining:
+        return remaining
+    deadline = time.monotonic() + timeout
+    while True:
+        now = _winword_pids()
+        if now is None:
+            return set()
+        remaining &= now
+        if not remaining or time.monotonic() >= deadline:
+            return remaining
+        time.sleep(0.25)
+
+
+def _close_open_documents(app) -> None:
+    """Close whatever this instance still has open, before Quit.
+
+    This is where the orphan came from. Individual operations close their
+    own document, but any path that raised before its close left one open,
+    and Word will not Quit an instance holding a document it considers
+    unsaved. The refusal was swallowed and the PID record was dropped on
+    the very next line, unchecked: exactly the two /Automation orphans the
+    2026-09-21 field test found still running.
+
+    wdDoNotSaveChanges, always: this instance is private to one operation
+    and everything it was asked to persist was persisted by that operation.
+    """
+    try:
+        count = int(app.Documents.Count)
+    except Exception:  # noqa: BLE001 - a dead app has nothing to close
+        return
+    for _ in range(count):
+        try:
+            app.Documents(1).Close(_WD_DO_NOT_SAVE)
+        except Exception as exc:  # noqa: BLE001
+            _note(f"could not close a document before Quit: {exc}")
+            return  # one refusal is enough; do not spin on the same doc
 
 
 @contextlib.contextmanager
@@ -101,45 +274,119 @@ def _word():
     pythoncom.CoInitialize()
     app = None
     tid = threading.get_ident()
+    # OWNERSHIP NEEDS POSITIVE EVIDENCE. before is None when tasklist could
+    # not be read, and then nothing is recorded for this call at all.
     before = _winword_pids()
     try:
         app = win32com.client.DispatchEx("Word.Application")
-        created = _winword_pids() - before
+        created = _acquisition_token(before, _winword_pids())
         if created:
             _INVISIBLE_PIDS[tid] = created
         app.Visible = False
         app.DisplayAlerts = _WD_ALERTS_NONE
         yield app
     finally:
+        # Take the PID record BEFORE anything can fail. It is evidence for
+        # a timeout refusal while the call runs, and nothing after this
+        # call acts on it: nothing in this package force-ends a process.
+        pids = _INVISIBLE_PIDS.pop(tid, None) or set()
         if app is not None:
-            with contextlib.suppress(Exception):
+            _close_open_documents(app)
+            try:
                 app.Quit(_WD_DO_NOT_SAVE)
-        _INVISIBLE_PIDS.pop(tid, None)
+            except Exception as exc:  # noqa: BLE001
+                _note(
+                    f"Word.Quit failed on the invisible instance {sorted(pids) or '(pid unknown)'}: "
+                    f"{exc}"
+                )
+        if pids:
+            # Verified, not assumed: Quit is asynchronous, so the record is
+            # checked against the process table before it is dropped. A
+            # survivor is REPORTED, never ended, and only when its command
+            # line is read as an automation instance: an unreadable one owns
+            # nothing, so no claim is made and no advice is given about it.
+            # A cleanup problem is announced, not raised over the top of an
+            # operation that already succeeded.
+            alive = _survivors(pids)
+            if any(_claims(pid) for pid in sorted(alive)):
+                _note(
+                    "the Word instance this call launched did not exit "
+                    f"within {_EXIT_WAIT_SECONDS:.0f}s of Quit(); a "
+                    "WINWORD.EXE process may be lingering (zombie_check() "
+                    "to confirm). It was launched by this tool and is safe "
+                    "to end via Task Manager."
+                )
         pythoncom.CoUninitialize()
 
 
 def _run_bounded(name: str, timeout: float, fn):
-    """Run fn on a worker thread under the COM lock with a hard deadline.
+    """Run fn on a worker thread under the COM lock, bounding how long the
+    CALLER waits.
 
     On expiry: if the worker never got the lock, that is queue contention
-    (WordBusy names the running operation). If it got the lock and stalled,
-    the invisible instance it spawned is terminated so the COM call errors
-    out and the lock is released (WordBlocked)."""
+    and WordBusy names the operation actually running. If it got the lock
+    and then stalled, NOTHING IS CANCELLED AND NOTHING IS FORCE-ENDED: the
+    deadline bounds how long the caller waits, not how long the work runs.
+    The worker is still inside the COM call, can finish later, and can
+    still save its output.
+
+    It used to force-end the invisible instance the worker had started.
+    That is gone (the KitchenSink4PPT 1.3.1 rule): a timeout cannot
+    revalidate a hung apartment, so the PID recorded at start-up is not
+    proof that the process is still only this call's.
+
+    The completion check is TWO-STAGE, as in KitchenSink4PPT 1.3.1: once
+    the instant the grace wait ends, before any dialog inspection, and once
+    more after it. Either way the worker's own answer wins, its result
+    returned or its exception raised, because reporting a timeout for an
+    operation that succeeded is a false failure the caller acts on (R6-1).
+    Only if it is still not done is the refusal built, and everything it
+    says about a process is state-neutral: what was observed, and what
+    this path did not do (R6-2).
+
+    QUEUE ABANDONMENT (KitchenSink4PPT 1.3.1, R7-1). A caller that gave up
+    while its worker was still QUEUED on the lock used to get WordBusy and
+    an invitation to retry, while the worker stayed in the queue and ran fn
+    anyway once the holder released, so a retried call ran twice. There is
+    now ONE decision per call, taken atomically, with two outcomes: the
+    caller marks the call ABANDONED when its wait expires, or the worker
+    marks it STARTED after it acquires the lock and BEFORE it calls fn.
+    Whichever side reaches the decision first wins and the other stands
+    down, so an abandoned call never runs and a started one is never
+    reported as queued."""
     result: dict = {}
-    lock_acquired = threading.Event()
-    done = threading.Event()
+    done = _COMPLETION_EVENT_FACTORY()
     worker_tid: list = []
+
+    # ONE decision per call, taken under this lock, with exactly two
+    # outcomes: the caller ABANDONED the queued call, or the worker STARTED
+    # it. The first to arrive wins; the other is told it lost (R7-1).
+    decision_lock = threading.Lock()
+    decision: list = []
+
+    def _elect(outcome: str) -> bool:
+        """Take this call's one decision, or lose it to the other side."""
+        with decision_lock:
+            if decision:
+                return False
+            decision.append(outcome)
+            return True
 
     def worker():
         worker_tid.append(threading.get_ident())
         try:
             with _serial.com_operation(name):
-                lock_acquired.set()
+                # Winning the serialization lock is not permission to run.
+                # The caller may have given up while this thread sat in the
+                # queue, and it was told the operation had not happened; an
+                # abandoned call releases the lock and exits WITHOUT
+                # touching Word.
+                if not _elect("started"):
+                    return
                 result["value"] = fn()
         except BaseException as exc:  # noqa: BLE001 — re-raised in caller
             result["error"] = exc
         finally:
-            lock_acquired.set()
             done.set()
 
     t = threading.Thread(target=worker, daemon=True, name=f"ks4w-{name}")
@@ -148,23 +395,88 @@ def _run_bounded(name: str, timeout: float, fn):
         if "error" in result:
             raise result["error"]
         return result["value"]
-    if not lock_acquired.is_set():
+    if _elect("abandoned"):
+        # The worker had NOT started fn when this decision was taken, so it
+        # never will: it is still queued on the lock, and when it reaches
+        # the front it loses this same decision, releases the lock and
+        # exits. Nothing ran and nothing was changed.
+        if "error" in result:
+            # It failed before it could reach the decision at all, so its
+            # own error is the honest answer, not a queue-contention one.
+            raise result["error"]
         snap = _serial.lock_snapshot()
         running = (snap.get("current_op") or {}).get(
             "name", "another COM operation"
         )
         raise WordBusy(
             f"{name} waited {timeout:.0f}s for the COM serialization lock "
-            f"({running} is still running); retry when it finishes; "
-            "com_word_status reports the running operation"
+            f"({running} is still running); retry when it finishes. "
+            "com_word_status reports the running operation."
+            " The queued call was abandoned before its operation ran; it "
+            "made no document changes. It is safe to retry after "
+            "com_word_status reports no COM operation in progress."
         )
-    killed = _kill_invisible_for_thread(worker_tid[0] if worker_tid else None)
-    done.wait(10.0)
+    # The worker won the decision, so fn IS running, or has already
+    # finished. This is no longer queue contention and the caller must not
+    # be told to simply retry. The deadline has passed but the work has NOT
+    # been cancelled, so the grace wait is a real second chance rather than
+    # a formality.
+    done.wait(TIMEOUT_GRACE_SECONDS)
+
+    def _completed():
+        """The worker's own answer, when it has one."""
+        if not done.is_set():
+            return False
+        if "error" in result:
+            raise result["error"]
+        return "value" in result
+
+    if _completed():
+        return result["value"]
+
+    dialogs_seen = []
+    with contextlib.suppress(Exception):
+        from . import dialogs as _dialogs
+
+        dialogs_seen = _dialogs.pending_dialogs()
+
+    if _completed():
+        return result["value"]
+    # Evidence is read HERE, at the moment the refusal is built: a worker
+    # that finished and released its instance meanwhile has cleared it.
+    ours = set(
+        _INVISIBLE_PIDS.get(worker_tid[0] if worker_tid else None) or set()
+    )
+    # STATE-NEUTRAL: an empty record is not evidence that no Word was
+    # started. The table may have been unreadable, two processes may have
+    # appeared at once, or the worker may never have reached DispatchEx.
+    if ours:
+        pids = ", ".join(str(p) for p in sorted(ours))
+        detail = (
+            f" (Word process pid {pids} was not running when this "
+            "call began; this call did not force-end it, and its current "
+            "state was not re-checked)"
+        )
+    else:
+        detail = (
+            " (no newly started Word process could be identified; no "
+            "process was force-ended)"
+        )
+    if dialogs_seen:
+        titles = ", ".join(
+            d.get("title") or d.get("class", "?") for d in dialogs_seen[:3]
+        )
+        detail += f". Word has a dialog open: {titles}"
+    # NOTHING WAS CANCELLED. The old sentence said the operation "was
+    # aborted", which stopped being true the moment nothing was ended: a
+    # caller told it was aborted retries on top of a live operation (R5-1).
     raise WordBlocked(
-        f"{name} did not finish within {timeout:.0f}s and was aborted"
-        + (" (its invisible Word instance was terminated)" if killed else "")
-        + ". The document may be very large, or Word may be stuck; check "
-        "com_word_status, and pass a larger timeout to raise the bound."
+        f"Word did not answer within {timeout:.0f} s. The operation "
+        "was NOT cancelled: it may still be running and may still finish "
+        "and save its output. Do not retry yet: call com_word_status and "
+        "wait until it reports no COM operation in progress, then check the "
+        "output file before repeating the call."
+        + detail
     )
 
 
@@ -724,44 +1036,57 @@ def _retry_word_call(fn, *, attempts: int = 5, first_delay: float = 0.5):
     ) from last_exc
 
 
-@_serial.serialized("com_save_document")
+#: M1 (2.2.1 release review): the passwordless save and close drive the
+#: USER's Word and flip its DisplayAlerts, the application state the
+#: cross-process live lock exists for (H2), so they take both lock layers
+#: the way a live session does, and without waiting: a held layer refuses
+#: with CallNotStarted before Word is touched, and nothing stays queued to
+#: save or close after the client has given up.
+_SAVE_CLOSE_LOCK = "com_save_document"
+
+
+@_serial.serialized(_SAVE_CLOSE_LOCK, refuse_if_busy=True)
 def save_open_document(path: str) -> dict:
     """Tell the USER's running Word to save a document it has open, so
     file-based tools can read the current state. Runs under the COM
     serialization lock with alerts suppressed and a bounded retry —
-    concurrent saves were the report's 11/11 dialog-blocked failure."""
-    pythoncom, app, doc = _find_open_document(path)
-    try:
-        with _alerts_suppressed(app):
-            _, retries = _retry_word_call(doc.Save)
-        out = {"saved": doc.FullName}
-        if retries:
-            out["retries"] = retries
-        return out
-    finally:
-        pythoncom.CoUninitialize()
+    concurrent saves were the report's 11/11 dialog-blocked failure.
+    Refuses without waiting when a COM lock is held (M1)."""
+    with _xproc.cross_process_lock(_SAVE_CLOSE_LOCK, refuse_if_held=True):
+        pythoncom, app, doc = _find_open_document(path)
+        try:
+            with _alerts_suppressed(app):
+                _, retries = _retry_word_call(doc.Save)
+            out = {"saved": doc.FullName}
+            if retries:
+                out["retries"] = retries
+            return out
+        finally:
+            pythoncom.CoUninitialize()
 
 
-@_serial.serialized("com_save_document")
+@_serial.serialized(_SAVE_CLOSE_LOCK, refuse_if_busy=True)
 def close_open_document(path: str, *, save: bool = True) -> dict:
     """Tell the USER's running Word to close a document (saving by default),
     releasing the lock so file-based tools can edit it. Serialized, alerts
-    suppressed, bounded retry (same contention path as save)."""
-    pythoncom, app, doc = _find_open_document(path)
-    try:
-        with _alerts_suppressed(app):
-            _, retries = _retry_word_call(
-                lambda: doc.Close(
-                    _WD_SAVE if save else _WD_DO_NOT_SAVE
-                ),
-                attempts=3,
-            )
-        out = {"closed": str(Path(path).resolve()), "saved": save}
-        if retries:
-            out["retries"] = retries
-        return out
-    finally:
-        pythoncom.CoUninitialize()
+    suppressed, bounded retry (same contention path as save). Refuses
+    without waiting when a COM lock is held (M1)."""
+    with _xproc.cross_process_lock(_SAVE_CLOSE_LOCK, refuse_if_held=True):
+        pythoncom, app, doc = _find_open_document(path)
+        try:
+            with _alerts_suppressed(app):
+                _, retries = _retry_word_call(
+                    lambda: doc.Close(
+                        _WD_SAVE if save else _WD_DO_NOT_SAVE
+                    ),
+                    attempts=3,
+                )
+            out = {"closed": str(Path(path).resolve()), "saved": save}
+            if retries:
+                out["retries"] = retries
+            return out
+        finally:
+            pythoncom.CoUninitialize()
 
 
 @_bounded_op("com_proofing_errors", default=60.0)
@@ -922,6 +1247,7 @@ def zombie_check() -> dict:
         capture_output=True,
         text=True,
         timeout=30,
+        creationflags=_NO_WINDOW,
     )
     lines = [
         ln for ln in result.stdout.splitlines() if "WINWORD.EXE" in ln.upper()

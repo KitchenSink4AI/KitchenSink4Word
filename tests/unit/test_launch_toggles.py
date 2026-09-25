@@ -183,6 +183,51 @@ def test_explicit_policy_locks_over_false_toggle(monkeypatch):
     assert packs.resolve_lock() is True
 
 
+def test_a_misspelled_policy_refuses_instead_of_failing_open(monkeypatch):
+    """The security defect this closes (2026-09-22).
+
+    KS4W_PACK_POLICY=lockedd used to serve, unlocked and silently: the
+    resolver asked only whether the value equalled "locked". The one env
+    var whose whole purpose is a security pin was the one that shrugged
+    off a typo, while KS4W_MODE=fulll refused to start. A host that ticked
+    the lock and misspelled it had no way to learn it was not in force."""
+    monkeypatch.setenv(packs.ENV_PACK_POLICY, "lockedd")
+    with pytest.raises(WordMcpError) as exc:
+        packs.pack_policy()
+    assert "lockedd" in str(exc.value)
+    with pytest.raises(WordMcpError):
+        packs.resolve_lock()
+    with pytest.raises(WordMcpError):
+        packs.apply_startup_mode()
+
+
+def test_a_misspelled_policy_never_serves_an_unlocked_surface(monkeypatch):
+    """The consequence, stated separately: whatever else changes, a typo
+    must not end up on the unlocked branch."""
+    monkeypatch.setenv(packs.ENV_PACK_POLICY, "unlocked")
+    monkeypatch.setenv(packs.ENV_LOCK_TOOLS, "true")
+    with pytest.raises(WordMcpError):
+        packs.resolve_lock()
+
+
+@pytest.mark.parametrize("value", ["auto", "AUTO", " locked ", "locked", ""])
+def test_recognized_policies_still_resolve(monkeypatch, value):
+    monkeypatch.setenv(packs.ENV_PACK_POLICY, value)
+    assert packs.resolve_lock() is (value.strip().lower() == "locked")
+
+
+def test_startup_exits_with_one_line_on_a_bad_policy(monkeypatch, capsys):
+    """Desktop renders a traceback as "server failed to start" and buries
+    the sentence that names the cause."""
+    monkeypatch.setenv(packs.ENV_PACK_POLICY, "lockedd")
+    with pytest.raises(SystemExit) as exc:
+        server.main()
+    assert exc.value.code == 2
+    err = capsys.readouterr().err
+    assert err.count("\n") == 1, f"not one line: {err!r}"
+    assert "KS4W_PACK_POLICY" in err and "did not start" in err
+
+
 def test_lock_toggle_refuses_enable_tools(monkeypatch):
     """The toggle reaches the same refusal the power-user env does."""
     monkeypatch.setenv(packs.ENV_LOCK_TOOLS, "true")
@@ -280,12 +325,13 @@ def test_manifest_checkbox_copy_is_a_sentence():
         assert "_" not in entry["description"], f"{key}: no env names in copy"
 
 
-def test_note_reaches_stderr(monkeypatch, capsys):
-    monkeypatch.setenv(PACK_ENVS["review"], "true")
-    packs.apply_startup_mode()
-    captured = capsys.readouterr()
-    assert captured.out == "", "stdout carries the protocol and stays clean"
-    assert PACK_ENVS["review"] in captured.err
+# A second def test_note_reaches_stderr stood here, shadowed by the one
+# below and therefore never collected or run. It referenced PACK_ENVS,
+# which is defined nowhere in the repo: a leftover of the per-pack startup
+# toggles that were reverted by the 2026-09-05 author ruling that
+# test_only_two_toggles_exist now guards. Deleted 2026-09-22; a dead test
+# that cannot fail is worse than no test, because the file reads as if the
+# case were covered.
 
 
 def test_note_reaches_stderr(monkeypatch, capsys):

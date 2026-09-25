@@ -210,6 +210,28 @@ def _tcpr(tc: etree._Element) -> etree._Element:
     return tcpr
 
 
+def header_row_indices(rows: list[etree._Element]) -> list[int]:
+    """Which rows a caller means by "header".
+
+    Word's own definition: the LEADING run of rows carrying
+    w:trPr/w:tblHeader, which is what repeats across a page break and what
+    set_table_properties(header_row_repeat=N) writes. A table with none
+    falls back to its first row, because that is what create_table styles
+    as the header and what a caller saying "header" means about a table
+    that was never given the flag.
+    """
+    out: list[int] = []
+    for i, tr in enumerate(rows):
+        trpr = tr.find(qn("w:trPr"))
+        if trpr is not None and trpr.find(qn("w:tblHeader")) is not None:
+            out.append(i)
+        else:
+            break
+    if out:
+        return out
+    return [0] if rows else []
+
+
 def _set_grid_span(tc: etree._Element, span: int) -> None:
     tcpr = _tcpr(tc)
     gs = tcpr.find(qn("w:gridSpan"))
@@ -609,7 +631,8 @@ def format_cells(
     targets: list[dict],
     formatting: dict,
 ) -> dict:
-    """Bulk cell formatting. targets: [{row, cell}] or [{row}] for whole rows.
+    """Bulk cell formatting. targets: [{row, cell}] or [{row}] for whole rows;
+    row takes a 0-based index or the string "header".
     formatting keys: shading (hex fill), bold/italic (applied to all runs),
     alignment (left|center|right|justify), valign (top|center|bottom),
     padding_pt (uniform cell margin)."""
@@ -627,15 +650,30 @@ def format_cells(
     cells: list[etree._Element] = []
     for tgt in targets:
         r = tgt["row"]
-        if not 0 <= r < len(rows):
-            raise TargetNotFound(f"row {r} out of range")
-        tcs = rows[r].findall(qn("w:tc"))
-        if "cell" in tgt and tgt["cell"] is not None:
-            if not 0 <= tgt["cell"] < len(tcs):
-                raise TargetNotFound(f"cell {tgt['cell']} out of range in row {r}")
-            cells.append(tcs[tgt["cell"]])
+        if isinstance(r, str):
+            if r != "header":
+                raise WordMcpError(
+                    f"row takes a 0-based index or 'header', got {r!r}"
+                )
+            row_indices = header_row_indices(rows)
         else:
-            cells.extend(tcs)
+            if isinstance(r, bool) or not isinstance(r, int):
+                raise WordMcpError(
+                    f"row takes a 0-based index or 'header', got {r!r}"
+                )
+            if not 0 <= r < len(rows):
+                raise TargetNotFound(f"row {r} out of range")
+            row_indices = [r]
+        for row_index in row_indices:
+            tcs = rows[row_index].findall(qn("w:tc"))
+            if "cell" in tgt and tgt["cell"] is not None:
+                if not 0 <= tgt["cell"] < len(tcs):
+                    raise TargetNotFound(
+                        f"cell {tgt['cell']} out of range in row {row_index}"
+                    )
+                cells.append(tcs[tgt["cell"]])
+            else:
+                cells.extend(tcs)
 
     for tc in cells:
         tcpr = _tcpr(tc)
