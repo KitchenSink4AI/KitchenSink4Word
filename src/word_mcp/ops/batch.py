@@ -205,7 +205,7 @@ def batch_apply(
 
 
 # ======================================================================
-# apply_edits: the v2 anchor-addressed batch layer
+# apply_edits: the v2 anchor-addressed batch layer (Section 9.2)
 # ======================================================================
 
 # op -> (accepted param keys beyond "op", required keys)
@@ -244,7 +244,7 @@ _MD_UNSUPPORTED: tuple[tuple[str, str, str], ...] = (
 def parse_markdown(markdown: str) -> list[dict]:
     """Markdown -> ordered block segments for the insert op.
 
-    Supported: #-######### headings (styles Heading
+    Supported (Section 9.2 point 3): #-######### headings (styles Heading
     1-9), plain paragraphs (one non-blank line = one paragraph, matching
     the view's one-line-per-block projection), -/*/+ bullet and N. numbered
     lists (2-space indent per nesting level), and pipe tables (first row

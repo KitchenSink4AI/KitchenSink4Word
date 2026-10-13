@@ -203,7 +203,7 @@ def refusal(exc: BaseException) -> dict:
     if ph:
         hint = f"{hint} {ph}".strip()
     error: dict[str, Any] = {"code": code, "message": message, "hint": hint}
-    # Ambiguity refusals from the locate resolver carry every
+    # Ambiguity refusals from the locate resolver (Section 6.2) carry every
     # match on the exception; surface them per the declared refusal shape.
     matches = getattr(exc, "matches", None)
     if matches:

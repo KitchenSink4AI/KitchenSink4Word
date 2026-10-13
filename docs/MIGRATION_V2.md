@@ -14,7 +14,7 @@ every tool schema paid for 189 schemas in every conversation. v2 cuts
 the full surface by consolidating overlapping tools into multiplexes
 (one `list_elements` instead of 18 `list_*` tools, one `validate`
 instead of 14 checkers), and tiered loading cuts it further: a fresh
-session starts with the 28-tool lite core and enables the rest by pack,
+session starts with the 29-tool lite core and enables the rest by pack,
 on demand. Second, selection accuracy: with 189 names, similar tools
 competed for the same task and agents picked wrong. v2 gives each
 concept exactly one name, built from a small verb table (`insert_`,
@@ -1002,8 +1002,8 @@ What to know when a document is open in Word:
 
 ## 9. Tiered loading (packs)
 
-A fresh v2 session exposes the 28-tool lite core (including the two
-toggles). The other 82 tools are grouped into seven packs:
+A fresh v2 session exposes the 29-tool lite core (including the two
+toggles). The other 83 tools are grouped into seven packs:
 `references`, `review`, `academic`, `assembly`, `media-forms`,
 `com-live`, `protection-io`. Call `enable_tools(pack)` to add a pack
 mid-session; calling a disabled tool returns a signpost naming its pack

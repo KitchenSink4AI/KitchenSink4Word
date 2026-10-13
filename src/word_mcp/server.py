@@ -4,15 +4,15 @@ The consolidated surface: the 189-tool v1.6 surface rebuilt
 as the consolidated v2 set. The ops/, com/, and core/ engine is unchanged;
 this module is thin dispatch plus the v2 grammar:
 
-- Positional tools take the location object, resolved through
+- Positional tools take the Section 6 location object, resolved through
   core.locate (ambiguity is a loud refusal carrying every match).
-- The envelope applies AT THE MCP BOUNDARY: the registered tool
+- The Section 7 envelope applies AT THE MCP BOUNDARY: the registered tool
   wraps the module-level function, converting typed exceptions into
   structured {ok: false, error: {...}} refusals with isError=true, and
   middleware adds the success fields (ok, file) at serialization.
   In-process callers (the test suite convention: srv.tool(...)) get the
   raw function: v1-shaped returns, typed exceptions raise through.
-- Every tool carries a pack tag (packs.py bookkeeping).
+- Every tool carries a pack tag (packs.py bookkeeping; Section 14.8).
   Pack VISIBILITY wiring (enable_tools/disable_tools, startup modes) is
   wired at startup; the full surface is registered and enabled.
 
@@ -155,7 +155,7 @@ mcp = FastMCP(
 
 
 class _SuccessEnvelope(_FmcpMiddleware):
-    """Success fields at the MCP boundary: object results gain
+    """Section 7.1 success fields at the MCP boundary: object results gain
     ok (and file, when the call named one). In-process calls bypass this
     entirely (module attributes are the raw functions), so the test suite
     keeps v1-shaped returns. List-shaped reader payloads ride under
@@ -323,7 +323,7 @@ def _loc_insert_args(pkg: DocxPackage, location) -> tuple[int | None, bool]:
 
 
 def _anchor_kwargs(pkg: DocxPackage, location) -> dict:
-    """Location -> {anchor_text, occurrence} for the
+    """Section 6.1 location -> {anchor_text, occurrence} for the
     run-anchored ops inserters (notes, comments, citations, fields, index
     entries): the shared adapter.
 
@@ -5289,7 +5289,7 @@ def live_repair() -> dict:
     return live.live_repair()
 
 
-# ------------------------------------------ tiered loading
+# ------------------------------------------ tiered loading (Section 14)
 # Registered LAST: enable_tools' docstring carries the pack menu with
 # per-pack token bills computed from the live registry, so every other
 # tool must already be registered when this block runs.

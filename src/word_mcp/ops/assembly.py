@@ -702,7 +702,7 @@ def _apply_num_remap(elements, num_map: dict[str, str], unresolved: set[str]):
 
 # ------------------------------- inherited-formatting reconciliation (source)
 #
-# The half-single-spaced-dissertation bug: with
+# The half-single-spaced bug: with
 # formatting="source", paragraphs that carried NO explicit line_spacing or
 # space_after relied on their SOURCE file's docDefaults for those values.
 # After transplant they resolved against the TARGET's docDefaults instead,
@@ -2115,7 +2115,7 @@ def _transplant(
         pkg, after_index, after_anchor, at_end, before_first
     )
 
-    # ---- phase A: prepare and SCAN (no target mutation on refusal)
+    # ---- pass 1: prepare and SCAN (no target mutation on refusal)
 
     # Mid-content section breaks: strip BEFORE the relationship scan so their
     # header/footer references never enter the transplant set.
@@ -2240,7 +2240,7 @@ def _transplant(
     # Pre-existing target note problems (never blamed on this insertion).
     pre_notes = _notes.validate_notes(pkg)
 
-    # ---- phase B: mutate the in-memory target (saved only by the caller,
+    # ---- pass 2: mutate the in-memory target (saved only by the caller,
     # so any exception below still leaves the file untouched)
 
     # B0. Formatting mode: strip direct formatting from the carried COPIES
@@ -2452,7 +2452,7 @@ def _transplant(
                 )
                 if rtype == _REL_IMAGE:
                     new_part = _copy_media(src_part)
-                else:  # chart / chartEx (phase A allowed nothing else)
+                else:  # chart / chartEx (pass 1 allowed nothing else)
                     new_part = _copy_subtree(src_part)
                     chart_parts.add(src_part)
                 # Both document.xml and the notes parts live in word/, so the

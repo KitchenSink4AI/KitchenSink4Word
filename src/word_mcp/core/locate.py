@@ -21,7 +21,7 @@ range refuses with RANGE_OUT_OF_BOUNDS.
 
 Design rules implemented here:
 
-- Ambiguity is a loud refusal. A text selector matching more
+- Ambiguity is a loud refusal (Section 6.2). A text selector matching more
   than one place without an ``occurrence`` raises AmbiguousTarget carrying a
   ``matches`` list (paragraph index, outline path where derivable, context
   snippet); envelope.refusal surfaces it as error["matches"]. No caller in
@@ -684,7 +684,7 @@ def _resolve_search(pkg: DocxPackage, value: Any, position: str) -> ResolvedLoca
 
 
 def _resolve_anchor(pkg: DocxPackage, value: Any, position: str) -> ResolvedLocation:
-    """The integration point: anything the view can see, every
+    """The Section 9.4 integration point: anything the view can see, every
     positional tool can address. Resolution recomputes the anchor map from
     current package content (ops/view.py has the scheme); a stale anchor
     raises StaleAnchor (closed code STALE_ANCHOR) with the re-view hint."""

@@ -995,8 +995,7 @@ def format_paragraphs(
 ) -> dict:
     """Apply character formatting to WHOLE paragraphs addressed by index,
     paragraph mark included. This is the no-unique-find-string route:
-    de-italicising headings whose text also occurs in running prose
-."""
+    de-italicising headings whose text also occurs in running prose."""
     _check_keys(formatting, _CHAR_FMT_KEYS, "character-formatting")
     done: list[int] = []
     runs_touched = 0

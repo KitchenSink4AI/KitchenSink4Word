@@ -1,0 +1,230 @@
+r"""THE PRE-SHIP GREP GATE: a check that reads the artifact.
+
+Publishing defects are catchable by one grep when what gets checked is the
+file itself rather than a report about the file. This is the check that
+opens the manifest.
+
+Five patterns, all of them things that mean "somebody was still working
+here" and none of them things a user should ever read:
+
+- ``COPY PENDING`` and ``FACTS TO CONVEY``, build instructions to a future
+  writer.
+- ``PLACEHOLDER``, a marker that must never reach users.
+- The em dash, banned across every public surface in every language.
+- A ``user_config`` entry typed anything but ``boolean``. The install screen
+  is checkboxes; a free-text box is a typo waiting to break somebody's
+  install, and the manifest schema has no enum type that would make one
+  safe. ``EXEMPT_TYPED_FIELDS`` names the exceptions, and naming them here
+  is what keeps the exception from spreading.
+- An absolute ``C:\\Users\\`` path, which is a build that only runs on the
+  machine that built it.
+
+SCOPE. Everything in ``ENFORCED`` is clean of all five, so every hit is a
+regression. ``docs/index.html`` is on that list; the published-figure guard
+at the bottom of this file covers the same class from the other direction.
+The ``src/`` trees are deliberately NOT in scope: the em dashes in their
+refusal strings are a product decision, not a gate decision.
+"""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+import pytest
+
+ROOT = Path(__file__).resolve().parents[2]
+
+#: Text surfaces scanned. Every one is clean at the commit that adds this
+#: gate. A surface a stranger reads belongs here; add it rather than
+#: trusting that nobody edits it.
+ENFORCED = (
+    "bundle/manifest.json",
+    "README.md",
+    "docs/llms.txt",
+    "docs/QUICKSTART.md",
+    "docs/index.html",
+)
+
+#: (needle, what it means) for the plain-text patterns. Written as literals
+#: rather than a regex so the failure message can quote the needle back.
+FORBIDDEN_TEXT = (
+    ("COPY PENDING", "a copy marker aimed at a future writer"),
+    ("FACTS TO CONVEY", "build instructions, not product copy"),
+    ("PLACEHOLDER", "an unfilled string"),
+    ("\u2014", "an em dash, banned on every public surface"),
+)
+
+#: The absolute-path pattern, in both the spellings a JSON file can hold it.
+HOME_PATHS = ("C:\\Users\\", "C:\\\\Users\\\\")
+
+#: The typed install-screen fields that are allowed exceptions, with the
+#: type each is allowed to be.
+EXEMPT_TYPED_FIELDS: dict[str, str] = {}
+
+
+def _read(rel: str) -> str:
+    return (ROOT / rel).read_text(encoding="utf-8")
+
+
+def _sources() -> dict[str, str]:
+    return {rel: _read(rel) for rel in ENFORCED}
+
+
+@pytest.mark.parametrize("needle,why", FORBIDDEN_TEXT)
+def test_no_working_state_reaches_a_shipping_surface(needle, why):
+    for where, text in _sources().items():
+        assert needle not in text, (
+            f"{where} carries {needle!r}: {why}. This is a pattern "
+            f"seen before on a release candidate; fix "
+            f"the surface, do not loosen the gate.")
+
+
+def test_no_absolute_home_path_reaches_a_shipping_surface():
+    """A hardcoded user directory means the artifact runs on exactly one
+    machine. A release candidate once launched
+    ``C:\\Users\\...\\venv\\Scripts\\...exe`` and could not have installed
+    for anybody else."""
+    for where, text in _sources().items():
+        for pattern in HOME_PATHS:
+            assert pattern not in text, (
+                f"{where} hardcodes {pattern!r}. The bundle has to launch on "
+                f"a machine nobody here owns.")
+
+
+def test_every_install_screen_field_is_a_checkbox():
+    """No typed field on the install screen except the ones allowed by
+    name. The rule is stated as a scan rather than as a parity assertion,
+    so it holds for the manifest a human installs from."""
+    for where in ENFORCED:
+        if not where.endswith(".json"):
+            continue
+        config = json.loads(_read(where)).get("user_config", {})
+        typed = sorted(
+            key for key, entry in config.items()
+            if entry.get("type") != "boolean"
+            and entry.get("type") != EXEMPT_TYPED_FIELDS.get(key))
+        assert not typed, (
+            f"{where} ships typed install-screen fields {typed}. The install "
+            f"screen is checkboxes; a value a user has to spell correctly "
+            f"belongs in a launch file, not on this screen. An exception is "
+            f"added to EXEMPT_TYPED_FIELDS deliberately, never by a "
+            f"change that found the gate inconvenient.")
+
+
+def test_every_enforced_surface_is_still_a_real_file():
+    """A row pointing at a renamed file would quietly turn into no gate at
+    all, which is how a total scope stops being total."""
+    for rel in ENFORCED:
+        assert (ROOT / rel).is_file(), rel
+
+
+#: Surfaces cut from a measured source. Every figure below is published on
+#: all three, so a change that restamps one and forgets another turns this
+#: red.
+FIGURE_SURFACES = (
+    "README.md",
+    "docs/index.html",
+    "docs/llms.txt",
+)
+
+#: (figure, what it measures, the script that produces it). Values are the
+#: measurement at the commit that adds this guard. Change one only together
+#: with a re-run of the named script.
+PUBLISHED_FIGURES = (
+    ('222', 'document operations', 'scripts/count_operations.py'),
+    ('110', 'tools', 'scripts/measure_surface.py'),
+    ('10,200|10.2k', 'tokens at lite start', 'scripts/measure_surface.py'),
+    ('35,500|35.5k', 'tokens at full surface', 'scripts/measure_surface.py'),
+)
+
+#: (string, what it used to mean). Absent from every FIGURE_SURFACES file at
+#: this commit. A hit means a surface went backwards.
+SUPERSEDED_FIGURES = (
+    ('1,324', 'the pre-2.1.0 test count'),
+    ('1,839', 'the test count before the gate gained its figure guard'),
+    ('1.324', 'the same count with a german or spanish separator'),
+    ('1 324', 'the same count with a french separator'),
+    ('219 document ops', 'the pre-consolidation operation count'),
+    ('1,842', 'the 2.1.0 test count, before the 2.1.1 serverInfo guards'),
+    ('8,000', 'the lite figure from the description-plus-schema estimator'),
+    ('8.000', 'the same figure with a german or spanish separator'),
+    ('8 000', 'the same figure with a french separator'),
+    ('27,800', 'the full-surface figure from the same old estimator'),
+    ('27.800', 'the same figure with a german or spanish separator'),
+    ('27 800', 'the same figure with a french separator'),
+    ('34,400', 'the v1.6 figure, which has no measurement on the new yardstick'),
+    ('34.400', 'the same figure with a german or spanish separator'),
+    ('34 400', 'the same figure with a french separator'),
+    ('1.842', 'the same count with a german or spanish separator'),
+    ('1 842', 'the same count with a french separator'),
+    ('1,846', 'the 2.1.x test count'),
+    ('1.846', 'the same count with a german or spanish separator'),
+    ('1 846', 'the same count with a french separator'),
+    ('221 operations', 'the 2.1.x operation count, before the move op'),
+    ('221 document operations', 'the same count on the README and the meta description'),
+    ('221 across 110', 'the same count in the v1.6 comparison'),
+    ('9,900', 'the 2.2.0 lite figure, before the typed live parameter'),
+    ('9.900', 'the same figure with a german or spanish separator'),
+    ('9 900', 'the same figure with a french separator'),
+    ('35,200', 'the 2.2.0 full-surface figure, before the typed live parameter'),
+    ('35.200', 'the same figure with a german or spanish separator'),
+    ('35 200', 'the same figure with a french separator'),
+    ('35,600', 'the pre-release 2.2.1 full-surface figure, before four com-live descriptions were narrowed'),
+    ('35.600', 'the same figure with a german or spanish separator'),
+    ('35 600', 'the same figure with a french separator'),
+    ('2,189', 'the 2.2.1 test count, before the test-suite cleanup'),
+    ('2.189', 'the same count with a german or spanish separator'),
+    ('2 189', 'the same count with a french separator'),
+    ('2,068', 'the 2.2.0 test count, before the 2.2.1 fixes'),
+    ('2.068', 'the same count with a german or spanish separator'),
+    ('2 068', 'the same count with a french separator'),
+    ('2,174', 'the pre-release count, before the no-late-entry tests'),
+    ('2.174', 'the same count with a german or spanish separator'),
+    ('2 174', 'the same count with a french separator'),
+)
+
+
+def test_every_published_figure_reads_the_same_on_every_surface():
+    """A figure published on three surfaces has to be the same figure on all
+    three. Checking presence rather than equality keeps the guard honest
+    about locale number formatting, which differs by design.
+
+    Looped rather than parametrized on purpose: this repo's collected test
+    count is one of the figures below, so a parametrized table would move
+    the number it is guarding every time somebody added a row to it."""
+    missing = []
+    for figure, what, source in PUBLISHED_FIGURES:
+        for rel in FIGURE_SURFACES:
+            if not any(alt in _read(rel) for alt in figure.split('|')):
+                missing.append(f"{rel} does not carry {figure!r} ({what}, "
+                               f"measured by {source})")
+    assert not missing, (
+        "\n".join(missing) + "\nEither a surface was missed by a restamp or "
+        "the figure moved and this table was not updated. Re-run the script "
+        "that produces it; do not guess the number.")
+
+
+def test_llms_txt_carries_the_collected_test_count():
+    """The README and the landing page say only "more than 2,000 tests";
+    the exact collected count is published in llms.txt alone."""
+    assert "2,182 tests" in _read("docs/llms.txt"), (
+        "docs/llms.txt does not carry the collected test count; re-run "
+        "pytest --collect-only and restamp it.")
+
+
+def test_no_superseded_figure_survives_on_a_published_surface():
+    """The regression guard for the defect this file was widened over."""
+    found = []
+    for stale, what in SUPERSEDED_FIGURES:
+        for rel in FIGURE_SURFACES:
+            if stale in _read(rel):
+                found.append(f"{rel} still carries {stale!r}, {what}")
+    assert not found, (
+        "\n".join(found) + "\nRestamp from the measuring script rather than "
+        "deleting the row.")
+
+
+def test_every_figure_surface_is_still_a_real_file():
+    for rel in FIGURE_SURFACES:
+        assert (ROOT / rel).is_file(), rel

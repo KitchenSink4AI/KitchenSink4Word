@@ -45,7 +45,7 @@ def _params(entry: dict) -> str:
 
 def render() -> str:
     data = json.loads(
-        (ROOT / "migration" / "v1_to_v2.json").read_text(encoding="utf-8")
+        (ROOT / "src" / "word_mcp" / "data" / "v1_to_v2.json").read_text(encoding="utf-8")
     )
     tools: dict[str, dict] = data["tools"]
 

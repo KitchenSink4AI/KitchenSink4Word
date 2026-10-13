@@ -645,8 +645,7 @@ def get_comments(pkg: DocxPackage, *, author: str | None = None) -> list[dict]:
             "anchored_text": anchors.get(cid, ""),
         }
         # Anchor range fully inside a pending tracked deletion: report the
-        # deleted text plus an honest flag instead of a bare empty string
-        #.
+        # deleted text plus an honest flag instead of a bare empty string.
         if not entry["anchored_text"] and deleted_anchors.get(cid):
             entry["anchored_text"] = deleted_anchors[cid]
             entry["anchor_deleted"] = True

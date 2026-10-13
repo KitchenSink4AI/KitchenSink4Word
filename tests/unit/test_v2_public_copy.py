@@ -1,0 +1,382 @@
+"""Public-copy guards. Stale marketing numbers are a recurring failure mode;
+these tests make it mechanical: the published operation/tool/token figures
+must match what the measurement scripts produce, no retired figure may
+survive in any public file, and no public file may carry an em dash in any
+language.
+
+Public files guarded: README.md, docs/index.html, docs/llms.txt.
+Em-dash sweep also covers docs/MIGRATION_V2.md.
+"""
+
+from __future__ import annotations
+
+import functools
+import json
+import re
+import subprocess
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[2]
+PUBLIC = [
+    ROOT / "README.md",
+    ROOT / "docs" / "index.html",
+    ROOT / "docs" / "llms.txt",
+]
+EM_DASH_FILES = PUBLIC + [ROOT / "docs" / "MIGRATION_V2.md"]
+
+
+@functools.cache
+def _run(script: str) -> str:
+    out = subprocess.run(
+        [sys.executable, "-X", "utf8", str(ROOT / "scripts" / script)],
+        capture_output=True, text=True, encoding="utf-8", cwd=ROOT,
+    )
+    assert out.returncode == 0, f"{script} failed: {out.stderr}"
+    return out.stdout
+
+
+def _measured():
+    """Authoritative figures, straight from the scripts."""
+    surf = _run("measure_surface.py")
+    ops = _run("count_operations.py")
+    lite = int(re.search(r"lite startup surface: (\d+) tools", surf).group(1))
+    full = int(re.search(r"full surface .*?: (\d+) tools", surf).group(1))
+    n_ops = int(re.search(r"TOTAL DISTINCT OPERATIONS:\s+(\d+)", ops).group(1))
+    return lite, full, n_ops
+
+
+def test_published_numbers_match_scripts():
+    """Every headline number in the public copy is the script's number."""
+    lite, full, n_ops = _measured()
+    lite_k = re.search(r"lite startup surface: \d+ tools, ~([\d.]+)k",
+                       _run("measure_surface.py")).group(1)
+    assert (lite, full, n_ops) == (29, 112, 222), (
+        f"scripts now report lite={lite} full={full} ops={n_ops}; update the "
+        "public copy AND this test together (that is the whole point)."
+    )
+    docs = full - 2  # document tools, excluding enable/disable_tools
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    llms = (ROOT / "docs" / "llms.txt").read_text(encoding="utf-8")
+    index = (ROOT / "docs" / "index.html").read_text(encoding="utf-8")
+    for name, text in (("README", readme), ("llms.txt", llms),
+                       ("index.html", index)):
+        assert str(n_ops) in text, f"{name} is missing the operations count"
+        assert str(docs) in text, f"{name} is missing the tool count"
+        assert (f"{lite_k}k" in text or f"{int(float(lite_k) * 1000):,}"
+                in text), (
+            f"{name} is missing the measured lite token figure {lite_k}k"
+        )
+
+
+# Retired figures that must never reappear as current claims. Each entry is
+# a compiled pattern; a match in any public file fails the guard.
+_STALE = [
+    (r"\b107\b", "retired tool count 107"),
+    (r"(?<!\d)(?<!\d[,.   ])\b182\b", "retired operations count 182 (undercounted delegate "
+                 "dispatch; corrected to 187 on remeasurement)"),
+    (r"\b187\b", "retired operations count 187 (missed dispatch carried "
+                 "inside caller-supplied dicts, and credited only one "
+                 "operation to capabilities that landed on the "
+                 "same v2 tool; remeasured at 219)"),
+    (r"27[,.   ]?000", "retired token bill 27,000"),
+    (r"~?27k\b", "retired token bill 27k"),
+    (r"2\.5\s*[-–to ]{1,4}3\s*x", "retired get_text 2.5-3x claim"),
+    (r"\b2\.5x\b", "retired 2.5x claim"),
+    (r"\b946\b", "retired test count 946"),
+    (r"\b910\b", "retired test count 910"),
+    (r"\b852\b", "retired test count 852"),
+    (r"\b4,400\b", "retired stress-call count 4,400"),
+    (r"\b4\.400\b", "retired stress-call count 4.400"),
+    (r"144\s*token", "retired per-tool average 144 tokens"),
+    (r"\b20 tools\b", "retired lite estimate 20 tools"),
+    (r"\b4,000\b", "retired lite token estimate 4,000"),
+    (r"\b4\.000\b", "retired lite token estimate 4.000"),
+    # Superseded by a later re-measure: delete_paragraphs
+    # gained expect_start/expect_end, which grew the published schema.
+    (r"\b7[,.   ]?600\b", "retired lite token bill 7,600"),
+    (r"~?7\.6k\b", "retired lite token bill 7.6k"),
+    (r"\b26[,.   ]?600\b", "retired full token bill 26,600"),
+    (r"~?26\.6k\b", "retired full token bill 26.6k"),
+    # A later feature cycle moved the surface three times, for
+    # get_server_info, floating images, and list numbering. Every headline
+    # figure it retired is listed here, so a stale one cannot come back.
+    (r"\b219\b", "retired operations count 219"),
+    (r"\b220\b", "retired operations count 220"),
+    (r"7[.,]\s?7k", "retired lite token bill 7.7k"),
+    (r"7[,.\s]700", "retired lite token bill 7,700"),
+    (r"7[.,]\s?9k", "retired lite token bill 7.9k"),
+    (r"7[,.\s]900", "retired lite token bill 7,900"),
+    (r"26[.,]\s?[79]k", "retired full token bill 26.7k / 26.9k"),
+    (r"27[.,]\s?4k", "retired full token bill 27.4k"),
+    # Superseded by the  fixes: the live parameter
+    # gained a three-value enum on fourteen tools.
+    (r"(?<![\d.])9[.,]\s?9k", "retired lite token bill 9.9k"),
+    (r"(?<![\d.,])9[,.\s]900\b", "retired lite token bill 9,900"),
+    (r"35[.,]\s?2k", "retired full token bill 35.2k"),
+    (r"35[,.\s]200\b", "retired full token bill 35,200"),
+    # Superseded on the 2.2.1 release branch: four com-live descriptions
+    # dropped their "aborts after timeout" clause, which stopped being true
+    # once nothing force-ends Word.
+    (r"35[.,]\s?6k", "retired full token bill 35.6k"),
+    (r"35[,.\s]600\b", "retired full token bill 35,600"),
+]
+
+
+#: Lines that carry a PER-PACK bill rather than a headline figure. The stale
+#: list above retires lite and full bills, and a per-pack bill is free to land
+#: on a number a headline once used: academic measures ~7.6k on the current
+#: estimator, which is also the lite bill this repo retired in September. Pack
+#: rows have their own guard (test_readme_pack_table_matches_measurement reads
+#: them straight off packs.pack_cost), so dropping them here loses no coverage.
+_PACK_BILL_LINE = re.compile(
+    r"^\|\s*\*{0,2}(lite|references|review|academic|assembly|media-forms|"
+    r"com-live|protection-io|Full surface)\b|^- Pack costs, from"
+)
+
+
+def _without_pack_bills(text: str) -> str:
+    return "\n".join(
+        line for line in text.splitlines() if not _PACK_BILL_LINE.match(line)
+    )
+
+
+def test_no_stale_figures_in_public_copy():
+    for path in PUBLIC:
+        text = _without_pack_bills(path.read_text(encoding="utf-8"))
+        for pat, why in _STALE:
+            m = re.search(pat, text)
+            assert m is None, (
+                f"{path.name}: {why} still present near "
+                f"{text[max(0, m.start()-25):m.start()+25]!r}"
+            )
+
+
+#: A bare 189, not the tail of a larger number: the 2.2.1 test count is
+#: 2,189 (2.189 / 2 189 in the locales), which says nothing about v1.6.
+_BARE_189 = re.compile(r"(?<!\d[,.   ])(?<!\d)189(?!\d)")
+
+
+def test_189_only_as_v1_history():
+    """189 was the v1.6 tool count. It may appear only where a line names
+    v1.6/v1.x/migration context, never as a current claim."""
+    for path in PUBLIC:
+        for i, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            if not _BARE_189.search(line):
+                continue
+            low = line.lower()
+            assert ("v1.6" in low or "v1.x" in low or "migrat" in low), (
+                f"{path.name}:{i}: bare 189 not qualified as v1 history: "
+                f"{line.strip()[:90]!r}"
+            )
+
+
+_SRC_TOOLS_CLAIM = re.compile(r"\b(\d+)\+?\s+(?:v1(?:\.6|\.x)?\s+)?tools\b")
+
+
+def test_src_tool_counts_are_measured_figures():
+    """The guards above cover README, llms.txt, and index.html. The
+    server's own source is public copy too: get_workflows serves
+    ops/workflows.py prose straight to the agent, and nothing measured it.
+    That is how "With 175+ tools" (a v1.6 figure) survived into v2.0.3
+    unnoticed while the README stayed exact. Every tool-count claim under
+    src/ must now be a number something measures: the lite surface, the
+    full surface, the document-tool count, or the shipped migration map's
+    v1 entry count."""
+    lite, full, _ = _measured()
+    v1_tools = len(
+        json.loads(
+            (ROOT / "src" / "word_mcp" / "data" / "v1_to_v2.json").read_text(encoding="utf-8")
+        )["tools"]
+    )
+    allowed = {lite, full, full - 2, v1_tools}
+    for py in sorted((ROOT / "src").rglob("*.py")):
+        lines = py.read_text(encoding="utf-8").splitlines()
+        for i, line in enumerate(lines, 1):
+            for m in _SRC_TOOLS_CLAIM.finditer(line):
+                claimed = int(m.group(1))
+                assert claimed in allowed, (
+                    f"{py.relative_to(ROOT)}:{i} claims {claimed} tools; "
+                    f"measured figures are {sorted(allowed)} "
+                    f"(lite={lite}, full={full}, documents={full - 2}, "
+                    f"v1 migration entries={v1_tools}). Line: "
+                    f"{line.strip()[:90]!r}"
+                )
+
+
+def test_readme_pack_table_matches_measurement():
+    """Every row of the README pack table carries the tool count and token
+    figure that measure_surface.py currently reports, so a re-measured
+    surface cannot ship under stale pack numbers."""
+    surf = _run("measure_surface.py")
+    rows = re.findall(r"^([a-z][\w-]*)\s+(\d+)\s+(~?[\d.]+k)\s*$", surf, re.M)
+    assert len(rows) >= 8, f"measure_surface pack table not parsed: {rows!r}"
+    lines = (ROOT / "README.md").read_text(encoding="utf-8").splitlines()
+    for pack, tools, toks in rows:
+        cands = [ln for ln in lines
+                 if ln.startswith(f"| {pack} ") or ln.startswith(f"| **{pack}**")]
+        assert cands, f"README pack table has no row for {pack!r}"
+        ln = cands[0]
+        assert f" {tools} " in ln and toks.lstrip("~") in ln, (
+            f"README row for {pack!r} does not carry measured "
+            f"{tools} tools / {toks}: {ln!r}"
+        )
+
+
+def test_token_headlines_match_measurement():
+    """The lite/full token figures in every public file are the measured
+    ones, in some accepted thousands format."""
+    surf = _run("measure_surface.py")
+    lite_k = re.search(r"lite startup surface: \d+ tools, ~([\d.]+)k",
+                       surf).group(1)
+    full_k = re.search(r"full surface .*?: \d+ tools, ~([\d.]+)k",
+                       surf).group(1)
+
+    def variants(k: str) -> list[str]:
+        n = int(round(float(k) * 1000))
+        comma = f"{n:,}"
+        seps = [".", " ", " ", " "]  # locale thousands separators
+        return [f"{k}k", comma] + [comma.replace(",", s) for s in seps]
+
+    for path in PUBLIC:
+        text = path.read_text(encoding="utf-8")
+        for label, k in (("lite", lite_k), ("full", full_k)):
+            assert any(v in text for v in variants(k)), (
+                f"{path.name}: measured {label} figure ~{k}k appears in no "
+                f"accepted format {variants(k)}"
+            )
+
+
+def test_i18n_dictionaries_carry_current_figures():
+    """Each of the seven language dictionaries in index.html must carry the
+    operations count and the measured token figures in a locale-accepted
+    format; the whole-file substring checks cannot see a single stale
+    language."""
+    text = (ROOT / "docs" / "index.html").read_text(encoding="utf-8")
+    langs = ["en", "ko", "ja", "zh", "de", "fr", "es"]
+    spans = []
+    for lang in langs:
+        start = text.index(f"\n{lang}: {{")
+        spans.append(start)
+    spans.append(text.index("/*I18N-END*/"))
+    def forms_of(base: str) -> list[str]:
+        return [base] + [base.replace(",", s)
+                         for s in (".", " ", " ", " ")]
+
+    sep = forms_of("10,200")
+    full = forms_of("35,500")
+    for i, lang in enumerate(langs):
+        block = text[spans[i]:spans[i + 1]]
+        assert "222" in block, f"i18n {lang}: operations count 222 missing"
+        for name, forms in (("lite 10.2k", sep), ("full 35.5k", full)):
+            assert any(f in block for f in forms), (
+                f"i18n {lang}: {name} figure missing in all accepted formats"
+            )
+
+
+def test_no_em_dashes_in_any_public_file():
+    for path in EM_DASH_FILES:
+        text = path.read_text(encoding="utf-8")
+        assert "—" not in text, f"{path.name} contains an em dash"
+
+
+def test_mcp_name_marker_survives():
+    first = (ROOT / "README.md").read_text(encoding="utf-8").splitlines()[0]
+    assert first == (
+        "<!-- mcp-name: io.github.KitchenSink4AI/kitchensink4word -->"
+    ), "README line 1 mcp-name marker was lost in the rewrite"
+
+
+def test_non_affiliation_disclaimer_present():
+    for path in (ROOT / "README.md", ROOT / "docs" / "index.html",
+                 ROOT / "docs" / "llms.txt"):
+        text = path.read_text(encoding="utf-8")
+        assert "Not affiliated with" in text, (
+            f"{path.name} is missing the non-affiliation disclaimer"
+        )
+
+
+# Version stamps nothing checked before 2.2.1. test_update_check pins the
+# package __init__ to pyproject; every other place the number lives was
+# bumped by hand at each release with nothing to catch a miss: the registry
+# entry (twice), the bundle manifest and its uvx pin, and the two llms.txt
+# lines an agent reads first. Ported from KitchenSink4XL 1.2.5.
+
+
+def _pyproject_version() -> str:
+    import tomllib
+
+    return tomllib.loads(
+        (ROOT / "pyproject.toml").read_text(encoding="utf-8")
+    )["project"]["version"]
+
+
+def test_version_is_consistent_across_manifests():
+    """pyproject, server.json (entry and package), and the bundle manifest
+    (version and uvx pin) name one version. A stale uvx pin installs the
+    previous release from a bundle labelled with the new one."""
+    version = _pyproject_version()
+    server_json = json.loads(
+        (ROOT / "server.json").read_text(encoding="utf-8"))
+    manifest = json.loads(
+        (ROOT / "bundle" / "manifest.json").read_text(encoding="utf-8"))
+    found = {
+        "server.json version": server_json["version"],
+        "server.json packages[0].version": server_json["packages"][0]["version"],
+        "bundle/manifest.json version": manifest["version"],
+        "bundle/manifest.json uvx pin": manifest["server"]["mcp_config"]["args"],
+    }
+    expected = {
+        "server.json version": version,
+        "server.json packages[0].version": version,
+        "bundle/manifest.json version": version,
+        "bundle/manifest.json uvx pin": [f"kitchensink4word=={version}"],
+    }
+    wrong = {k: v for k, v in found.items() if v != expected[k]}
+    assert not wrong, (
+        f"these stamps do not match pyproject version {version}: {wrong}")
+
+
+def test_llms_txt_version_lines_match_the_package_version():
+    """The Release line and the test-evidence line both name the version
+    being shipped, and each appears exactly once."""
+    version = _pyproject_version()
+    lines = (ROOT / "docs" / "llms.txt").read_text(
+        encoding="utf-8").splitlines()
+    release = [ln for ln in lines if ln.startswith("Release:")]
+    assert release == [f"Release: v{version}"], (
+        f"docs/llms.txt Release line(s) {release!r} do not match pyproject "
+        f"version {version}")
+    evidence = [m.group(1) for ln in lines
+                for m in [re.match(r"- Test evidence for v(\S+?):", ln)] if m]
+    assert evidence == [version], (
+        f"docs/llms.txt test-evidence line names {evidence!r}, not pyproject "
+        f"version {version}")
+
+
+#: The one download URL the showroom uses: the latest release's bundle,
+#: which carries no version and so cannot go stale. A release that attaches
+#: the bundle under any other file name breaks every one of these links.
+SHOWROOM_DOWNLOAD_URL = ("https://github.com/KitchenSink4AI/KitchenSink4Word/"
+                         "releases/latest/download/kitchensink4word.mcpb")
+
+#: The rendered install panel plus its seven i18n copies (en, ko, ja, zh,
+#: de, fr, es). A locale added or dropped changes this number on purpose.
+SHOWROOM_DOWNLOAD_LINKS = 8
+
+
+def test_showroom_download_links_track_the_latest_release():
+    """Every release link in docs/index.html is the versionless latest-bundle
+    URL. A link pinned to a tag (releases/download/vX.Y.Z/...) would keep
+    serving that release after the next one ships."""
+    html = (ROOT / "docs" / "index.html").read_text(encoding="utf-8")
+    links = re.findall(
+        r"https://github\.com/KitchenSink4AI/KitchenSink4Word/releases/"
+        r"[A-Za-z0-9_./-]*", html)
+    assert len(links) == SHOWROOM_DOWNLOAD_LINKS, (
+        f"docs/index.html has {len(links)} release links, expected "
+        f"{SHOWROOM_DOWNLOAD_LINKS} (one per install panel)")
+    other = sorted({ln for ln in links if ln != SHOWROOM_DOWNLOAD_URL})
+    assert not other, (
+        f"docs/index.html release links other than {SHOWROOM_DOWNLOAD_URL}: "
+        f"{other}")

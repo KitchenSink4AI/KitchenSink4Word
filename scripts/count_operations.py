@@ -93,7 +93,7 @@ def configure(root: Path):
     global SRC, SERVER_PY, MIGRATION_JSON, server_mod
     SRC = root / "src"
     SERVER_PY = SRC / "word_mcp" / "server.py"
-    MIGRATION_JSON = root / "migration" / "v1_to_v2.json"
+    MIGRATION_JSON = root / "src" / "word_mcp" / "data" / "v1_to_v2.json"
     sys.path.insert(0, str(SRC))
     server_mod = importlib.import_module("word_mcp.server")
     return server_mod

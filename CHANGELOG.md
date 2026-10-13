@@ -1,5 +1,8 @@
 # Changelog
 
+### 2.2.2
+A maintenance release with no change in how the tools behave. It updates the documentation, the test fixtures and the package metadata, which now lists KitchenSink4AI as the author.
+
 ### 2.2.1
 KitchenSink4Word 2.2.1 is a fix release focused on clearer refusals, stricter startup settings and safer Word automation timeouts.
 

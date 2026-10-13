@@ -421,8 +421,7 @@ def _merge_props(
     drop: dict[str, set[str]] | None = None,
 ) -> None:
     """Merge a freshly built pPr/rPr into an existing one: a property the
-    call addressed replaces its counterpart, everything else survives
-. drop names attributes the call
+    call addressed replaces its counterpart, everything else survives. ``drop`` names attributes the call
     addressed by REMOVING them (w:hanging when a first-line indent is set:
     an explicit zero still counts as specified and suppresses firstLine,
     ECMA-376 17.3.1.12)."""
