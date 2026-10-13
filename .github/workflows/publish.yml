@@ -1,14 +1,13 @@
 name: Publish to PyPI
 
-# A published GitHub Release is the ONLY thing that publishes a version.
+# A published GitHub Release is the only thing that publishes a version.
 #
 # There is no workflow_dispatch trigger, so a version cannot be published from
 # a branch without a Release. The pypi environment requires approval and only
 # accepts main or a v* tag.
 #
-# To publish: cut a Release. To retry a failed publish: re-run this workflow
-# from its own Actions run, which keeps the Release as the thing that authorized
-# it.
+# To publish, create a Release. To retry a failed publish, re-run this workflow
+# from its own Actions run, so the Release stays the thing that authorized it.
 on:
   release:
     types: [published]
